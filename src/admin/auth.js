@@ -1,13 +1,18 @@
 // src/admin/auth.js
-// Autenticação MOCK — placeholder até integrarmos Supabase Auth.
-// Aceita qualquer e-mail/palavra-passe e grava flag em sessionStorage.
+// Autenticação MOCK — placeholder até integrarmos backend real (D1 + Workers + KV).
+// AVISO: A senha abaixo é visível no JS bundle público do site.
+// NÃO é segurança real — apenas filtro de visitantes curiosos durante a fase de demo.
+// Será substituída por auth com JWT + bcrypt + sessões em KV quando entrarmos no backend.
 
 const AUTH_KEY = 'vyvian_admin_session';
+const DEMO_PASSWORD = 'A299792xyz!'; // TODO: remover quando backend real entrar
 
 export function login(email, password) {
-  // Validação simulada — qualquer entrada não-vazia é aceite
   if (!email || !password) {
     return { ok: false, error: 'Preencha e-mail e palavra-passe.' };
+  }
+  if (password !== DEMO_PASSWORD) {
+    return { ok: false, error: 'Credenciais inválidas.' };
   }
   const session = {
     email,

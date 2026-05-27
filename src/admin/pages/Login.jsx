@@ -24,7 +24,16 @@ export default function Login() {
     <div className="adm-root">
       <div className="adm-login-screen">
         <div className="adm-login-card">
-          <div className="adm-login-logo">V</div>
+          <img
+            src="/favicon.svg"
+            alt="Vyvian Avena Advogada"
+            style={{
+              height: '70px',
+              width: 'auto',
+              display: 'block',
+              margin: '0 auto 1.5rem',
+            }}
+          />
           <h1>Área Privada</h1>
           <div className="adm-login-sub">Vyvian Avena Advogada</div>
 
@@ -62,9 +71,6 @@ export default function Login() {
 
           <div className="adm-login-help">
             Acesso restrito · Recuperar palavra-passe
-          </div>
-          <div className="adm-login-help" style={{ marginTop: '0.5rem', fontSize: '0.65rem', opacity: 0.6 }}>
-            (Mock: qualquer palavra-passe não-vazia entra)
           </div>
         </div>
       </div>

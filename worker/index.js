@@ -9,6 +9,7 @@ import { handleDashboard } from './routes/dashboard.js';
 import { handleRecibos } from './routes/recibos.js'; // Fase 3
 import { handleProcuracoes } from './routes/procuracoes.js'; // Procurações
 import { handleExtracao } from './routes/extracao.js'; // IA: extração de documentos
+import { handleUploadTokens, handleClientDocuments, handlePublicUpload } from './routes/cliente_docs.js'; // Upload pelo cliente
 import { runDailyCron } from './cron.js'; // Fase 2
 import { jsonError, jsonResponse } from './lib/response.js';
 import { requireAuth } from './lib/auth.js';
@@ -40,6 +41,11 @@ export default {
           return await handleAuth(request, env, path);
         }
 
+        // Upload de documentos PELO CLIENTE (público, valida pelo token)
+        if (path.startsWith('/api/public/upload/')) {
+          return await handlePublicUpload(request, env, path);
+        }
+
         // Rotas privadas — requerem sessão válida
         const session = await requireAuth(request, env);
         if (!session) {
@@ -68,6 +74,12 @@ export default {
         }
         if (path === '/api/cadastro/extrair-documento') {
           return await handleExtracao(request, env, path, session);
+        }
+        if (path.startsWith('/api/upload-tokens')) {
+          return await handleUploadTokens(request, env, path, session);
+        }
+        if (path.startsWith('/api/client-documents')) {
+          return await handleClientDocuments(request, env, path, session);
         }
         // NOVO (Fase 2): disparo manual do cron diário
         if (path === '/api/cron/run' && request.method === 'POST') {

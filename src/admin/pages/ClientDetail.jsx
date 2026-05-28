@@ -1,7 +1,7 @@
 // src/admin/pages/ClientDetail.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { clients as clientsApi, installments as installmentsApi, recibos as recibosApi, procuracoes as procApi } from '../apiClient';
+import { clients as clientsApi, installments as installmentsApi, recibos as recibosApi, procuracoes as procApi, uploadTokens as utApi, clientDocs as docsApi } from '../apiClient';
 
 function fmtMoney(amount, currency = 'EUR') {
   const symbol = currency === 'BRL' ? 'R$' : '€';
@@ -55,6 +55,14 @@ export default function ClientDetail() {
   const [procLocal, setProcLocal] = useState('Santa Maria da Feira');
   const [procData, setProcData] = useState(new Date().toISOString().slice(0, 10));
   const [procBusy, setProcBusy] = useState(false);
+
+  // ── Documentos do cliente / link de upload
+  const [docs, setDocs] = useState([]);
+  const [tokens, setTokens] = useState([]);
+  const [tokensLoading, setTokensLoading] = useState(false);
+  const [instructions, setInstructions] = useState('');
+  const [tokenBusy, setTokenBusy] = useState(false);
+  const [copied, setCopied] = useState(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -197,6 +205,49 @@ export default function ClientDetail() {
     } finally {
       setProcBusy(false);
     }
+  };
+
+  // ── Documentos: carregar quando se entra no tab
+  const loadDocsAndTokens = async () => {
+    setTokensLoading(true);
+    try {
+      const [d, t] = await Promise.all([docsApi.list(clientId), utApi.list(clientId)]);
+      setDocs(d.documents || []);
+      setTokens(t.tokens || []);
+    } catch (e) { /* silencioso */ }
+    finally { setTokensLoading(false); }
+  };
+  useEffect(() => { if (activeTab === 'docs') loadDocsAndTokens(); }, [activeTab, clientId]);
+
+  const handleCreateToken = async () => {
+    setTokenBusy(true);
+    try {
+      const r = await utApi.create({ client_id: clientId, instructions: instructions || null, days: 30 });
+      const link = `${window.location.origin}/upload/${r.token}`;
+      try { await navigator.clipboard.writeText(link); setCopied(r.token); setTimeout(() => setCopied(null), 2500); } catch {}
+      setInstructions('');
+      await loadDocsAndTokens();
+      alert('Link gerado e copiado para o seu clipboard:\n\n' + link);
+    } catch (e) {
+      alert('Erro a gerar link: ' + e.message);
+    } finally { setTokenBusy(false); }
+  };
+
+  const handleCopyLink = async (token) => {
+    const link = `${window.location.origin}/upload/${token}`;
+    try { await navigator.clipboard.writeText(link); setCopied(token); setTimeout(() => setCopied(null), 2500); } catch { alert(link); }
+  };
+
+  const handleRevokeToken = async (token) => {
+    if (!confirm('Revogar este link? O cliente deixará de poder enviar documentos por ele.')) return;
+    try { await utApi.revoke(token); await loadDocsAndTokens(); }
+    catch (e) { alert('Erro: ' + e.message); }
+  };
+
+  const handleRemoveDoc = async (docId, filename) => {
+    if (!confirm(`Apagar "${filename}"? Esta ação é irreversível.`)) return;
+    try { await docsApi.remove(docId); await loadDocsAndTokens(); }
+    catch (e) { alert('Erro: ' + e.message); }
   };
 
   if (loading) return <div className="adm-empty" style={{ padding: '3rem' }}>A carregar cliente…</div>;
@@ -414,7 +465,93 @@ export default function ClientDetail() {
       )}
 
       {activeTab === 'docs' && (
-        <div className="adm-empty">Gestão de documentos — em desenvolvimento.</div>
+        <div className="adm-card">
+          <div className="adm-card-title">Documentos do cliente</div>
+
+          {/* Gerar link para o cliente enviar */}
+          <div style={{ background: 'var(--cream, #f5f0e8)', padding: '1rem', borderRadius: 6, marginBottom: '1.5rem' }}>
+            <div style={{ fontWeight: 600, color: 'var(--forest, #12302a)', marginBottom: '0.5rem' }}>
+              📤 Pedir documentos ao cliente
+            </div>
+            <p style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: 0 }}>
+              Gere um link único e envie por WhatsApp ou e-mail. O cliente arrasta os ficheiros sem precisar de login.
+            </p>
+            <div className="adm-field">
+              <label>Instruções (opcional)</label>
+              <textarea
+                rows={2}
+                value={instructions}
+                onChange={(e) => setInstructions(e.target.value)}
+                placeholder="Ex.: Enviar passaporte, comprovativo de morada e declaração da Segurança Social."
+                disabled={tokenBusy}
+                style={{ width: '100%', fontFamily: 'inherit', fontSize: '0.9rem', padding: '0.5rem' }}
+              />
+            </div>
+            <button className="adm-btn adm-btn-gold" onClick={handleCreateToken} disabled={tokenBusy}>
+              {tokenBusy ? 'A gerar…' : 'Gerar link (válido 30 dias)'}
+            </button>
+          </div>
+
+          {/* Lista de links ativos */}
+          {tokens.length > 0 && (
+            <div style={{ marginBottom: '1.5rem' }}>
+              <div style={{ fontSize: '0.8rem', letterSpacing: 1, color: 'var(--gold, #b8935a)', fontWeight: 700, marginBottom: '0.5rem' }}>LINKS ATIVOS</div>
+              <table className="adm-table">
+                <thead><tr><th>Criado</th><th>Expira</th><th>Usos</th><th>Estado</th><th></th></tr></thead>
+                <tbody>
+                  {tokens.map((t) => {
+                    const expired = new Date(t.expires_at) < new Date();
+                    const status = t.revoked ? 'Revogado' : expired ? 'Expirado' : 'Ativo';
+                    return (
+                      <tr key={t.token}>
+                        <td>{new Date(t.created_at).toLocaleDateString('pt-PT')}</td>
+                        <td>{new Date(t.expires_at).toLocaleDateString('pt-PT')}</td>
+                        <td>{t.used_count}</td>
+                        <td>{status}</td>
+                        <td style={{ textAlign: 'right' }}>
+                          {!t.revoked && !expired && (
+                            <>
+                              <a href="#" style={{ fontSize: '0.75rem' }} onClick={(e) => { e.preventDefault(); handleCopyLink(t.token); }}>
+                                {copied === t.token ? '✓ Copiado' : 'Copiar link'}
+                              </a>
+                              <a href="#" style={{ fontSize: '0.75rem', marginLeft: '0.75rem', color: '#b00' }} onClick={(e) => { e.preventDefault(); handleRevokeToken(t.token); }}>Revogar</a>
+                            </>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Lista de documentos enviados */}
+          <div style={{ fontSize: '0.8rem', letterSpacing: 1, color: 'var(--gold, #b8935a)', fontWeight: 700, marginBottom: '0.5rem' }}>DOCUMENTOS ENVIADOS</div>
+          {tokensLoading ? (
+            <div className="adm-empty">A carregar…</div>
+          ) : docs.length === 0 ? (
+            <div className="adm-empty">Sem documentos enviados.</div>
+          ) : (
+            <table className="adm-table">
+              <thead><tr><th>Ficheiro</th><th>Tipo</th><th>Tamanho</th><th>Enviado</th><th></th></tr></thead>
+              <tbody>
+                {docs.map((d) => (
+                  <tr key={d.id}>
+                    <td>{d.filename}</td>
+                    <td><small style={{ color: 'var(--muted)' }}>{d.content_type}</small></td>
+                    <td>{(d.size_bytes / 1024).toFixed(0)} KB</td>
+                    <td>{new Date(d.uploaded_at).toLocaleString('pt-PT')}</td>
+                    <td style={{ textAlign: 'right' }}>
+                      <a href="#" style={{ fontSize: '0.75rem' }} onClick={(e) => { e.preventDefault(); docsApi.openInNewTab(d.id).catch((err) => alert(err.message)); }}>Abrir</a>
+                      <a href="#" style={{ fontSize: '0.75rem', marginLeft: '0.75rem', color: '#b00' }} onClick={(e) => { e.preventDefault(); handleRemoveDoc(d.id, d.filename); }}>Remover</a>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       )}
 
       {activeTab === 'procuracoes' && (

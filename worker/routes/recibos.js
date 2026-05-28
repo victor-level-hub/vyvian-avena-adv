@@ -3,13 +3,20 @@
 // Cache no R2 (env.RECIBOS). Atualiza installments.receipt_path.
 import { jsonResponse, jsonError } from "../lib/response.js";
 import { generateReciboPDF } from "../lib/pdfgen.js";
+import { sendEmail } from "../lib/senders.js";
 
 const CORS = { "Access-Control-Allow-Origin": "*" };
 
 export async function handleRecibos(request, env, path, session) {
-  const segments = path.split("/").filter(Boolean); // ['api','recibos',':id']
+  const segments = path.split("/").filter(Boolean); // ['api','recibos',':id','send'?]
   const installmentId = segments[2];
+  const sub = segments[3];
   if (!installmentId) return jsonError("ID da parcela em falta", 400);
+
+  // POST /api/recibos/:id/send -> envia o recibo por email ao cliente
+  if (sub === "send" && request.method === "POST") {
+    return sendRecibo(env, installmentId);
+  }
 
   switch (request.method) {
     case "GET":    return getRecibo(request, env, installmentId, false);
@@ -43,6 +50,74 @@ async function receiptNumber(env, installment) {
   `).bind(year, paid, paid, installment.id).first();
   const seq = (row?.seq || 1);
   return `${year}-${String(seq).padStart(4, "0")}`;
+}
+
+function u8ToBase64(u8) {
+  let s = "";
+  const chunk = 0x8000;
+  for (let i = 0; i < u8.length; i += chunk) {
+    s += String.fromCharCode.apply(null, u8.subarray(i, i + chunk));
+  }
+  return btoa(s);
+}
+
+// Garante os bytes do recibo: serve do R2 se existir, senão gera e guarda.
+async function ensureBytes(env, installment, client, number) {
+  const key = `recibos/${client.id}/${installment.id}.pdf`;
+  if (env.RECIBOS) {
+    const cached = await env.RECIBOS.get(key).catch(() => null);
+    if (cached) return { bytes: new Uint8Array(await cached.arrayBuffer()), key };
+  }
+  const bytes = await generateReciboPDF({ client, installment, receiptNumber: number });
+  if (env.RECIBOS) {
+    await env.RECIBOS.put(key, bytes, { httpMetadata: { contentType: "application/pdf" } }).catch(() => {});
+    await env.DB.prepare(
+      "UPDATE installments SET receipt_path = ?, updated_at = datetime('now') WHERE id = ?"
+    ).bind(key, installment.id).run().catch(() => {});
+  }
+  return { bytes, key };
+}
+
+async function sendRecibo(env, installmentId) {
+  const { installment, client, error } = await loadData(env, installmentId);
+  if (error) return error;
+  if (installment.status !== "paid" || !installment.paid_date) {
+    return jsonError("Recibo s\u00f3 dispon\u00edvel para parcelas pagas.", 409);
+  }
+  if (!client.email) {
+    return jsonError("Cliente sem email registado.", 400);
+  }
+
+  const number = await receiptNumber(env, installment);
+  const { bytes } = await ensureBytes(env, installment, client, number);
+
+  const subject = `Recibo ${number} \u2014 Vyvian Avena Advogada`;
+  const text =
+    `Caro(a) ${client.name},\n\n` +
+    `Segue em anexo o recibo ${number}, referente \u00e0 parcela ` +
+    `${installment.installment_number}/${installment.total_installments} dos honor\u00e1rios.\n\n` +
+    `Com os melhores cumprimentos,\nVyvian Avena Advogada`;
+
+  const result = await sendEmail(env, {
+    to: client.email,
+    subject,
+    text,
+    attachments: [{ filename: `recibo-${number}.pdf`, content: u8ToBase64(bytes) }],
+  });
+
+  // registar no log
+  await env.DB.prepare(`
+    INSERT INTO notification_log (id, installment_id, client_id, channel, status, message_preview, error_message, external_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).bind(
+    crypto.randomUUID(), installment.id, client.id, "email",
+    result.ok ? "sent" : result.skipped ? "skipped" : "error",
+    `Recibo ${number} -> ${client.email}`, result.error || null, result.external_id || null
+  ).run().catch(() => {});
+
+  if (result.skipped) return jsonResponse({ ok: false, skipped: true, reason: result.reason, sent_to: client.email });
+  if (!result.ok) return jsonError(result.error || "Falha no envio do email", 502);
+  return jsonResponse({ ok: true, sent_to: client.email, receipt_number: number, external_id: result.external_id });
 }
 
 async function getRecibo(request, env, installmentId, force) {

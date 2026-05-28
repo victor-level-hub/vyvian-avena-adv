@@ -127,4 +127,6 @@ export const recibos = {
   },
   // Metadados (nº do recibo, se já existe no R2) — JSON.
   info: (installmentId) => request(`/api/recibos/${installmentId}?info=true`),
+  // Envia o recibo por email ao cliente (anexo PDF). Devolve {ok|skipped|error}.
+  sendToClient: (installmentId) => request(`/api/recibos/${installmentId}/send`, { method: 'POST' }),
 };

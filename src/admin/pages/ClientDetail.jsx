@@ -41,6 +41,7 @@ export default function ClientDetail() {
   const [error, setError] = useState(null);
   const [markingPaid, setMarkingPaid] = useState(null);
   const [reciboBusy, setReciboBusy] = useState(null);
+  const [sendBusy, setSendBusy] = useState(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -78,6 +79,19 @@ export default function ClientDetail() {
       alert('Não foi possível gerar o recibo: ' + err.message);
     } finally {
       setReciboBusy(null);
+    }
+  };
+
+  const handleSendRecibo = async (installmentId) => {
+    setSendBusy(installmentId);
+    try {
+      const r = await recibosApi.sendToClient(installmentId);
+      if (r.skipped) alert('Envio por email ainda não configurado (falta a chave Resend).');
+      else alert('Recibo enviado por email para ' + r.sent_to + '.');
+    } catch (err) {
+      alert('Não foi possível enviar: ' + err.message);
+    } finally {
+      setSendBusy(null);
     }
   };
 
@@ -223,9 +237,14 @@ export default function ClientDetail() {
                     <td><StatusBadge installment={i} /></td>
                     <td>
                       {i.status === 'paid' ? (
-                        <a href="#" style={{ fontSize: '0.75rem' }} onClick={(e) => { e.preventDefault(); if (reciboBusy !== i.id) handleRecibo(i.id); }}>
-                          {reciboBusy === i.id ? 'A gerar…' : 'Recibo'}
-                        </a>
+                        <>
+                          <a href="#" style={{ fontSize: '0.75rem' }} onClick={(e) => { e.preventDefault(); if (reciboBusy !== i.id) handleRecibo(i.id); }}>
+                            {reciboBusy === i.id ? 'A gerar…' : 'Recibo'}
+                          </a>
+                          <a href="#" style={{ fontSize: '0.75rem', marginLeft: '0.75rem' }} onClick={(e) => { e.preventDefault(); if (sendBusy !== i.id) handleSendRecibo(i.id); }}>
+                            {sendBusy === i.id ? 'A enviar…' : 'Enviar'}
+                          </a>
+                        </>
                       ) : (
                         <a
                           href="#"

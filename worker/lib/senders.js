@@ -2,7 +2,7 @@
 // Resend (email) + Z-API (WhatsApp). Nunca lançam exceção — devolvem {ok|skipped|error}
 // para o cron poder continuar mesmo que um canal falhe.
 
-export async function sendEmail(env, { to, subject, html, text }) {
+export async function sendEmail(env, { to, subject, html, text, attachments }) {
   if (!env.RESEND_API_KEY) return { channel: "email", skipped: true, reason: "RESEND_API_KEY n\u00e3o definido" };
   if (!to) return { channel: "email", skipped: true, reason: "sem destinat\u00e1rio" };
   try {
@@ -18,6 +18,7 @@ export async function sendEmail(env, { to, subject, html, text }) {
         subject: subject || "Vyvian Avena Advogada",
         html: html || (text ? `<p>${text}</p>` : ""),
         text: text || undefined,
+        attachments: attachments && attachments.length ? attachments : undefined,
       }),
     });
     const data = await res.json().catch(() => ({}));

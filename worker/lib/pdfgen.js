@@ -14,8 +14,8 @@ const WHITE  = rgb(1, 1, 1);
 
 // ── Identidade profissional (CONFIRMA a cédula/OAB) ──
 const ORDEM = {
-  PT: { nome: "Dra. Vyvian Avena", linha: "Advogada \u00b7 Ordem dos Advogados (Portugal)", reg: "C\u00e9d. Prof. 60987P" },
-  BR: { nome: "Dra. Vyvian Avena", linha: "Advogada \u00b7 OAB", reg: "OAB/RJ \u2014 (confirmar)" },
+  PT: { nome: "Dra. Vyvian Avena", linha: "Advogada" },
+  BR: { nome: "Dra. Vyvian Avena", linha: "Advogada" },
 };
 
 // ── Helpers de formatação (sem ICU/Intl, robusto no Worker) ──
@@ -148,8 +148,6 @@ export async function generateReciboPDF({ client, installment, receiptNumber }) 
   text(ordem.nome, sigX + (220 - nameW) / 2, sigY - 12, { font: serifB, size: 12, color: FOREST });
   const lW = sans.widthOfTextAtSize(ordem.linha, 8.5);
   text(ordem.linha, sigX + (220 - lW) / 2, sigY - 26, { font: sans, size: 8.5, color: MUTE });
-  const rW = sans.widthOfTextAtSize(ordem.reg, 8.5);
-  text(ordem.reg, sigX + (220 - rW) / 2, sigY - 38, { font: sans, size: 8.5, color: MUTE });
 
   // ── Rodapé ──────────────────────────────────────────
   page.drawLine({ start: { x: M, y: 70 }, end: { x: width - M, y: 70 }, thickness: 0.5, color: GOLD });
@@ -158,3 +156,4 @@ export async function generateReciboPDF({ client, installment, receiptNumber }) 
 
   return await doc.save();
 }
+

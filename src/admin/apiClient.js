@@ -150,3 +150,44 @@ export const recibos = {
   // Envia o RV anexado ao cliente por email. Devolve {ok|skipped|error}.
   sendToClient: (installmentId) => request(`/api/recibos/${installmentId}/send`, { method: 'POST' }),
 };
+
+// ============ PROCURAÇÕES ============
+export const procuracoes = {
+  // Lista os modelos ativos.
+  listTemplates: () => request('/api/procuracoes/templates'),
+
+  // Preview: texto preenchido + lista de campos editáveis ainda em aberto.
+  // body: { template_id, client_id }
+  preview: (body) => request('/api/procuracoes/preview', { method: 'POST', body: JSON.stringify(body) }),
+
+  // Gera o PDF e abre numa nova aba (com Bearer + à prova de popup-blocker).
+  // body: { template_id, client_id, overrides?, local?, data? }
+  async generateOpen(body) {
+    const tab = window.open('', '_blank');
+    try {
+      const token = getToken();
+      const res = await fetch('/api/procuracoes/gerar', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try { const e = await res.json(); msg = e.error || msg; } catch {}
+        if (tab) tab.close();
+        const err = new Error(msg); err.status = res.status; throw err;
+      }
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      if (tab) tab.location.href = objUrl;
+      else { const a = document.createElement('a'); a.href = objUrl; a.download = `procuracao.pdf`; document.body.appendChild(a); a.click(); a.remove(); }
+      setTimeout(() => URL.revokeObjectURL(objUrl), 60000);
+    } catch (err) {
+      if (tab && !tab.closed) tab.close();
+      throw err;
+    }
+  },
+};

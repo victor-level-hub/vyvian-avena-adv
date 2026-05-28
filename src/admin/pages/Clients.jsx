@@ -37,6 +37,8 @@ export default function Clients() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [areaFilter, setAreaFilter] = useState('all');
+  const [countryFilter, setCountryFilter] = useState('all');
+  const [payFilter, setPayFilter] = useState('all');
   const [allClients, setAllClients] = useState([]);
   const [nextByClient, setNextByClient] = useState({}); // { clientId: installment | null }
   const [loading, setLoading] = useState(true);
@@ -80,6 +82,12 @@ export default function Clients() {
   const filtered = useMemo(() => {
     return allClients.filter((c) => {
       if (areaFilter !== 'all' && c.practice_area !== areaFilter) return false;
+      if (countryFilter !== 'all' && c.country !== countryFilter) return false;
+      if (payFilter !== 'all') {
+        const next = nextByClient[c.id];
+        const situ = !next ? 'quitado' : (next.status === 'late' ? 'late' : 'pending');
+        if (situ !== payFilter) return false;
+      }
       if (search) {
         const q = search.toLowerCase();
         return (
@@ -90,7 +98,10 @@ export default function Clients() {
       }
       return true;
     });
-  }, [search, areaFilter, allClients]);
+  }, [search, areaFilter, countryFilter, payFilter, allClients, nextByClient]);
+
+  const hasFilters = search || areaFilter !== 'all' || countryFilter !== 'all' || payFilter !== 'all';
+  const clearFilters = () => { setSearch(''); setAreaFilter('all'); setCountryFilter('all'); setPayFilter('all'); };
 
   const totalActive = Object.keys(nextByClient).length;
 
@@ -125,6 +136,25 @@ export default function Clients() {
           <option value="Trabalhista">Trabalhista</option>
           <option value="Empresarial">Empresarial</option>
         </select>
+        <select value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)}>
+          <option value="all">Todos os países</option>
+          <option value="PT">Portugal</option>
+          <option value="BR">Brasil</option>
+        </select>
+        <select value={payFilter} onChange={(e) => setPayFilter(e.target.value)}>
+          <option value="all">Todas as situações</option>
+          <option value="late">Em atraso</option>
+          <option value="pending">A vencer</option>
+          <option value="quitado">Quitado</option>
+        </select>
+        {hasFilters && (
+          <button type="button" className="adm-btn" onClick={clearFilters}>Limpar filtros</button>
+        )}
+      </div>
+
+      <div className="adm-sub" style={{ marginBottom: '0.75rem' }}>
+        {filtered.length} {filtered.length === 1 ? 'cliente' : 'clientes'}
+        {hasFilters ? ` de ${allClients.length}` : ''}
       </div>
 
       {filtered.length === 0 ? (
@@ -175,3 +205,4 @@ export default function Clients() {
     </>
   );
 }
+

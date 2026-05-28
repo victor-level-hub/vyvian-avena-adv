@@ -32,7 +32,7 @@
     "crons": ["0 7 * * *"]
   },
   "vars": {
-    "ENVIRONMENT": "production",
-    "JWT_SECRET": "YPQ5BnqeQr_B9LIyWF4FNFLfpMZbZI-Je7XQu1T4hNQeI0ClITZ3PoY8Wi0z1b4P"
+    "ENVIRONMENT": "production"
   }
 }
+

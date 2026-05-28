@@ -8,6 +8,7 @@ import Apoio from './pages/Apoio';
 import Contacto from './pages/Contacto';
 import PoliticaCookies from './pages/PoliticaCookies';
 import AdminApp from './admin/AdminApp';
+import UploadPage from './upload/UploadPage';
 
 function PublicSite() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
     <Router>
       <Routes>
         <Route path="/admin/*" element={<AdminApp />} />
+        <Route path="/upload/:token" element={<UploadPage />} />
         <Route path="/*" element={<PublicSite />} />
       </Routes>
     </Router>

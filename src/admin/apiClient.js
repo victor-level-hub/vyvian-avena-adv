@@ -191,3 +191,40 @@ export const procuracoes = {
     }
   },
 };
+
+// ============ UPLOAD TOKENS (admin) ============
+export const uploadTokens = {
+  // body: { client_id, instructions?, days? }
+  create: (body) => request('/api/upload-tokens', { method: 'POST', body: JSON.stringify(body) }),
+  list: (clientId) => request('/api/upload-tokens?client_id=' + encodeURIComponent(clientId)),
+  revoke: (token) => request('/api/upload-tokens/' + encodeURIComponent(token), { method: 'DELETE' }),
+};
+
+// ============ CLIENT DOCUMENTS (admin) ============
+export const clientDocs = {
+  list: (clientId) => request('/api/client-documents?client_id=' + encodeURIComponent(clientId)),
+  remove: (docId) => request('/api/client-documents/' + encodeURIComponent(docId), { method: 'DELETE' }),
+  // Abre o documento numa nova aba (com Bearer + à prova de popup-blocker)
+  async openInNewTab(docId) {
+    const tab = window.open('', '_blank');
+    try {
+      const token = getToken();
+      const res = await fetch('/api/client-documents/' + encodeURIComponent(docId), {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try { const e = await res.json(); msg = e.error || msg; } catch {}
+        if (tab) tab.close();
+        const err = new Error(msg); err.status = res.status; throw err;
+      }
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      if (tab) tab.location.href = objUrl;
+      setTimeout(() => URL.revokeObjectURL(objUrl), 60000);
+    } catch (err) {
+      if (tab && !tab.closed) tab.close();
+      throw err;
+    }
+  },
+};

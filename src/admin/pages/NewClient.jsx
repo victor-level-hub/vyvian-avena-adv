@@ -29,6 +29,10 @@ export default function NewClient() {
     email: '',
     phone: '',
     country: 'PT',
+    address: '',
+    nationality: '',
+    maritalStatus: '',
+    rg: '',
     area: 'Família',
     process: '',
     planType: 'installment',
@@ -66,6 +70,10 @@ export default function NewClient() {
         phone: form.phone,
         country: form.country,
         identification: form.taxId,
+        address: form.address || null,
+        nationality: form.country === 'BR' ? (form.nationality || null) : null,
+        marital_status: form.country === 'BR' ? (form.maritalStatus || null) : null,
+        rg: form.country === 'BR' ? (form.rg || null) : null,
         practice_area: form.area,
         notes: form.process ? `Processo: ${form.process}` : '',
         honorarios_total: totalContracted,
@@ -173,8 +181,8 @@ export default function NewClient() {
             <input type="text" value={form.name} onChange={update('name')} required disabled={submitting} />
           </div>
           <div className="adm-field">
-            <label>NIF / CPF</label>
-            <input type="text" value={form.taxId} onChange={update('taxId')} placeholder="123 456 789" disabled={submitting} />
+            <label>{form.country === 'BR' ? 'CPF' : 'NIF'}</label>
+            <input type="text" value={form.taxId} onChange={update('taxId')} placeholder={form.country === 'BR' ? '123.456.789-00' : '123 456 789'} disabled={submitting} />
           </div>
           <div className="adm-field">
             <label>E-mail *</label>
@@ -191,6 +199,33 @@ export default function NewClient() {
               <option value="BR">Brasil · R$ BRL</option>
             </select>
           </div>
+          <div className="adm-field">
+            <label>Morada / Endereço</label>
+            <input type="text" value={form.address} onChange={update('address')} placeholder={form.country === 'BR' ? 'Rua, nº, bairro, cidade - UF' : 'Rua, nº, código postal, localidade'} disabled={submitting} />
+          </div>
+          {form.country === 'BR' && (
+            <>
+              <div className="adm-field">
+                <label>RG</label>
+                <input type="text" value={form.rg} onChange={update('rg')} placeholder="12.345.678-9" disabled={submitting} />
+              </div>
+              <div className="adm-field">
+                <label>Nacionalidade</label>
+                <input type="text" value={form.nationality} onChange={update('nationality')} placeholder="brasileiro(a)" disabled={submitting} />
+              </div>
+              <div className="adm-field">
+                <label>Estado civil</label>
+                <select value={form.maritalStatus} onChange={update('maritalStatus')} disabled={submitting}>
+                  <option value="">—</option>
+                  <option value="solteiro(a)">Solteiro(a)</option>
+                  <option value="casado(a)">Casado(a)</option>
+                  <option value="divorciado(a)">Divorciado(a)</option>
+                  <option value="viúvo(a)">Viúvo(a)</option>
+                  <option value="união estável">União estável</option>
+                </select>
+              </div>
+            </>
+          )}
           <div className="adm-field">
             <label>Área de atuação</label>
             <select value={form.area} onChange={update('area')} disabled={submitting}>

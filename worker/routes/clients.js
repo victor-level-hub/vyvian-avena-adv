@@ -75,19 +75,20 @@ async function createClient(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Invalid JSON', 400); }
 
-  const { id, name, email, phone, country, identification, practice_area, notes, honorarios_total, honorarios_parcelas, contract_start_date } = body || {};
+  const { id, name, email, phone, country, identification, practice_area, notes, honorarios_total, honorarios_parcelas, contract_start_date, address, nationality, marital_status, rg } = body || {};
   if (!id || !name || !country) {
     return jsonError('id, name e country são obrigatórios', 400);
   }
 
   try {
     await env.DB.prepare(`
-      INSERT INTO clients (id, name, email, phone, country, identification, practice_area, status, notes, honorarios_total, honorarios_parcelas, contract_start_date)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?)
+      INSERT INTO clients (id, name, email, phone, country, identification, practice_area, status, notes, honorarios_total, honorarios_parcelas, contract_start_date, address, nationality, marital_status, rg)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id, name, email || null, phone || null, country,
       identification || null, practice_area || null, notes || '',
-      honorarios_total || 0, honorarios_parcelas || 0, contract_start_date || null
+      honorarios_total || 0, honorarios_parcelas || 0, contract_start_date || null,
+      address || null, nationality || null, marital_status || null, rg || null
     ).run();
   } catch (err) {
     if (err.message?.includes('UNIQUE')) return jsonError('Já existe cliente com esse ID', 409);
@@ -101,7 +102,7 @@ async function updateClient(request, env, clientId) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Invalid JSON', 400); }
 
-  const allowed = ['name', 'email', 'phone', 'country', 'identification', 'practice_area', 'status', 'notes', 'honorarios_total', 'honorarios_parcelas', 'contract_start_date'];
+  const allowed = ['name', 'email', 'phone', 'country', 'identification', 'practice_area', 'status', 'notes', 'honorarios_total', 'honorarios_parcelas', 'contract_start_date', 'address', 'nationality', 'marital_status', 'rg'];
   const updates = [];
   const params = [];
   for (const key of allowed) {

@@ -1,11 +1,12 @@
 // src/admin/pages/Clients.jsx
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { CLIENTS, getNextInstallmentByClientId, TODAY } from '../mockData';
+import { clients as clientsApi, installments as installmentsApi } from '../apiClient';
 
 function fmtMoney(amount, currency = 'EUR') {
   const symbol = currency === 'BRL' ? 'R$' : '€';
-  return symbol + '\u00A0' + amount.toLocaleString('pt-PT', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  const n = Number(amount || 0);
+  return symbol + '\u00A0' + n.toLocaleString('pt-PT', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
 function fmtDate(dateStr) {
@@ -15,17 +16,19 @@ function fmtDate(dateStr) {
 }
 
 function daysUntil(dateStr) {
-  return Math.round((new Date(dateStr) - TODAY) / (1000 * 60 * 60 * 24));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((new Date(dateStr) - today) / (1000 * 60 * 60 * 24));
 }
 
 function StatusBadge({ installment }) {
   if (!installment) return <span className="adm-badge adm-badge-paid">Concluído</span>;
   if (installment.status === 'late') {
-    const days = Math.abs(daysUntil(installment.dueDate));
+    const days = Math.abs(daysUntil(installment.due_date));
     return <span className="adm-badge adm-badge-late">{days}d atraso</span>;
   }
   if (installment.status === 'due_today') return <span className="adm-badge adm-badge-warn">Hoje</span>;
-  const days = daysUntil(installment.dueDate);
+  const days = daysUntil(installment.due_date);
   if (days === 1) return <span className="adm-badge adm-badge-warn">Amanhã</span>;
   return <span className="adm-badge adm-badge-pending">A vencer</span>;
 }
@@ -34,29 +37,65 @@ export default function Clients() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [areaFilter, setAreaFilter] = useState('all');
-  const [planFilter, setPlanFilter] = useState('all');
+  const [allClients, setAllClients] = useState([]);
+  const [nextByClient, setNextByClient] = useState({}); // { clientId: installment | null }
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const [c, upcoming] = await Promise.all([
+          clientsApi.list(),
+          installmentsApi.list({ status: 'pending' }), // pega pending
+        ]);
+        // Para "próximo vencimento", também precisamos due_today + late
+        const [dueToday, late] = await Promise.all([
+          installmentsApi.list({ status: 'due_today' }),
+          installmentsApi.list({ status: 'late' }),
+        ]);
+        const all = [
+          ...(dueToday.installments || []),
+          ...(late.installments || []),
+          ...(upcoming.installments || []),
+        ];
+        // Para cada cliente, encontrar a parcela mais próxima
+        const byClient = {};
+        for (const inst of all) {
+          const existing = byClient[inst.client_id];
+          if (!existing || new Date(inst.due_date) < new Date(existing.due_date)) {
+            byClient[inst.client_id] = inst;
+          }
+        }
+        setAllClients(c.clients || []);
+        setNextByClient(byClient);
+      } catch (err) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, []);
 
   const filtered = useMemo(() => {
-    return CLIENTS.filter((c) => {
-      if (areaFilter !== 'all' && c.area !== areaFilter) return false;
-      if (planFilter !== 'all' && c.planType !== planFilter) return false;
+    return allClients.filter((c) => {
+      if (areaFilter !== 'all' && c.practice_area !== areaFilter) return false;
       if (search) {
         const q = search.toLowerCase();
         return (
           c.name.toLowerCase().includes(q) ||
-          c.email.toLowerCase().includes(q) ||
-          c.taxId.replace(/\s/g, '').includes(q.replace(/\s/g, '')) ||
-          c.process.toLowerCase().includes(q)
+          (c.email || '').toLowerCase().includes(q) ||
+          (c.identification || '').replace(/\s/g, '').toLowerCase().includes(q.replace(/\s/g, ''))
         );
       }
       return true;
     });
-  }, [search, areaFilter, planFilter]);
+  }, [search, areaFilter, allClients]);
 
-  const totalActive = CLIENTS.filter((c) => {
-    const next = getNextInstallmentByClientId(c.id);
-    return next !== null;
-  }).length;
+  const totalActive = Object.keys(nextByClient).length;
+
+  if (loading) return <div className="adm-empty" style={{ padding: '3rem' }}>A carregar clientes…</div>;
+  if (error) return <div className="adm-login-error">{error}</div>;
 
   return (
     <>
@@ -64,7 +103,7 @@ export default function Clients() {
         <div>
           <h1>Clientes</h1>
           <div className="adm-sub">
-            {CLIENTS.length} clientes · {totalActive} com plano ativo
+            {allClients.length} clientes · {totalActive} com plano ativo
           </div>
         </div>
         <button className="adm-btn adm-btn-gold" onClick={() => navigate('/admin/clientes/novo')}>
@@ -75,7 +114,7 @@ export default function Clients() {
       <div className="adm-filter-bar">
         <input
           type="search"
-          placeholder="🔍 Pesquisar por nome, NIF/CPF, e-mail ou processo…"
+          placeholder="🔍 Pesquisar por nome, NIF/CPF ou e-mail…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -85,11 +124,6 @@ export default function Clients() {
           <option value="Cível">Cível</option>
           <option value="Trabalhista">Trabalhista</option>
           <option value="Empresarial">Empresarial</option>
-        </select>
-        <select value={planFilter} onChange={(e) => setPlanFilter(e.target.value)}>
-          <option value="all">Todos os planos</option>
-          <option value="monthly">Avença mensal</option>
-          <option value="installment">Parcelado</option>
         </select>
       </div>
 
@@ -101,7 +135,7 @@ export default function Clients() {
             <tr>
               <th>Cliente</th>
               <th>Área</th>
-              <th>Plano</th>
+              <th>País</th>
               <th>Próx. vencimento</th>
               <th className="adm-text-right">Valor</th>
               <th>Estado</th>
@@ -109,11 +143,7 @@ export default function Clients() {
           </thead>
           <tbody>
             {filtered.map((c) => {
-              const next = getNextInstallmentByClientId(c.id);
-              const planLabel =
-                c.planType === 'monthly'
-                  ? 'Avença mensal'
-                  : `Parcelado ${next ? next.label : c.planInstallments + '/' + c.planInstallments + ' ✓'}`;
+              const next = nextByClient[c.id];
               return (
                 <tr
                   key={c.id}
@@ -127,11 +157,11 @@ export default function Clients() {
                       {c.country === 'BR' ? c.phone : c.email}
                     </small>
                   </td>
-                  <td>{c.area}</td>
-                  <td>{planLabel}</td>
-                  <td>{next ? fmtDate(next.dueDate) : '—'}</td>
+                  <td>{c.practice_area || '—'}</td>
+                  <td>{c.country}</td>
+                  <td>{next ? fmtDate(next.due_date) : '—'}</td>
                   <td className="adm-text-right adm-val">
-                    {next ? fmtMoney(next.amount, c.currency) : (
+                    {next ? fmtMoney(next.amount, next.currency) : (
                       <span style={{ color: 'var(--success)' }}>Quitado</span>
                     )}
                   </td>

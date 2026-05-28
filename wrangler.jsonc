@@ -1,0 +1,29 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "vyvian-avena-adv",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-05-27",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "vyvian-avena-db",
+      "database_id": "49e587e4-cb1c-486e-ab7a-cf2907fff09e"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "SESSIONS",
+      "id": "c5cbf662e3334190ab02959a41d12783"
+    }
+  ],
+  "vars": {
+    "ENVIRONMENT": "production",
+    "JWT_SECRET": "YPQ5BnqeQr_B9LIyWF4FNFLfpMZbZI-Je7XQu1T4hNQeI0ClITZ3PoY8Wi0z1b4P"
+  }
+}

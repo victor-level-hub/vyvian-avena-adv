@@ -1,7 +1,7 @@
 // src/admin/pages/Calendar.jsx
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { INSTALLMENTS, getClientById, TODAY } from '../mockData';
+import { installments as installmentsApi } from '../apiClient';
 
 const MONTHS_PT = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -11,10 +11,11 @@ const DAYS_PT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 
 function fmtMoney(amount, currency = 'EUR', compact = false) {
   const symbol = currency === 'BRL' ? 'R$' : '€';
-  if (compact && amount >= 1000) {
-    return symbol + '\u00A0' + (amount / 1000).toFixed(1).replace('.0', '') + 'k';
+  const n = Number(amount || 0);
+  if (compact && n >= 1000) {
+    return symbol + '\u00A0' + (n / 1000).toFixed(1).replace('.0', '') + 'k';
   }
-  return symbol + '\u00A0' + amount.toLocaleString('pt-PT', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return symbol + '\u00A0' + n.toLocaleString('pt-PT', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
 function fmtDate(dateStr) {
@@ -26,31 +27,43 @@ function isSameDay(a, b) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
 
+function dateKey(d) {
+  return d.toISOString().slice(0, 10);
+}
+
 export default function Calendar() {
-  const [currentDate, setCurrentDate] = useState(new Date(TODAY));
+  const TODAY_REAL = new Date();
+  TODAY_REAL.setHours(0, 0, 0, 0);
+
+  const [currentDate, setCurrentDate] = useState(new Date(TODAY_REAL));
   const [selectedDate, setSelectedDate] = useState(null);
+  const [allInstallments, setAllInstallments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    installmentsApi.list()
+      .then((res) => setAllInstallments(res.installments || []))
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, []);
 
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
-  // Constrói grade do mês (seg-dom)
   const grid = useMemo(() => {
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
-    // dia da semana ISO (0=Seg, 6=Dom)
     const firstWeekday = (firstDay.getDay() + 6) % 7;
 
     const cells = [];
-    // dias do mês anterior
     for (let i = firstWeekday - 1; i >= 0; i--) {
       const d = new Date(year, month, -i);
       cells.push({ date: d, current: false });
     }
-    // dias do mês corrente
     for (let i = 1; i <= lastDay.getDate(); i++) {
       cells.push({ date: new Date(year, month, i), current: true });
     }
-    // completa últimas linhas
     while (cells.length % 7 !== 0) {
       const last = cells[cells.length - 1].date;
       const next = new Date(last);
@@ -60,37 +73,33 @@ export default function Calendar() {
     return cells;
   }, [year, month]);
 
-  // Indexa parcelas por data (YYYY-MM-DD)
   const installmentsByDate = useMemo(() => {
     const map = {};
-    INSTALLMENTS.forEach((i) => {
-      if (!map[i.dueDate]) map[i.dueDate] = [];
-      map[i.dueDate].push(i);
+    allInstallments.forEach((i) => {
+      if (!map[i.due_date]) map[i.due_date] = [];
+      map[i.due_date].push(i);
     });
     return map;
-  }, []);
+  }, [allInstallments]);
 
-  function dateKey(d) {
-    return d.toISOString().slice(0, 10);
-  }
-
-  // Resumo do mês corrente
-  const monthInstallments = INSTALLMENTS.filter((i) => {
-    const d = new Date(i.dueDate);
+  const monthInstallments = allInstallments.filter((i) => {
+    const d = new Date(i.due_date);
     return d.getFullYear() === year && d.getMonth() === month;
   });
   const totalEur = monthInstallments
-    .filter((i) => getClientById(i.clientId).currency === 'EUR')
-    .reduce((s, i) => s + i.amount, 0);
+    .filter((i) => i.currency === 'EUR')
+    .reduce((s, i) => s + Number(i.amount), 0);
 
-  const prevMonth = () => setCurrentDate(new Date(year, month - 1, 1));
-  const nextMonth = () => setCurrentDate(new Date(year, month + 1, 1));
-  const goToday = () => { setCurrentDate(new Date(TODAY)); setSelectedDate(null); };
+  const prevMonth = () => { setCurrentDate(new Date(year, month - 1, 1)); setSelectedDate(null); };
+  const nextMonth = () => { setCurrentDate(new Date(year, month + 1, 1)); setSelectedDate(null); };
+  const goToday = () => { setCurrentDate(new Date(TODAY_REAL)); setSelectedDate(null); };
 
-  // Parcelas do dia selecionado
   const selectedInstallments = selectedDate
     ? (installmentsByDate[dateKey(selectedDate)] || [])
     : [];
+
+  if (loading) return <div className="adm-empty" style={{ padding: '3rem' }}>A carregar calendário…</div>;
+  if (error) return <div className="adm-login-error">{error}</div>;
 
   return (
     <>
@@ -121,13 +130,14 @@ export default function Calendar() {
         ))}
         {grid.map((cell, idx) => {
           const inst = installmentsByDate[dateKey(cell.date)] || [];
-          const isToday = isSameDay(cell.date, TODAY);
+          const isToday = isSameDay(cell.date, TODAY_REAL);
           const isSelected = selectedDate && isSameDay(cell.date, selectedDate);
-          const dayTotal = inst.reduce((s, i) => {
-            const c = getClientById(i.clientId);
-            return c.currency === 'EUR' ? s + i.amount : s + (c.currency === 'BRL' ? i.amount : 0);
-          }, 0);
-          const dayCurrency = inst.length > 0 ? getClientById(inst[0].clientId).currency : 'EUR';
+          const dayTotalByCurrency = inst.reduce((acc, i) => {
+            acc[i.currency] = (acc[i.currency] || 0) + Number(i.amount);
+            return acc;
+          }, {});
+          const dayCurrency = inst[0]?.currency || 'EUR';
+          const dayTotal = dayTotalByCurrency[dayCurrency] || 0;
           const hasLate = inst.some((i) => i.status === 'late');
 
           return (
@@ -174,7 +184,6 @@ export default function Calendar() {
         <span><span className="adm-cal-legend-dot" style={{ background: 'var(--danger)' }} />Atrasado</span>
       </div>
 
-      {/* ===== Detalhe do dia selecionado ===== */}
       {selectedDate && (
         <div className="adm-day-detail">
           <h3>Vencimentos em {fmtDate(dateKey(selectedDate))}</h3>
@@ -193,26 +202,23 @@ export default function Calendar() {
                 </tr>
               </thead>
               <tbody>
-                {selectedInstallments.map((i) => {
-                  const c = getClientById(i.clientId);
-                  return (
-                    <tr key={i.id}>
-                      <td>
-                        <Link to={`/admin/clientes/${c.id}`} style={{ color: 'inherit' }}>
-                          <strong>{c.name}</strong>
-                        </Link>
-                      </td>
-                      <td>{c.planType === 'monthly' ? `Avença ${i.label}` : `Parcela ${i.label}`}</td>
-                      <td className="adm-text-right adm-val">{fmtMoney(i.amount, c.currency)}</td>
-                      <td>
-                        {i.status === 'paid' && <span className="adm-badge adm-badge-paid">Pago</span>}
-                        {i.status === 'pending' && <span className="adm-badge adm-badge-pending">Pendente</span>}
-                        {i.status === 'due_today' && <span className="adm-badge adm-badge-warn">Hoje</span>}
-                        {i.status === 'late' && <span className="adm-badge adm-badge-late">Vencido</span>}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {selectedInstallments.map((i) => (
+                  <tr key={i.id}>
+                    <td>
+                      <Link to={`/admin/clientes/${i.client_id}`} style={{ color: 'inherit' }}>
+                        <strong>{i.client_name}</strong>
+                      </Link>
+                    </td>
+                    <td>{i.installment_number}/{i.total_installments}</td>
+                    <td className="adm-text-right adm-val">{fmtMoney(i.amount, i.currency)}</td>
+                    <td>
+                      {i.status === 'paid' && <span className="adm-badge adm-badge-paid">Pago</span>}
+                      {i.status === 'pending' && <span className="adm-badge adm-badge-pending">Pendente</span>}
+                      {i.status === 'due_today' && <span className="adm-badge adm-badge-warn">Hoje</span>}
+                      {i.status === 'late' && <span className="adm-badge adm-badge-late">Vencido</span>}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           )}

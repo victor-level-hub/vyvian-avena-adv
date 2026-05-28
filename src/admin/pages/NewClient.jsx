@@ -1,9 +1,27 @@
 // src/admin/pages/NewClient.jsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { clients as clientsApi, installments as installmentsApi, notifications as notifApi } from '../apiClient';
+
+function makeId(name) {
+  return name
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/(^-|-$)/g, '')
+    .slice(0, 40) + '-' + Math.random().toString(36).slice(2, 6);
+}
+
+function addMonths(dateStr, months) {
+  const d = new Date(dateStr);
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
 
 export default function NewClient() {
   const navigate = useNavigate();
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
 
   const [form, setForm] = useState({
     name: '',
@@ -24,13 +42,103 @@ export default function NewClient() {
 
   const update = (key) => (e) => setForm({ ...form, [key]: e.target.value });
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    alert('Cliente criado (mock). Quando o BD estiver pronto, isto guarda no Supabase.');
-    navigate('/admin/clientes');
+    setError(null);
+    setSubmitting(true);
+
+    try {
+      const currency = form.country === 'BR' ? 'BRL' : 'EUR';
+      const clientId = makeId(form.name);
+
+      // 1. Criar cliente
+      const totalContracted = form.planType === 'installment'
+        ? parseFloat(form.totalValue.toString().replace(',', '.'))
+        : 0;
+      const numParcelas = form.planType === 'installment'
+        ? parseInt(form.installments, 10)
+        : 0;
+
+      await clientsApi.create({
+        id: clientId,
+        name: form.name,
+        email: form.email,
+        phone: form.phone,
+        country: form.country,
+        identification: form.taxId,
+        practice_area: form.area,
+        notes: form.process ? `Processo: ${form.process}` : '',
+        honorarios_total: totalContracted,
+        honorarios_parcelas: numParcelas,
+        contract_start_date: form.startDate,
+      });
+
+      // 2. Gerar parcelas
+      let installmentsToCreate = [];
+      if (form.planType === 'installment') {
+        const per = totalContracted / numParcelas;
+        for (let n = 1; n <= numParcelas; n++) {
+          installmentsToCreate.push({
+            id: `${clientId}-p${n}`,
+            client_id: clientId,
+            installment_number: n,
+            total_installments: numParcelas,
+            amount: Math.round(per * 100) / 100,
+            currency,
+            due_date: addMonths(form.startDate, n - 1),
+          });
+        }
+      } else {
+        // Avença: cria 12 primeiras parcelas
+        const monthlyValue = parseFloat(form.monthlyValue.toString().replace(',', '.'));
+        for (let n = 1; n <= 12; n++) {
+          installmentsToCreate.push({
+            id: `${clientId}-m${n}`,
+            client_id: clientId,
+            installment_number: n,
+            total_installments: 12,
+            amount: monthlyValue,
+            currency,
+            due_date: addMonths(form.startDate, n - 1),
+          });
+        }
+      }
+
+      for (const inst of installmentsToCreate) {
+        await installmentsApi.list ? null : null; // dummy
+        await fetch('/api/installments', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${sessionStorage.getItem('vyvian_admin_token')}`,
+          },
+          body: JSON.stringify(inst),
+        });
+      }
+
+      // 3. Criar regras de notificação
+      if (form.reminderChannels !== 'none') {
+        const channels = form.reminderChannels.split('+');
+        for (let idx = 0; idx < channels.length; idx++) {
+          const channel = channels[idx];
+          await notifApi.createRule({
+            id: `nr-${clientId}-${idx}`,
+            client_id: clientId,
+            channel,
+            days_before: parseInt(form.reminderDays, 10),
+            enabled: true,
+            template_id: channel === 'email' ? 'tpl-reminder-5d-pt' : 'tpl-reminder-1d-pt',
+          });
+        }
+      }
+
+      navigate('/admin/clientes/' + clientId);
+    } catch (err) {
+      setError(err.message);
+      setSubmitting(false);
+    }
   };
 
-  // ===== preview do plano =====
   let planPreview = null;
   if (form.planType === 'installment' && form.totalValue && form.installments) {
     const total = parseFloat(form.totalValue.toString().replace(',', '.'));
@@ -43,7 +151,7 @@ export default function NewClient() {
   } else if (form.planType === 'monthly' && form.monthlyValue) {
     const v = parseFloat(form.monthlyValue.toString().replace(',', '.'));
     const symbol = form.country === 'BR' ? 'R$' : '€';
-    if (!isNaN(v)) planPreview = `→ avença de ${symbol}\u00A0${v.toFixed(2)}/mês, recorrente`;
+    if (!isNaN(v)) planPreview = `→ avença de ${symbol}\u00A0${v.toFixed(2)}/mês, recorrente (12 meses iniciais)`;
   }
 
   return (
@@ -55,35 +163,37 @@ export default function NewClient() {
         </div>
       </header>
 
+      {error && <div className="adm-login-error">{error}</div>}
+
       <form onSubmit={handleSubmit}>
         <div className="adm-form-section-title">Dados pessoais</div>
         <div className="adm-form-grid">
           <div className="adm-field">
             <label>Nome completo *</label>
-            <input type="text" value={form.name} onChange={update('name')} required />
+            <input type="text" value={form.name} onChange={update('name')} required disabled={submitting} />
           </div>
           <div className="adm-field">
             <label>NIF / CPF</label>
-            <input type="text" value={form.taxId} onChange={update('taxId')} placeholder="123 456 789" />
+            <input type="text" value={form.taxId} onChange={update('taxId')} placeholder="123 456 789" disabled={submitting} />
           </div>
           <div className="adm-field">
             <label>E-mail *</label>
-            <input type="email" value={form.email} onChange={update('email')} required />
+            <input type="email" value={form.email} onChange={update('email')} required disabled={submitting} />
           </div>
           <div className="adm-field">
             <label>Telefone (WhatsApp) *</label>
-            <input type="tel" value={form.phone} onChange={update('phone')} placeholder="+351 91 …" required />
+            <input type="tel" value={form.phone} onChange={update('phone')} placeholder="+351 91 …" required disabled={submitting} />
           </div>
           <div className="adm-field">
             <label>Jurisdição</label>
-            <select value={form.country} onChange={update('country')}>
+            <select value={form.country} onChange={update('country')} disabled={submitting}>
               <option value="PT">Portugal · € EUR</option>
               <option value="BR">Brasil · R$ BRL</option>
             </select>
           </div>
           <div className="adm-field">
             <label>Área de atuação</label>
-            <select value={form.area} onChange={update('area')}>
+            <select value={form.area} onChange={update('area')} disabled={submitting}>
               <option>Família</option>
               <option>Cível</option>
               <option>Trabalhista</option>
@@ -92,7 +202,7 @@ export default function NewClient() {
           </div>
           <div className="adm-field adm-full">
             <label>Processo / referência interna</label>
-            <input type="text" value={form.process} onChange={update('process')} placeholder="Ex.: 1289/26 · Divórcio consensual" />
+            <input type="text" value={form.process} onChange={update('process')} placeholder="Ex.: 1289/26 · Divórcio consensual" disabled={submitting} />
           </div>
         </div>
 
@@ -101,25 +211,25 @@ export default function NewClient() {
           <div className="adm-form-grid">
             <div className="adm-field">
               <label>Tipo de plano *</label>
-              <select value={form.planType} onChange={update('planType')}>
+              <select value={form.planType} onChange={update('planType')} disabled={submitting}>
                 <option value="installment">Parcelado (montante dividido)</option>
                 <option value="monthly">Avença mensal (recorrente)</option>
               </select>
             </div>
             <div className="adm-field">
               <label>Data da primeira cobrança *</label>
-              <input type="date" value={form.startDate} onChange={update('startDate')} required />
+              <input type="date" value={form.startDate} onChange={update('startDate')} required disabled={submitting} />
             </div>
 
             {form.planType === 'installment' && (
               <>
                 <div className="adm-field">
                   <label>Valor total contratado *</label>
-                  <input type="text" value={form.totalValue} onChange={update('totalValue')} placeholder="3.120,00" required />
+                  <input type="text" value={form.totalValue} onChange={update('totalValue')} placeholder="3120" required disabled={submitting} />
                 </div>
                 <div className="adm-field">
                   <label>Número de parcelas *</label>
-                  <input type="number" min="1" value={form.installments} onChange={update('installments')} placeholder="6" required />
+                  <input type="number" min="1" value={form.installments} onChange={update('installments')} placeholder="6" required disabled={submitting} />
                   {planPreview && <div className="adm-field-helper">{planPreview}</div>}
                 </div>
               </>
@@ -128,7 +238,7 @@ export default function NewClient() {
             {form.planType === 'monthly' && (
               <div className="adm-field adm-full">
                 <label>Valor mensal *</label>
-                <input type="text" value={form.monthlyValue} onChange={update('monthlyValue')} placeholder="450,00" required />
+                <input type="text" value={form.monthlyValue} onChange={update('monthlyValue')} placeholder="450" required disabled={submitting} />
                 {planPreview && <div className="adm-field-helper">{planPreview}</div>}
               </div>
             )}
@@ -141,6 +251,7 @@ export default function NewClient() {
                   const [days, channels] = e.target.value.split(':');
                   setForm({ ...form, reminderDays: days, reminderChannels: channels });
                 }}
+                disabled={submitting}
               >
                 <option value="5:email+whatsapp">5 dias antes — por e-mail + WhatsApp</option>
                 <option value="3:email">3 dias antes — só e-mail</option>
@@ -152,11 +263,11 @@ export default function NewClient() {
         </div>
 
         <div className="adm-form-actions">
-          <button type="button" className="adm-btn adm-btn-ghost" onClick={() => navigate('/admin/clientes')}>
+          <button type="button" className="adm-btn adm-btn-ghost" onClick={() => navigate('/admin/clientes')} disabled={submitting}>
             Cancelar
           </button>
-          <button type="submit" className="adm-btn adm-btn-primary">
-            Criar cliente e gerar parcelas
+          <button type="submit" className="adm-btn adm-btn-primary" disabled={submitting}>
+            {submitting ? 'A criar…' : 'Criar cliente e gerar parcelas'}
           </button>
         </div>
       </form>

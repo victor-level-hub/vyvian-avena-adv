@@ -6,7 +6,6 @@ import { handleClients } from './routes/clients.js';
 import { handleInstallments } from './routes/installments.js';
 import { handleNotifications } from './routes/notifications.js';
 import { handleDashboard } from './routes/dashboard.js';
-import { handleRecibos } from './routes/recibos.js';
 import { jsonError, jsonResponse } from './lib/response.js';
 import { requireAuth } from './lib/auth.js';
 import { runDailyCron } from './cron.js';
@@ -16,6 +15,7 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // Pre-flight CORS
     if (request.method === 'OPTIONS') {
       return new Response(null, {
         status: 204,
@@ -29,6 +29,7 @@ export default {
       });
     }
 
+    // === ROTAS API ===
     if (path.startsWith('/api/')) {
       try {
         if (path.startsWith('/api/auth/')) {
@@ -38,6 +39,7 @@ export default {
         const session = await requireAuth(request, env);
         if (!session) return jsonError('Unauthorized', 401);
 
+        // Endpoint manual: força execução do cron (útil para testes)
         if (path === '/api/cron/run' && request.method === 'POST') {
           const result = await runDailyCron(env, Date.now());
           return jsonResponse(result);
@@ -55,9 +57,6 @@ export default {
         if (path.startsWith('/api/dashboard')) {
           return await handleDashboard(request, env, path, session);
         }
-        if (path.startsWith('/api/recibos')) {
-          return await handleRecibos(request, env, path, session);
-        }
 
         return jsonError('Not found', 404);
       } catch (err) {
@@ -66,9 +65,12 @@ export default {
       }
     }
 
+    // === ASSETS ESTÁTICOS (SPA) ===
     return env.ASSETS.fetch(request);
   },
 
+  // ===== SCHEDULED HANDLER (Cron Triggers) =====
+  // Configurado no wrangler.jsonc — corre todos os dias às 07:00 UTC
   async scheduled(event, env, ctx) {
     ctx.waitUntil(
       runDailyCron(env, event.scheduledTime).then((result) => {

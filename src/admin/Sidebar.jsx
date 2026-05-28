@@ -22,7 +22,7 @@ export default function Sidebar() {
 
   return (
     <aside className="adm-sidebar">
-      <div className="adm-sidebar-brand">
+      <div className="adm-sidebar-brand" style={{ textAlign: 'center' }}>
         <img
           src="/logo-vyvian-vertical-gold.svg"
           alt="Vyvian Avena Advogada"
@@ -30,7 +30,7 @@ export default function Sidebar() {
             height: '90px',
             width: 'auto',
             display: 'block',
-            marginBottom: '0.5rem',
+            margin: '0 auto 0.8rem',
           }}
         />
         <div className="adm-sidebar-role">Área Privada</div>

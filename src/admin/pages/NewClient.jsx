@@ -33,6 +33,13 @@ export default function NewClient() {
     nationality: '',
     maritalStatus: '',
     rg: '',
+    birthDate: '',
+    birthPlace: '',
+    docType: '',
+    docNumber: '',
+    docValidity: '',
+    niss: '',
+    filiation: '',
     area: 'Família',
     process: '',
     planType: 'installment',
@@ -71,9 +78,16 @@ export default function NewClient() {
         country: form.country,
         identification: form.taxId,
         address: form.address || null,
-        nationality: form.country === 'BR' ? (form.nationality || null) : null,
-        marital_status: form.country === 'BR' ? (form.maritalStatus || null) : null,
+        nationality: form.nationality || null,
+        marital_status: form.maritalStatus || null,
         rg: form.country === 'BR' ? (form.rg || null) : null,
+        birth_date: form.birthDate || null,
+        birth_place: form.birthPlace || null,
+        doc_type: form.docType || null,
+        doc_number: form.docNumber || null,
+        doc_validity: form.docValidity || null,
+        niss: form.niss || null,
+        filiation: form.filiation || null,
         practice_area: form.area,
         notes: form.process ? `Processo: ${form.process}` : '',
         honorarios_total: totalContracted,
@@ -203,29 +217,65 @@ export default function NewClient() {
             <label>Morada / Endereço</label>
             <input type="text" value={form.address} onChange={update('address')} placeholder={form.country === 'BR' ? 'Rua, nº, bairro, cidade - UF' : 'Rua, nº, código postal, localidade'} disabled={submitting} />
           </div>
+          <div className="adm-field">
+            <label>Nacionalidade</label>
+            <input type="text" value={form.nationality} onChange={update('nationality')} placeholder={form.country === 'BR' ? 'brasileiro(a)' : 'português(a)'} disabled={submitting} />
+          </div>
+          <div className="adm-field">
+            <label>Estado civil</label>
+            <select value={form.maritalStatus} onChange={update('maritalStatus')} disabled={submitting}>
+              <option value="">—</option>
+              <option value="solteiro(a)">Solteiro(a)</option>
+              <option value="casado(a)">Casado(a)</option>
+              <option value="divorciado(a)">Divorciado(a)</option>
+              <option value="viúvo(a)">Viúvo(a)</option>
+              <option value="união estável">União estável / convivente</option>
+            </select>
+          </div>
+          <div className="adm-field">
+            <label>Data de nascimento</label>
+            <input type="date" value={form.birthDate} onChange={update('birthDate')} disabled={submitting} />
+          </div>
+          <div className="adm-field">
+            <label>Naturalidade</label>
+            <input type="text" value={form.birthPlace} onChange={update('birthPlace')} placeholder="Cidade, Estado/Distrito, País" disabled={submitting} />
+          </div>
+
+          {/* Documento de identificação — necessário para procurações */}
+          <div className="adm-field">
+            <label>Tipo de documento</label>
+            <select value={form.docType} onChange={update('docType')} disabled={submitting}>
+              <option value="">—</option>
+              <option value="Título de Residência">Título de Residência</option>
+              <option value="Cartão de Cidadão">Cartão de Cidadão</option>
+              <option value="Passaporte">Passaporte</option>
+              <option value="BI/RG">BI / RG</option>
+            </select>
+          </div>
+          <div className="adm-field">
+            <label>Nº do documento</label>
+            <input type="text" value={form.docNumber} onChange={update('docNumber')} placeholder="Ex.: X6D997798" disabled={submitting} />
+          </div>
+          <div className="adm-field">
+            <label>Validade do documento</label>
+            <input type="date" value={form.docValidity} onChange={update('docValidity')} disabled={submitting} />
+          </div>
           {form.country === 'BR' && (
-            <>
-              <div className="adm-field">
-                <label>RG</label>
-                <input type="text" value={form.rg} onChange={update('rg')} placeholder="12.345.678-9" disabled={submitting} />
-              </div>
-              <div className="adm-field">
-                <label>Nacionalidade</label>
-                <input type="text" value={form.nationality} onChange={update('nationality')} placeholder="brasileiro(a)" disabled={submitting} />
-              </div>
-              <div className="adm-field">
-                <label>Estado civil</label>
-                <select value={form.maritalStatus} onChange={update('maritalStatus')} disabled={submitting}>
-                  <option value="">—</option>
-                  <option value="solteiro(a)">Solteiro(a)</option>
-                  <option value="casado(a)">Casado(a)</option>
-                  <option value="divorciado(a)">Divorciado(a)</option>
-                  <option value="viúvo(a)">Viúvo(a)</option>
-                  <option value="união estável">União estável</option>
-                </select>
-              </div>
-            </>
+            <div className="adm-field">
+              <label>RG</label>
+              <input type="text" value={form.rg} onChange={update('rg')} placeholder="12.345.678-9" disabled={submitting} />
+            </div>
           )}
+          {form.country === 'PT' && (
+            <div className="adm-field">
+              <label>NISS (opcional)</label>
+              <input type="text" value={form.niss} onChange={update('niss')} placeholder="120 772 806 32" disabled={submitting} />
+            </div>
+          )}
+          <div className="adm-field">
+            <label>Filiação (opcional)</label>
+            <input type="text" value={form.filiation} onChange={update('filiation')} placeholder="Nome do pai e da mãe" disabled={submitting} />
+          </div>
           <div className="adm-field">
             <label>Área de atuação</label>
             <select value={form.area} onChange={update('area')} disabled={submitting}>

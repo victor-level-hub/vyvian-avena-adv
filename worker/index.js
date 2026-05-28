@@ -6,6 +6,8 @@ import { handleClients } from './routes/clients.js';
 import { handleInstallments } from './routes/installments.js';
 import { handleNotifications } from './routes/notifications.js';
 import { handleDashboard } from './routes/dashboard.js';
+import { handleRecibos } from './routes/recibos.js'; // Fase 3
+import { runDailyCron } from './cron.js'; // Fase 2
 import { jsonError, jsonResponse } from './lib/response.js';
 import { requireAuth } from './lib/auth.js';
 
@@ -55,6 +57,16 @@ export default {
           return await handleDashboard(request, env, path, session);
         }
 
+        // NOVO (Fase 3): recibos PDF
+        if (path.startsWith('/api/recibos')) {
+          return await handleRecibos(request, env, path, session);
+        }
+        // NOVO (Fase 2): disparo manual do cron diário
+        if (path === '/api/cron/run' && request.method === 'POST') {
+          const result = await runDailyCron(env, ctx);
+          return jsonResponse({ ok: true, ...result });
+        }
+
         return jsonError('Not found', 404);
       } catch (err) {
         console.error('API error:', err.message, err.stack);
@@ -64,5 +76,15 @@ export default {
 
     // === ASSETS ESTÁTICOS (SPA) ===
     return env.ASSETS.fetch(request);
+  },
+
+  // NOVO (Fase 2): cron agendado (ver triggers.crons no wrangler.jsonc)
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(
+      runDailyCron(env, ctx).then(
+        (s) => console.log('cron diário OK:', JSON.stringify(s)),
+        (e) => console.error('cron diário falhou:', e.message),
+      ),
+    );
   },
 };

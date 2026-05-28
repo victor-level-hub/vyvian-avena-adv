@@ -7,6 +7,7 @@ import { handleInstallments } from './routes/installments.js';
 import { handleNotifications } from './routes/notifications.js';
 import { handleDashboard } from './routes/dashboard.js';
 import { handleRecibos } from './routes/recibos.js'; // Fase 3
+import { handleProcuracoes } from './routes/procuracoes.js'; // Procurações
 import { runDailyCron } from './cron.js'; // Fase 2
 import { jsonError, jsonResponse } from './lib/response.js';
 import { requireAuth } from './lib/auth.js';
@@ -60,6 +61,9 @@ export default {
         // NOVO (Fase 3): recibos PDF
         if (path.startsWith('/api/recibos')) {
           return await handleRecibos(request, env, path, session);
+        }
+        if (path.startsWith('/api/procuracoes')) {
+          return await handleProcuracoes(request, env, path, session);
         }
         // NOVO (Fase 2): disparo manual do cron diário
         if (path === '/api/cron/run' && request.method === 'POST') {

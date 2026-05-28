@@ -22,6 +22,10 @@ export default function NewClient() {
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiMsg, setAiMsg] = useState(null);
+  const [aiDragOver, setAiDragOver] = useState(false);
+  const aiFileRef = React.useRef(null);
 
   const [form, setForm] = useState({
     name: '',
@@ -52,6 +56,72 @@ export default function NewClient() {
   });
 
   const update = (key) => (e) => setForm({ ...form, [key]: e.target.value });
+
+  // ── Cadastro com IA: arrastar/escolher documento -> extrair campos
+  const aiAccept = ['image/png','image/jpeg','image/jpg','image/webp','application/pdf'];
+
+  const aiExtractFile = async (file) => {
+    if (!file) return;
+    if (!aiAccept.includes(file.type)) {
+      setAiMsg({ kind: 'err', text: 'Tipo não suportado. Use PNG, JPEG, WEBP ou PDF.' });
+      return;
+    }
+    setAiBusy(true);
+    setAiMsg({ kind: 'info', text: 'A ler o documento com IA…' });
+    try {
+      const token = sessionStorage.getItem('vyvian_admin_token');
+      const res = await fetch('/api/cadastro/extrair-documento', {
+        method: 'POST',
+        headers: {
+          'Content-Type': file.type,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: file,
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        setAiMsg({ kind: 'err', text: data.error || `HTTP ${res.status}` });
+        return;
+      }
+      const f = data.fields || {};
+      // mapear campos da IA -> campos do form (apenas preencher se não estiver vazio)
+      const merge = { ...form };
+      const set = (k, v) => { if (v != null && v !== '' && !merge[k]) merge[k] = String(v); };
+      set('name', f.name);
+      set('taxId', f.identification);
+      set('address', f.birth_place && !f.address ? '' : f.address); // não mexer se não veio
+      if (f.address) merge.address = String(f.address);
+      set('nationality', f.nationality);
+      set('maritalStatus', f.marital_status);
+      set('birthDate', f.birth_date);
+      set('birthPlace', f.birth_place);
+      set('docType', f.doc_type);
+      set('docNumber', f.doc_number);
+      set('docValidity', f.doc_validity);
+      set('niss', f.niss);
+      set('filiation', f.filiation);
+      if (f.country && (f.country === 'PT' || f.country === 'BR')) merge.country = f.country;
+      setForm(merge);
+      const filled = Object.keys(f).filter((k) => f[k]).length;
+      const u = data.usage || {};
+      setAiMsg({ kind: 'ok', text: `Documento lido — ${filled} campos preenchidos. Reveja antes de guardar. (uso: ${u.input_tokens||0} entrada, ${u.output_tokens||0} saída)` });
+    } catch (err) {
+      setAiMsg({ kind: 'err', text: 'Erro: ' + err.message });
+    } finally {
+      setAiBusy(false);
+    }
+  };
+
+  const aiOnDrop = (e) => {
+    e.preventDefault(); setAiDragOver(false);
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) aiExtractFile(file);
+  };
+  const aiOnFile = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (file) aiExtractFile(file);
+    if (aiFileRef.current) aiFileRef.current.value = '';
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -188,6 +258,48 @@ export default function NewClient() {
       {error && <div className="adm-login-error">{error}</div>}
 
       <form onSubmit={handleSubmit}>
+        <input ref={aiFileRef} type="file" accept="image/png,image/jpeg,image/webp,application/pdf" style={{ display: 'none' }} onChange={aiOnFile} />
+        <div
+          onDragOver={(e) => { e.preventDefault(); setAiDragOver(true); }}
+          onDragLeave={() => setAiDragOver(false)}
+          onDrop={aiOnDrop}
+          onClick={() => !aiBusy && aiFileRef.current && aiFileRef.current.click()}
+          style={{
+            border: `2px dashed ${aiDragOver ? 'var(--gold, #b8935a)' : 'rgba(0,0,0,0.18)'}`,
+            background: aiDragOver ? 'rgba(184,147,90,0.08)' : 'var(--cream, #f5f0e8)',
+            borderRadius: 8,
+            padding: '1.25rem',
+            textAlign: 'center',
+            cursor: aiBusy ? 'wait' : 'pointer',
+            marginBottom: '1.25rem',
+            opacity: aiBusy ? 0.7 : 1,
+            transition: 'background 0.15s, border-color 0.15s',
+          }}
+        >
+          <div style={{ fontWeight: 600, color: 'var(--forest, #12302a)' }}>
+            📄 Cadastro rápido com IA
+          </div>
+          <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: '0.35rem' }}>
+            Arraste aqui (ou clique para escolher) o documento do cliente — Título de Residência, Cartão de Cidadão, Passaporte ou RG.
+            <br />A IA lê o documento e preenche o formulário. Reveja antes de guardar.
+          </div>
+          <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '0.35rem' }}>
+            PNG, JPEG, WEBP ou PDF · até 8 MB
+          </div>
+          {aiMsg && (
+            <div style={{
+              marginTop: '0.75rem',
+              fontSize: '0.85rem',
+              padding: '0.5rem 0.75rem',
+              borderRadius: 4,
+              background: aiMsg.kind === 'ok' ? 'rgba(34,134,58,0.10)' : aiMsg.kind === 'err' ? 'rgba(176,0,0,0.10)' : 'rgba(0,0,0,0.06)',
+              color: aiMsg.kind === 'ok' ? '#1f6b32' : aiMsg.kind === 'err' ? '#b00' : 'var(--ink)',
+            }}>
+              {aiMsg.text}
+            </div>
+          )}
+        </div>
+
         <div className="adm-form-section-title">Dados pessoais</div>
         <div className="adm-form-grid">
           <div className="adm-field">

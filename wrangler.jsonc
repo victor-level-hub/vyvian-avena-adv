@@ -22,6 +22,15 @@
       "id": "c5cbf662e3334190ab02959a41d12783"
     }
   ],
+  "r2_buckets": [
+    {
+      "binding": "RECIBOS",
+      "bucket_name": "vyvian-recibos"
+    }
+  ],
+  "triggers": {
+    "crons": ["0 7 * * *"]
+  },
   "vars": {
     "ENVIRONMENT": "production",
     "JWT_SECRET": "YPQ5BnqeQr_B9LIyWF4FNFLfpMZbZI-Je7XQu1T4hNQeI0ClITZ3PoY8Wi0z1b4P"

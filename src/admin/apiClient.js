@@ -94,11 +94,34 @@ export const dashboard = {
   get: () => request('/api/dashboard'),
 };
 
-// ============ RECIBOS ============
+// ============ RECIBOS VERDES (arquivo por parcela) ============
 export const recibos = {
-  // Abre o recibo PDF numa nova aba. Envia o Bearer token e trata o bloqueador de popups.
+  // Metadados: { exists, size, uploaded_at, filename }
+  info: (installmentId) => request(`/api/recibos/${installmentId}?info=true`),
+
+  // Upload do RV (PDF) anexado pela utilizadora. file = File do <input type=file>.
+  async upload(installmentId, file) {
+    const token = getToken();
+    const res = await fetch(`/api/recibos/${installmentId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/pdf',
+        'X-Filename': file.name || 'recibo-verde.pdf',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: file,
+    });
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try { const e = await res.json(); msg = e.error || msg; } catch {}
+      const err = new Error(msg); err.status = res.status; throw err;
+    }
+    return res.json();
+  },
+
+  // Abre o RV anexado numa nova aba (com Bearer token, à prova de popup-blocker).
   async openInNewTab(installmentId) {
-    const tab = window.open('', '_blank'); // abre já, dentro do gesto do clique
+    const tab = window.open('', '_blank');
     try {
       const token = getToken();
       const res = await fetch(`/api/recibos/${installmentId}`, {
@@ -112,21 +135,18 @@ export const recibos = {
       }
       const blob = await res.blob();
       const objUrl = URL.createObjectURL(blob);
-      if (tab) {
-        tab.location.href = objUrl;
-      } else {
-        const a = document.createElement('a');
-        a.href = objUrl; a.download = `recibo-${installmentId}.pdf`;
-        document.body.appendChild(a); a.click(); a.remove();
-      }
+      if (tab) tab.location.href = objUrl;
+      else { const a = document.createElement('a'); a.href = objUrl; a.download = `recibo-${installmentId}.pdf`; document.body.appendChild(a); a.click(); a.remove(); }
       setTimeout(() => URL.revokeObjectURL(objUrl), 60000);
     } catch (err) {
       if (tab && !tab.closed) tab.close();
       throw err;
     }
   },
-  // Metadados (nº do recibo, se já existe no R2) — JSON.
-  info: (installmentId) => request(`/api/recibos/${installmentId}?info=true`),
-  // Envia o recibo por email ao cliente (anexo PDF). Devolve {ok|skipped|error}.
+
+  // Remove o RV anexado.
+  remove: (installmentId) => request(`/api/recibos/${installmentId}`, { method: 'DELETE' }),
+
+  // Envia o RV anexado ao cliente por email. Devolve {ok|skipped|error}.
   sendToClient: (installmentId) => request(`/api/recibos/${installmentId}/send`, { method: 'POST' }),
 };

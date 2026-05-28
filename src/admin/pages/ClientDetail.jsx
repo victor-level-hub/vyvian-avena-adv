@@ -40,14 +40,24 @@ export default function ClientDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [markingPaid, setMarkingPaid] = useState(null);
+  const [reciboInfo, setReciboInfo] = useState({}); // { installmentId: {exists, filename} }
   const [reciboBusy, setReciboBusy] = useState(null);
   const [sendBusy, setSendBusy] = useState(null);
+  const fileInputRef = React.useRef(null);
+  const pendingUploadId = React.useRef(null);
 
   const loadData = async () => {
     setLoading(true);
     try {
       const res = await clientsApi.get(clientId);
       setData(res);
+      // carregar estado dos RV das parcelas pagas
+      const paidIds = (res.installments || []).filter((i) => i.status === 'paid').map((i) => i.id);
+      const infos = {};
+      await Promise.all(paidIds.map(async (id) => {
+        try { infos[id] = await recibosApi.info(id); } catch { infos[id] = { exists: false }; }
+      }));
+      setReciboInfo(infos);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -71,12 +81,46 @@ export default function ClientDetail() {
     }
   };
 
-  const handleRecibo = async (installmentId) => {
+  // Anexar RV: aciona o input de ficheiro escondido
+  const triggerAttach = (installmentId) => {
+    pendingUploadId.current = installmentId;
+    if (fileInputRef.current) { fileInputRef.current.value = ''; fileInputRef.current.click(); }
+  };
+
+  const handleFileChosen = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    const installmentId = pendingUploadId.current;
+    if (!file || !installmentId) return;
+    if (file.type !== 'application/pdf') { alert('Por favor selecione um ficheiro PDF.'); return; }
     setReciboBusy(installmentId);
+    try {
+      await recibosApi.upload(installmentId, file);
+      const info = await recibosApi.info(installmentId);
+      setReciboInfo((prev) => ({ ...prev, [installmentId]: info }));
+    } catch (err) {
+      alert('Não foi possível anexar o Recibo Verde: ' + err.message);
+    } finally {
+      setReciboBusy(null);
+      pendingUploadId.current = null;
+    }
+  };
+
+  const handleViewRecibo = async (installmentId) => {
     try {
       await recibosApi.openInNewTab(installmentId);
     } catch (err) {
-      alert('Não foi possível gerar o recibo: ' + err.message);
+      alert('Não foi possível abrir o Recibo Verde: ' + err.message);
+    }
+  };
+
+  const handleRemoveRecibo = async (installmentId) => {
+    if (!confirm('Remover o Recibo Verde anexado a esta parcela?')) return;
+    setReciboBusy(installmentId);
+    try {
+      await recibosApi.remove(installmentId);
+      setReciboInfo((prev) => ({ ...prev, [installmentId]: { exists: false } }));
+    } catch (err) {
+      alert('Não foi possível remover: ' + err.message);
     } finally {
       setReciboBusy(null);
     }
@@ -87,7 +131,7 @@ export default function ClientDetail() {
     try {
       const r = await recibosApi.sendToClient(installmentId);
       if (r.skipped) alert('Envio por email ainda não configurado (falta a chave Resend).');
-      else alert('Recibo enviado por email para ' + r.sent_to + '.');
+      else alert('Recibo Verde enviado por email para ' + r.sent_to + '.');
     } catch (err) {
       alert('Não foi possível enviar: ' + err.message);
     } finally {
@@ -133,6 +177,13 @@ export default function ClientDetail() {
 
   return (
     <>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="application/pdf"
+        style={{ display: 'none' }}
+        onChange={handleFileChosen}
+      />
       <div className="adm-client-head">
         <div className="adm-client-avatar">{initials || 'C'}</div>
         <div>
@@ -238,12 +289,26 @@ export default function ClientDetail() {
                     <td>
                       {i.status === 'paid' ? (
                         <>
-                          <a href="#" style={{ fontSize: '0.75rem' }} onClick={(e) => { e.preventDefault(); if (reciboBusy !== i.id) handleRecibo(i.id); }}>
-                            {reciboBusy === i.id ? 'A gerar…' : 'Recibo'}
-                          </a>
-                          <a href="#" style={{ fontSize: '0.75rem', marginLeft: '0.75rem' }} onClick={(e) => { e.preventDefault(); if (sendBusy !== i.id) handleSendRecibo(i.id); }}>
-                            {sendBusy === i.id ? 'A enviar…' : 'Enviar'}
-                          </a>
+                          {reciboInfo[i.id]?.exists ? (
+                            <>
+                              <a href="#" style={{ fontSize: '0.75rem' }} onClick={(e) => { e.preventDefault(); handleViewRecibo(i.id); }}>
+                                Ver RV
+                              </a>
+                              <a href="#" style={{ fontSize: '0.75rem', marginLeft: '0.75rem' }} onClick={(e) => { e.preventDefault(); if (reciboBusy !== i.id) triggerAttach(i.id); }}>
+                                {reciboBusy === i.id ? 'A processar…' : 'Substituir'}
+                              </a>
+                              <a href="#" style={{ fontSize: '0.75rem', marginLeft: '0.75rem' }} onClick={(e) => { e.preventDefault(); if (sendBusy !== i.id) handleSendRecibo(i.id); }}>
+                                {sendBusy === i.id ? 'A enviar…' : 'Enviar'}
+                              </a>
+                              <a href="#" style={{ fontSize: '0.75rem', marginLeft: '0.75rem', color: 'var(--late, #b00)' }} onClick={(e) => { e.preventDefault(); if (reciboBusy !== i.id) handleRemoveRecibo(i.id); }}>
+                                Remover
+                              </a>
+                            </>
+                          ) : (
+                            <a href="#" style={{ fontSize: '0.75rem' }} onClick={(e) => { e.preventDefault(); if (reciboBusy !== i.id) triggerAttach(i.id); }}>
+                              {reciboBusy === i.id ? 'A anexar…' : '+ Anexar Recibo Verde'}
+                            </a>
+                          )}
                         </>
                       ) : (
                         <a

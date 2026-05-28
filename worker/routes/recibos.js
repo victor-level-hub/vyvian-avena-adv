@@ -1,11 +1,18 @@
-// worker/routes/recibos.js — Fase 3
-// Endpoints /api/recibos/:installmentId  (GET serve|gera, POST regenera, DELETE apaga)
-// Cache no R2 (env.RECIBOS). Atualiza installments.receipt_path.
+// worker/routes/recibos.js — Arquivo de Recibos Verdes (por parcela)
+// A Dra. Vyvian anexa o RV oficial (PDF) emitido na AT; guardamos no R2 e
+// registamos a chave em installments.receipt_path. Sem geração automática.
+//
+// Endpoints (sob /api/recibos/:installmentId):
+//   GET    /api/recibos/:id            -> serve o RV anexado (PDF) | 404 se não houver
+//   GET    /api/recibos/:id?info=true  -> metadados { exists, filename, size, uploaded_at }
+//   PUT    /api/recibos/:id            -> upload do RV (corpo = PDF binário)
+//   DELETE /api/recibos/:id            -> remove o RV anexado
+//   POST   /api/recibos/:id/send       -> envia o RV anexado ao cliente por email
 import { jsonResponse, jsonError } from "../lib/response.js";
-import { generateReciboPDF } from "../lib/pdfgen.js";
 import { sendEmail } from "../lib/senders.js";
 
 const CORS = { "Access-Control-Allow-Origin": "*" };
+const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
 export async function handleRecibos(request, env, path, session) {
   const segments = path.split("/").filter(Boolean); // ['api','recibos',':id','send'?]
@@ -13,14 +20,13 @@ export async function handleRecibos(request, env, path, session) {
   const sub = segments[3];
   if (!installmentId) return jsonError("ID da parcela em falta", 400);
 
-  // POST /api/recibos/:id/send -> envia o recibo por email ao cliente
   if (sub === "send" && request.method === "POST") {
     return sendRecibo(env, installmentId);
   }
 
   switch (request.method) {
-    case "GET":    return getRecibo(request, env, installmentId, false);
-    case "POST":   return getRecibo(request, env, installmentId, true); // força regenerar
+    case "GET":    return getRecibo(request, env, installmentId);
+    case "PUT":    return uploadRecibo(request, env, installmentId);
     case "DELETE": return deleteRecibo(env, installmentId);
     default:       return jsonError("Method not allowed", 405);
   }
@@ -38,162 +44,125 @@ async function loadData(env, installmentId) {
   return { installment, client };
 }
 
-// Nº sequencial estável por ordem de pagamento: AAAA-NNNN
-async function receiptNumber(env, installment) {
-  const paid = (installment.paid_date || new Date().toISOString().slice(0, 10)).slice(0, 10);
-  const year = paid.slice(0, 4);
-  const row = await env.DB.prepare(`
-    SELECT COUNT(*) AS seq FROM installments
-    WHERE status = 'paid' AND paid_date IS NOT NULL
-      AND strftime('%Y', paid_date) = ?
-      AND (paid_date < ? OR (paid_date = ? AND id <= ?))
-  `).bind(year, paid, paid, installment.id).first();
-  const seq = (row?.seq || 1);
-  return `${year}-${String(seq).padStart(4, "0")}`;
+function r2Key(clientId, installmentId) {
+  return `recibos/${clientId}/${installmentId}.pdf`;
 }
 
+// ── Upload do RV (PDF) ──────────────────────────────
+async function uploadRecibo(request, env, installmentId) {
+  const { installment, client, error } = await loadData(env, installmentId);
+  if (error) return error;
+  if (!env.RECIBOS) return jsonError("Armazenamento R2 indispon\u00edvel", 500);
+
+  const ct = request.headers.get("content-type") || "";
+  if (!ct.includes("application/pdf")) {
+    return jsonError("Apenas ficheiros PDF s\u00e3o aceites.", 415);
+  }
+  const buf = await request.arrayBuffer();
+  if (!buf || buf.byteLength === 0) return jsonError("Ficheiro vazio.", 400);
+  if (buf.byteLength > MAX_BYTES) return jsonError("Ficheiro demasiado grande (m\u00e1x. 10 MB).", 413);
+
+  // validar assinatura PDF (%PDF)
+  const head = new Uint8Array(buf.slice(0, 5));
+  const magic = String.fromCharCode(...head);
+  if (!magic.startsWith("%PDF")) return jsonError("O ficheiro n\u00e3o \u00e9 um PDF v\u00e1lido.", 415);
+
+  const key = r2Key(client.id, installment.id);
+  await env.RECIBOS.put(key, buf, {
+    httpMetadata: { contentType: "application/pdf" },
+    customMetadata: { uploaded_at: new Date().toISOString(), original_name: request.headers.get("x-filename") || "recibo-verde.pdf" },
+  });
+  await env.DB.prepare(
+    "UPDATE installments SET receipt_path = ?, updated_at = datetime('now') WHERE id = ?"
+  ).bind(key, installment.id).run().catch(() => {});
+
+  return jsonResponse({ ok: true, installment_id: installment.id, r2_key: key, size: buf.byteLength });
+}
+
+// ── Servir / metadados ──────────────────────────────
+async function getRecibo(request, env, installmentId) {
+  const url = new URL(request.url);
+  const infoOnly = url.searchParams.get("info") === "true";
+
+  const { installment, client, error } = await loadData(env, installmentId);
+  if (error) return error;
+  const key = installment.receipt_path || r2Key(client.id, installment.id);
+
+  if (infoOnly) {
+    let exists = false, size = null, uploaded_at = null, filename = null;
+    if (env.RECIBOS) {
+      const head = await env.RECIBOS.head(key).catch(() => null);
+      if (head) { exists = true; size = head.size; uploaded_at = head.customMetadata?.uploaded_at || null; filename = head.customMetadata?.original_name || null; }
+    }
+    return jsonResponse({ installment_id: installment.id, client_id: client.id, r2_key: key, exists, size, uploaded_at, filename });
+  }
+
+  if (!env.RECIBOS) return jsonError("Armazenamento R2 indispon\u00edvel", 500);
+  const obj = await env.RECIBOS.get(key).catch(() => null);
+  if (!obj) return jsonError("Nenhum Recibo Verde anexado a esta parcela.", 404);
+
+  return new Response(obj.body, {
+    headers: {
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `inline; filename="recibo-verde-${installment.id}.pdf"`,
+      "Cache-Control": "private, max-age=300",
+      ...CORS,
+    },
+  });
+}
+
+// ── Remover ─────────────────────────────────────────
+async function deleteRecibo(env, installmentId) {
+  const { installment, error } = await loadData(env, installmentId);
+  if (error) return error;
+  const key = installment.receipt_path || r2Key(installment.client_id, installment.id);
+  if (env.RECIBOS) await env.RECIBOS.delete(key).catch(() => {});
+  await env.DB.prepare(
+    "UPDATE installments SET receipt_path = NULL, updated_at = datetime('now') WHERE id = ?"
+  ).bind(installmentId).run();
+  return jsonResponse({ ok: true, deleted: key });
+}
+
+// ── Enviar o RV anexado ao cliente ──────────────────
 function u8ToBase64(u8) {
   let s = "";
   const chunk = 0x8000;
-  for (let i = 0; i < u8.length; i += chunk) {
-    s += String.fromCharCode.apply(null, u8.subarray(i, i + chunk));
-  }
+  for (let i = 0; i < u8.length; i += chunk) s += String.fromCharCode.apply(null, u8.subarray(i, i + chunk));
   return btoa(s);
-}
-
-// Garante os bytes do recibo: serve do R2 se existir, senão gera e guarda.
-async function ensureBytes(env, installment, client, number) {
-  const key = `recibos/${client.id}/${installment.id}.pdf`;
-  if (env.RECIBOS) {
-    const cached = await env.RECIBOS.get(key).catch(() => null);
-    if (cached) return { bytes: new Uint8Array(await cached.arrayBuffer()), key };
-  }
-  const bytes = await generateReciboPDF({ client, installment, receiptNumber: number });
-  if (env.RECIBOS) {
-    await env.RECIBOS.put(key, bytes, { httpMetadata: { contentType: "application/pdf" } }).catch(() => {});
-    await env.DB.prepare(
-      "UPDATE installments SET receipt_path = ?, updated_at = datetime('now') WHERE id = ?"
-    ).bind(key, installment.id).run().catch(() => {});
-  }
-  return { bytes, key };
 }
 
 async function sendRecibo(env, installmentId) {
   const { installment, client, error } = await loadData(env, installmentId);
   if (error) return error;
-  if (installment.status !== "paid" || !installment.paid_date) {
-    return jsonError("Recibo s\u00f3 dispon\u00edvel para parcelas pagas.", 409);
-  }
-  if (!client.email) {
-    return jsonError("Cliente sem email registado.", 400);
-  }
+  if (!client.email) return jsonError("Cliente sem email registado.", 400);
+  if (!env.RECIBOS) return jsonError("Armazenamento R2 indispon\u00edvel", 500);
 
-  const number = await receiptNumber(env, installment);
-  const { bytes } = await ensureBytes(env, installment, client, number);
+  const key = installment.receipt_path || r2Key(client.id, installment.id);
+  const obj = await env.RECIBOS.get(key).catch(() => null);
+  if (!obj) return jsonError("Nenhum Recibo Verde anexado para enviar.", 404);
+  const bytes = new Uint8Array(await obj.arrayBuffer());
 
-  const subject = `Recibo ${number} \u2014 Vyvian Avena Advogada`;
+  const subject = `Recibo \u2014 Vyvian Avena Advogada`;
   const text =
     `Caro(a) ${client.name},\n\n` +
-    `Segue em anexo o recibo ${number}, referente \u00e0 parcela ` +
-    `${installment.installment_number}/${installment.total_installments} dos honor\u00e1rios.\n\n` +
+    `Segue em anexo o recibo referente \u00e0 parcela ${installment.installment_number}/${installment.total_installments} dos honor\u00e1rios.\n\n` +
     `Com os melhores cumprimentos,\nVyvian Avena Advogada`;
 
   const result = await sendEmail(env, {
-    to: client.email,
-    subject,
-    text,
-    attachments: [{ filename: `recibo-${number}.pdf`, content: u8ToBase64(bytes) }],
+    to: client.email, subject, text,
+    attachments: [{ filename: `recibo-${installment.id}.pdf`, content: u8ToBase64(bytes) }],
   });
 
-  // registar no log
   await env.DB.prepare(`
     INSERT INTO notification_log (id, installment_id, client_id, channel, status, message_preview, error_message, external_id)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `).bind(
     crypto.randomUUID(), installment.id, client.id, "email",
     result.ok ? "sent" : result.skipped ? "skipped" : "error",
-    `Recibo ${number} -> ${client.email}`, result.error || null, result.external_id || null
+    `Recibo Verde -> ${client.email}`, result.error || null, result.external_id || null
   ).run().catch(() => {});
 
   if (result.skipped) return jsonResponse({ ok: false, skipped: true, reason: result.reason, sent_to: client.email });
   if (!result.ok) return jsonError(result.error || "Falha no envio do email", 502);
-  return jsonResponse({ ok: true, sent_to: client.email, receipt_number: number, external_id: result.external_id });
-}
-
-async function getRecibo(request, env, installmentId, force) {
-  const url = new URL(request.url);
-  const infoOnly = url.searchParams.get("info") === "true";
-
-  const { installment, client, error } = await loadData(env, installmentId);
-  if (error) return error;
-
-  if (installment.status !== "paid" || !installment.paid_date) {
-    return jsonError("Recibo s\u00f3 dispon\u00edvel para parcelas pagas.", 409);
-  }
-
-  const key = `recibos/${client.id}/${installment.id}.pdf`;
-
-  // info=true → metadados, sem gerar/descarregar o PDF
-  if (infoOnly) {
-    let exists = false;
-    if (env.RECIBOS) {
-      const head = await env.RECIBOS.head(key).catch(() => null);
-      exists = !!head;
-    }
-    return jsonResponse({
-      installment_id: installment.id,
-      client_id: client.id,
-      receipt_number: await receiptNumber(env, installment),
-      r2_key: key,
-      exists,
-    });
-  }
-
-  // Servir do cache R2 (se existir e não for regeneração forçada)
-  if (!force && env.RECIBOS) {
-    const cached = await env.RECIBOS.get(key).catch(() => null);
-    if (cached) {
-      return new Response(cached.body, {
-        headers: {
-          "Content-Type": "application/pdf",
-          "Content-Disposition": `inline; filename="recibo-${installment.id}.pdf"`,
-          "Cache-Control": "private, max-age=300",
-          ...CORS,
-        },
-      });
-    }
-  }
-
-  // Gerar
-  const number = await receiptNumber(env, installment);
-  const bytes = await generateReciboPDF({ client, installment, receiptNumber: number });
-
-  // Guardar no R2 + registar a chave na parcela
-  if (env.RECIBOS) {
-    await env.RECIBOS.put(key, bytes, {
-      httpMetadata: { contentType: "application/pdf" },
-    }).catch((e) => console.error("R2 put falhou:", e.message));
-    await env.DB.prepare(
-      "UPDATE installments SET receipt_path = ?, updated_at = datetime('now') WHERE id = ?"
-    ).bind(key, installment.id).run().catch(() => {});
-  }
-
-  return new Response(bytes, {
-    headers: {
-      "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="recibo-${number}.pdf"`,
-      ...CORS,
-    },
-  });
-}
-
-async function deleteRecibo(env, installmentId) {
-  const { installment, error } = await loadData(env, installmentId);
-  if (error) return error;
-  const key = installment.receipt_path || `recibos/${installment.client_id}/${installment.id}.pdf`;
-  if (env.RECIBOS) await env.RECIBOS.delete(key).catch(() => {});
-  await env.DB.prepare(
-    "UPDATE installments SET receipt_path = NULL, updated_at = datetime('now') WHERE id = ?"
-  ).bind(installmentId).run();
-  return jsonResponse({ ok: true, deleted: key });
+  return jsonResponse({ ok: true, sent_to: client.email });
 }

@@ -14,6 +14,7 @@
 //   POST   /api/public/upload/:token              -> recebe ficheiro (Content-Type=mime, X-Filename: original)
 //
 import { jsonResponse, jsonError } from "../lib/response.js";
+import { sendEmail } from "../lib/senders.js";
 
 const MAX_BYTES = 15 * 1024 * 1024; // 15 MB
 const ALLOWED_MIME = [
@@ -194,6 +195,22 @@ export async function handlePublicUpload(request, env, path) {
     await env.DB.prepare(
       "UPDATE upload_tokens SET used_count = used_count + 1, last_used_at = datetime('now') WHERE token = ?"
     ).bind(token).run();
+
+    // Notificar a Vyvian por email (não bloqueia o upload se falhar)
+    if (env.ADMIN_EMAIL && env.RESEND_API_KEY) {
+      const sizeKB = Math.round(buf.byteLength / 1024);
+      const subject = `📎 ${client.name} enviou um documento (${filename})`;
+      const text =
+        `Olá Vyvian,\n\n` +
+        `O cliente "${client.name}" acabou de enviar um documento através do link de upload:\n\n` +
+        `  • Ficheiro: ${filename}\n` +
+        `  • Tamanho: ${sizeKB} KB\n` +
+        `  • Tipo: ${ct}\n\n` +
+        `Pode consultá-lo no separador "Documentos" da ficha do cliente.\n\n` +
+        `— Sistema Vyvian Avena Advogada`;
+      // não esperamos o resultado para não atrasar a resposta ao cliente
+      sendEmail(env, { to: env.ADMIN_EMAIL, subject, text }).catch(() => {});
+    }
 
     return new Response(JSON.stringify({ ok: true, id: docId, filename, size: buf.byteLength }), {
       headers: { "Content-Type": "application/json", ...CORS_PUBLIC },

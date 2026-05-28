@@ -15,6 +15,7 @@ export async function sendEmail(env, { to, subject, html, text, attachments }) {
       body: JSON.stringify({
         from: env.RESEND_FROM || "Vyvian Avena Advogada <no-reply@vyavenaadv.com>",
         to: [to],
+        reply_to: env.RESEND_REPLY_TO || undefined,
         subject: subject || "Vyvian Avena Advogada",
         html: html || (text ? `<p>${text}</p>` : ""),
         text: text || undefined,

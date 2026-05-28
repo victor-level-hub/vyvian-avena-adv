@@ -1,7 +1,7 @@
 // src/admin/pages/ClientDetail.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { clients as clientsApi, installments as installmentsApi, recibos as recibosApi } from '../apiClient';
+import { clients as clientsApi, installments as installmentsApi, recibos as recibosApi, procuracoes as procApi } from '../apiClient';
 
 function fmtMoney(amount, currency = 'EUR') {
   const symbol = currency === 'BRL' ? 'R$' : '€';
@@ -45,6 +45,16 @@ export default function ClientDetail() {
   const [sendBusy, setSendBusy] = useState(null);
   const fileInputRef = React.useRef(null);
   const pendingUploadId = React.useRef(null);
+
+  // ── Procurações
+  const [procTemplates, setProcTemplates] = useState([]);
+  const [procTemplateId, setProcTemplateId] = useState('');
+  const [procText, setProcText] = useState('');
+  const [procEditable, setProcEditable] = useState([]);   // ['poderes', ...]
+  const [procOverrides, setProcOverrides] = useState({}); // { poderes: '...' }
+  const [procLocal, setProcLocal] = useState('Santa Maria da Feira');
+  const [procData, setProcData] = useState(new Date().toISOString().slice(0, 10));
+  const [procBusy, setProcBusy] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -139,6 +149,56 @@ export default function ClientDetail() {
     }
   };
 
+  // ── Procurações: carregar lista de modelos (apenas uma vez)
+  useEffect(() => {
+    (async () => {
+      try { const r = await procApi.listTemplates(); setProcTemplates(r.templates || []); }
+      catch (e) { /* silencioso — secção opcional */ }
+    })();
+  }, []);
+
+  // Quando muda o modelo escolhido, fazer preview do texto preenchido
+  const handlePickTemplate = async (templateId) => {
+    setProcTemplateId(templateId);
+    setProcOverrides({});
+    setProcText('');
+    setProcEditable([]);
+    if (!templateId) return;
+    setProcBusy(true);
+    try {
+      const r = await procApi.preview({ template_id: templateId, client_id: clientId });
+      setProcText(r.texto || '');
+      const fields = r.campos_editaveis || [];
+      setProcEditable(fields);
+      // pré-preencher cada campo editável com texto sugerido padrão (vazio se o utilizador definir)
+      const defaults = {};
+      if (fields.includes('poderes')) defaults.poderes = 'poderes para o representar no âmbito do processo n.º [INDICAR] e processos conexos, incluindo a junção de documentos, apresentação de requerimentos, resposta a notificações, interposição de recursos e prática de todos os demais atos processuais necessários à defesa dos seus direitos.';
+      setProcOverrides(defaults);
+    } catch (e) {
+      alert('Erro a carregar modelo: ' + e.message);
+    } finally {
+      setProcBusy(false);
+    }
+  };
+
+  const handleGenerateProc = async () => {
+    if (!procTemplateId) return;
+    setProcBusy(true);
+    try {
+      await procApi.generateOpen({
+        template_id: procTemplateId,
+        client_id: clientId,
+        overrides: procOverrides,
+        local: procLocal,
+        data: procData,
+      });
+    } catch (e) {
+      alert('Erro a gerar procuração: ' + e.message);
+    } finally {
+      setProcBusy(false);
+    }
+  };
+
   if (loading) return <div className="adm-empty" style={{ padding: '3rem' }}>A carregar cliente…</div>;
   if (error) return <div className="adm-login-error">{error}</div>;
   if (!data?.client) {
@@ -211,6 +271,7 @@ export default function ClientDetail() {
           { id: 'summary', label: 'Resumo' },
           { id: 'comms', label: 'Comunicações' },
           { id: 'docs', label: 'Documentos' },
+          { id: 'procuracoes', label: 'Procurações' },
           { id: 'notes', label: 'Notas privadas' },
         ].map((t) => (
           <button
@@ -354,6 +415,74 @@ export default function ClientDetail() {
 
       {activeTab === 'docs' && (
         <div className="adm-empty">Gestão de documentos — em desenvolvimento.</div>
+      )}
+
+      {activeTab === 'procuracoes' && (
+        <div className="adm-card">
+          <div className="adm-card-title">Gerar procuração</div>
+          <p style={{ color: 'var(--muted)', fontSize: '0.9rem', marginTop: 0 }}>
+            Os dados do cliente são preenchidos automaticamente a partir do cadastro.
+            Os blocos editáveis (ex.: <em>poderes</em>) vêm sugeridos — ajuste-os antes de gerar.
+          </p>
+
+          <div className="adm-field" style={{ maxWidth: 520 }}>
+            <label>Modelo de procuração</label>
+            <select value={procTemplateId} onChange={(e) => handlePickTemplate(e.target.value)} disabled={procBusy}>
+              <option value="">— selecionar —</option>
+              {procTemplates.map((t) => (
+                <option key={t.id} value={t.id}>{t.categoria ? `[${t.categoria}] ` : ''}{t.nome}</option>
+              ))}
+            </select>
+          </div>
+
+          {procTemplateId && (
+            <>
+              {procEditable.includes('poderes') && (
+                <div className="adm-field">
+                  <label>Poderes específicos (editável)</label>
+                  <textarea
+                    rows={5}
+                    value={procOverrides.poderes || ''}
+                    onChange={(e) => setProcOverrides({ ...procOverrides, poderes: e.target.value })}
+                    disabled={procBusy}
+                    style={{ width: '100%', fontFamily: 'inherit', fontSize: '0.9rem', padding: '0.6rem' }}
+                  />
+                </div>
+              )}
+
+              <div className="adm-field-row" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+                <div className="adm-field" style={{ flex: 1, minWidth: 200 }}>
+                  <label>Local de emissão</label>
+                  <input type="text" value={procLocal} onChange={(e) => setProcLocal(e.target.value)} disabled={procBusy} />
+                </div>
+                <div className="adm-field" style={{ flex: 1, minWidth: 200 }}>
+                  <label>Data</label>
+                  <input type="date" value={procData} onChange={(e) => setProcData(e.target.value)} disabled={procBusy} />
+                </div>
+              </div>
+
+              <details style={{ margin: '1rem 0', fontSize: '0.85rem' }}>
+                <summary style={{ cursor: 'pointer', color: 'var(--muted)' }}>Ver texto preenchido (preview)</summary>
+                <pre style={{ whiteSpace: 'pre-wrap', background: 'var(--cream, #f5f0e8)', padding: '0.8rem', borderRadius: 4, marginTop: '0.5rem', fontSize: '0.85rem', fontFamily: 'inherit' }}>
+                  {procText}
+                </pre>
+              </details>
+
+              <button
+                className="adm-btn adm-btn-gold"
+                onClick={handleGenerateProc}
+                disabled={procBusy}
+                style={{ marginTop: '0.5rem' }}
+              >
+                {procBusy ? 'A gerar…' : 'Gerar PDF'}
+              </button>
+
+              <p style={{ fontSize: '0.8rem', color: 'var(--muted)', marginTop: '0.75rem' }}>
+                Campos em falta no cadastro aparecerão como <code>[•]</code> no documento. Para os preencher, edite o cliente.
+              </p>
+            </>
+          )}
+        </div>
       )}
 
       {activeTab === 'notes' && (

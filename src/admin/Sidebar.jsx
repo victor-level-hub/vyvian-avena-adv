@@ -15,16 +15,24 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const session = getSession();
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     navigate('/admin/login');
   };
 
   return (
     <aside className="adm-sidebar">
       <div className="adm-sidebar-brand">
-        <div className="adm-sidebar-logo">V</div>
-        <div className="adm-sidebar-name">Vyvian Avena</div>
+        <img
+          src="/logo-vyvian-vertical-gold.svg"
+          alt="Vyvian Avena Advogada"
+          style={{
+            height: '90px',
+            width: 'auto',
+            display: 'block',
+            marginBottom: '0.5rem',
+          }}
+        />
         <div className="adm-sidebar-role">Área Privada</div>
       </div>
 

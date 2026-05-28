@@ -1,7 +1,7 @@
 // src/admin/pages/ClientDetail.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { clients as clientsApi, installments as installmentsApi } from '../apiClient';
+import { clients as clientsApi, installments as installmentsApi, recibos as recibosApi } from '../apiClient';
 
 function fmtMoney(amount, currency = 'EUR') {
   const symbol = currency === 'BRL' ? 'R$' : '€';
@@ -40,6 +40,7 @@ export default function ClientDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [markingPaid, setMarkingPaid] = useState(null);
+  const [reciboBusy, setReciboBusy] = useState(null);
 
   const loadData = async () => {
     setLoading(true);
@@ -66,6 +67,17 @@ export default function ClientDetail() {
       alert('Erro: ' + err.message);
     } finally {
       setMarkingPaid(null);
+    }
+  };
+
+  const handleRecibo = async (installmentId) => {
+    setReciboBusy(installmentId);
+    try {
+      await recibosApi.openInNewTab(installmentId);
+    } catch (err) {
+      alert('Não foi possível gerar o recibo: ' + err.message);
+    } finally {
+      setReciboBusy(null);
     }
   };
 
@@ -211,8 +223,8 @@ export default function ClientDetail() {
                     <td><StatusBadge installment={i} /></td>
                     <td>
                       {i.status === 'paid' ? (
-                        <a href="#" style={{ fontSize: '0.75rem' }} onClick={(e) => { e.preventDefault(); alert('Geração de recibo PDF — em desenvolvimento'); }}>
-                          Recibo
+                        <a href="#" style={{ fontSize: '0.75rem' }} onClick={(e) => { e.preventDefault(); if (reciboBusy !== i.id) handleRecibo(i.id); }}>
+                          {reciboBusy === i.id ? 'A gerar…' : 'Recibo'}
                         </a>
                       ) : (
                         <a

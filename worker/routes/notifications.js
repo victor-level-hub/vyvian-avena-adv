@@ -1,11 +1,18 @@
 // worker/routes/notifications.js
 import { jsonResponse, jsonError } from '../lib/response.js';
+import { runDailyCron } from '../cron.js'; // Fase 2
 
 export async function handleNotifications(request, env, path, session) {
   const method = request.method;
   const segments = path.split('/').filter(Boolean);
-  const subRoute = segments[2]; // 'rules' | 'templates' | 'log'
+  const subRoute = segments[2]; // 'rules' | 'templates' | 'log' | 'process-queue'
   const id = segments[3];
+
+  // NOVO (Fase 2): força processamento das notificações devidas agora
+  if (subRoute === 'process-queue' && method === 'POST') {
+    const result = await runDailyCron(env);
+    return jsonResponse({ ok: true, ...result });
+  }
 
   if (subRoute === 'rules') {
     if (!id && method === 'GET') return listRules(request, env);

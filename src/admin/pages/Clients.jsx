@@ -1,6 +1,6 @@
 // src/admin/pages/Clients.jsx
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { clients as clientsApi, installments as installmentsApi } from '../apiClient';
 
 function fmtMoney(amount, currency = 'EUR') {
@@ -33,16 +33,41 @@ function StatusBadge({ installment }) {
   return <span className="adm-badge adm-badge-pending">A vencer</span>;
 }
 
+// Peso de ordenação por estado de pagamento: atraso primeiro, depois a vencer, depois quitado
+function payRank(next) {
+  if (!next) return 2;            // quitado / sem plano
+  if (next.status === 'late') return 0;
+  return 1;                        // a vencer / hoje / amanhã
+}
+
 export default function Clients() {
   const navigate = useNavigate();
-  const [search, setSearch] = useState('');
-  const [areaFilter, setAreaFilter] = useState('all');
-  const [countryFilter, setCountryFilter] = useState('all');
-  const [payFilter, setPayFilter] = useState('all');
+  const [params, setParams] = useSearchParams();
+
+  // Estado inicial lido do URL (permite guardar/partilhar uma vista filtrada)
+  const [search, setSearch] = useState(params.get('q') || '');
+  const [areaFilter, setAreaFilter] = useState(params.get('area') || 'all');
+  const [countryFilter, setCountryFilter] = useState(params.get('pais') || 'all');
+  const [payFilter, setPayFilter] = useState(params.get('sit') || 'all');
+  const [sortBy, setSortBy] = useState(params.get('sort') || 'due'); // due | name | amount
+  const [sortDir, setSortDir] = useState(params.get('dir') || 'asc'); // asc | desc
+
   const [allClients, setAllClients] = useState([]);
   const [nextByClient, setNextByClient] = useState({}); // { clientId: installment | null }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  // Sincroniza filtros/ordenação com o URL (sem poluir o histórico)
+  useEffect(() => {
+    const p = {};
+    if (search) p.q = search;
+    if (areaFilter !== 'all') p.area = areaFilter;
+    if (countryFilter !== 'all') p.pais = countryFilter;
+    if (payFilter !== 'all') p.sit = payFilter;
+    if (sortBy !== 'due') p.sort = sortBy;
+    if (sortDir !== 'asc') p.dir = sortDir;
+    setParams(p, { replace: true });
+  }, [search, areaFilter, countryFilter, payFilter, sortBy, sortDir, setParams]);
 
   useEffect(() => {
     (async () => {
@@ -80,7 +105,7 @@ export default function Clients() {
   }, []);
 
   const filtered = useMemo(() => {
-    return allClients.filter((c) => {
+    const out = allClients.filter((c) => {
       if (areaFilter !== 'all' && c.practice_area !== areaFilter) return false;
       if (countryFilter !== 'all' && c.country !== countryFilter) return false;
       if (payFilter !== 'all') {
@@ -98,10 +123,42 @@ export default function Clients() {
       }
       return true;
     });
-  }, [search, areaFilter, countryFilter, payFilter, allClients, nextByClient]);
+
+    const dir = sortDir === 'desc' ? -1 : 1;
+    out.sort((a, b) => {
+      const na = nextByClient[a.id];
+      const nb = nextByClient[b.id];
+      let cmp = 0;
+      if (sortBy === 'name') {
+        cmp = a.name.localeCompare(b.name, 'pt');
+      } else if (sortBy === 'amount') {
+        cmp = Number(na?.amount || 0) - Number(nb?.amount || 0);
+      } else { // 'due' — por estado de pagamento e depois data de vencimento
+        const r = payRank(na) - payRank(nb);
+        if (r !== 0) cmp = r;
+        else {
+          const da = na ? new Date(na.due_date).getTime() : Infinity;
+          const db = nb ? new Date(nb.due_date).getTime() : Infinity;
+          cmp = da - db;
+        }
+      }
+      return cmp * dir;
+    });
+    return out;
+  }, [search, areaFilter, countryFilter, payFilter, sortBy, sortDir, allClients, nextByClient]);
 
   const hasFilters = search || areaFilter !== 'all' || countryFilter !== 'all' || payFilter !== 'all';
   const clearFilters = () => { setSearch(''); setAreaFilter('all'); setCountryFilter('all'); setPayFilter('all'); };
+
+  const toggleSort = (col) => {
+    if (sortBy === col) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortBy(col);
+      setSortDir('asc');
+    }
+  };
+  const sortArrow = (col) => (sortBy === col ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '');
 
   const totalActive = Object.keys(nextByClient).length;
 
@@ -163,11 +220,11 @@ export default function Clients() {
         <table className="adm-table">
           <thead>
             <tr>
-              <th>Cliente</th>
+              <th className="adm-th-sort" onClick={() => toggleSort('name')}>Cliente{sortArrow('name')}</th>
               <th>Área</th>
               <th>País</th>
-              <th>Próx. vencimento</th>
-              <th className="adm-text-right">Valor</th>
+              <th className="adm-th-sort" onClick={() => toggleSort('due')}>Próx. vencimento{sortArrow('due')}</th>
+              <th className="adm-text-right adm-th-sort" onClick={() => toggleSort('amount')}>Valor{sortArrow('amount')}</th>
               <th>Estado</th>
             </tr>
           </thead>
@@ -205,4 +262,3 @@ export default function Clients() {
     </>
   );
 }
-

@@ -755,3 +755,15 @@
   .adm-client-head .adm-client-avatar { margin: 0 auto; }
   .adm-client-actions { justify-content: center; }
 }
+
+
+/* Cabeçalhos de tabela ordenáveis (lista de clientes) */
+.adm-th-sort {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+.adm-th-sort:hover {
+  color: var(--gold, #b8935a);
+}

@@ -76,10 +76,10 @@ export default function Sobre() {
               <h2 className="font-heading text-3xl md:text-4xl text-forest mb-4">Os Nossos Valores</h2>
             </div>
           </ScrollReveal>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-stretch">
             {VALUES.map((val, i) => (
-              <ScrollReveal key={val.title} delay={i * 100}>
-                <div className="p-8 bg-warmwhite border border-border text-center">
+              <ScrollReveal key={val.title} delay={i * 100} className="h-full">
+                <div className="h-full flex flex-col p-8 bg-warmwhite border border-border text-center">
                   <val.icon className="w-8 h-8 text-gold mx-auto mb-4" />
                   <h3 className="font-heading text-xl text-forest mb-2">{val.title}</h3>
                   <p className="font-body text-sm text-forest/60 leading-relaxed">{val.desc}</p>

@@ -46,6 +46,10 @@ export default function ClientDetail() {
   const [planPdfBusy, setPlanPdfBusy] = useState(false);
   const [planSendBusy, setPlanSendBusy] = useState(false);
   const [planMsg, setPlanMsg] = useState(null);
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState(null);
+  const [editBusy, setEditBusy] = useState(false);
+  const [editError, setEditError] = useState(null);
   const fileInputRef = React.useRef(null);
   const pendingUploadId = React.useRef(null);
 
@@ -200,6 +204,48 @@ export default function ClientDetail() {
     }
   };
 
+  const openEdit = () => {
+    setEditError(null);
+    setEditForm({
+      name: client.name || '',
+      email: client.email || '',
+      phone: client.phone || '',
+      identification: client.identification || '',
+      practice_area: client.practice_area || '',
+      address: client.address || '',
+      nationality: client.nationality || '',
+      marital_status: client.marital_status || '',
+      birth_date: client.birth_date || '',
+      birth_place: client.birth_place || '',
+      doc_type: client.doc_type || '',
+      doc_number: client.doc_number || '',
+      doc_validity: client.doc_validity || '',
+      rg: client.rg || '',
+      niss: client.niss || '',
+      filiation: client.filiation || '',
+      notes: client.notes || '',
+      status: client.status || 'active',
+    });
+    setEditing(true);
+  };
+
+  const editField = (key) => (e) => setEditForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const handleSaveEdit = async () => {
+    if (!editForm.name.trim()) { setEditError('O nome é obrigatório.'); return; }
+    setEditBusy(true);
+    setEditError(null);
+    try {
+      await clientsApi.update(client.id, editForm);
+      setEditing(false);
+      await loadData();
+    } catch (err) {
+      setEditError(err.message || 'Falha ao guardar.');
+    } finally {
+      setEditBusy(false);
+    }
+  };
+
   const handlePickTemplate = async (templateId) => {
     setProcTemplateId(templateId);
     setProcOverrides({});
@@ -329,6 +375,67 @@ export default function ClientDetail() {
         style={{ display: 'none' }}
         onChange={handleFileChosen}
       />
+
+      {editing && editForm && (
+        <div
+          onClick={(e) => { if (e.target === e.currentTarget && !editBusy) setEditing(false); }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '3rem 1rem', zIndex: 1000, overflowY: 'auto' }}
+        >
+          <div style={{ background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 640, padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <h2 style={{ margin: '0 0 1.25rem', fontFamily: 'var(--serif)' }}>Editar cliente</h2>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.9rem' }}>
+              <label className="adm-field" style={{ gridColumn: '1 / -1' }}>
+                <span>Nome *</span>
+                <input type="text" value={editForm.name} onChange={editField('name')} disabled={editBusy} />
+              </label>
+              <label className="adm-field"><span>Email</span><input type="email" value={editForm.email} onChange={editField('email')} disabled={editBusy} /></label>
+              <label className="adm-field"><span>Telefone</span><input type="tel" value={editForm.phone} onChange={editField('phone')} disabled={editBusy} /></label>
+              <label className="adm-field"><span>{client.country === 'BR' ? 'CPF/CNPJ' : 'NIF'}</span><input type="text" value={editForm.identification} onChange={editField('identification')} disabled={editBusy} /></label>
+              <label className="adm-field">
+                <span>Área de atuação</span>
+                <select value={editForm.practice_area} onChange={editField('practice_area')} disabled={editBusy}>
+                  <option value="">—</option>
+                  <option value="Família">Família</option>
+                  <option value="Cível">Cível</option>
+                  <option value="Trabalhista">Trabalhista</option>
+                  <option value="Empresarial">Empresarial</option>
+                  <option value="Nacionalidade">Nacionalidade</option>
+                </select>
+              </label>
+              <label className="adm-field" style={{ gridColumn: '1 / -1' }}><span>Morada</span><input type="text" value={editForm.address} onChange={editField('address')} disabled={editBusy} /></label>
+              <label className="adm-field"><span>Nacionalidade</span><input type="text" value={editForm.nationality} onChange={editField('nationality')} disabled={editBusy} /></label>
+              <label className="adm-field"><span>Estado civil</span><input type="text" value={editForm.marital_status} onChange={editField('marital_status')} disabled={editBusy} /></label>
+              <label className="adm-field"><span>Data de nascimento</span><input type="date" value={editForm.birth_date} onChange={editField('birth_date')} disabled={editBusy} /></label>
+              <label className="adm-field"><span>Naturalidade</span><input type="text" value={editForm.birth_place} onChange={editField('birth_place')} disabled={editBusy} /></label>
+              <label className="adm-field"><span>Tipo de documento</span><input type="text" value={editForm.doc_type} onChange={editField('doc_type')} disabled={editBusy} /></label>
+              <label className="adm-field"><span>Nº do documento</span><input type="text" value={editForm.doc_number} onChange={editField('doc_number')} disabled={editBusy} /></label>
+              <label className="adm-field"><span>Validade do documento</span><input type="date" value={editForm.doc_validity} onChange={editField('doc_validity')} disabled={editBusy} /></label>
+              {client.country === 'BR'
+                ? <label className="adm-field"><span>RG</span><input type="text" value={editForm.rg} onChange={editField('rg')} disabled={editBusy} /></label>
+                : <label className="adm-field"><span>NISS</span><input type="text" value={editForm.niss} onChange={editField('niss')} disabled={editBusy} /></label>}
+              <label className="adm-field" style={{ gridColumn: '1 / -1' }}><span>Filiação</span><input type="text" value={editForm.filiation} onChange={editField('filiation')} disabled={editBusy} /></label>
+              <label className="adm-field" style={{ gridColumn: '1 / -1' }}>
+                <span>Estado</span>
+                <select value={editForm.status} onChange={editField('status')} disabled={editBusy}>
+                  <option value="active">Ativo</option>
+                  <option value="inactive">Inativo</option>
+                </select>
+              </label>
+              <label className="adm-field" style={{ gridColumn: '1 / -1' }}>
+                <span>Notas privadas</span>
+                <textarea rows={3} value={editForm.notes} onChange={editField('notes')} disabled={editBusy} />
+              </label>
+            </div>
+            {editError && <div className="adm-login-error" style={{ marginTop: '1rem' }}>{editError}</div>}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
+              <button className="adm-btn" onClick={() => setEditing(false)} disabled={editBusy}>Cancelar</button>
+              <button className="adm-btn adm-btn-gold" onClick={handleSaveEdit} disabled={editBusy}>
+                {editBusy ? 'A guardar…' : 'Guardar alterações'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <div className="adm-client-head">
         <div className="adm-client-avatar">{initials || 'C'}</div>
         <div>
@@ -345,7 +452,7 @@ export default function ClientDetail() {
           </div>
         </div>
         <div className="adm-client-actions">
-          <button onClick={() => alert('Edição completa na próxima iteração')}>Editar</button>
+          <button onClick={openEdit}>Editar</button>
           <button className="primary" onClick={() => alert('Registo de pagamento avulso — em desenvolvimento')}>+ Pagamento</button>
         </div>
       </div>
@@ -695,4 +802,5 @@ export default function ClientDetail() {
     </>
   );
 }
+
 

@@ -47,7 +47,11 @@ export default function Footer() {
                 <Phone className="w-4 h-4 text-gold" />
                 +351 911 831 530
               </a>
-              <a href="mailto:vyvianavena-60987P@adv.oa.pt" className="flex items-center gap-2 hover:text-gold transition-colors">
+              <a href="mailto:vyavena@gmail.com" className="flex items-center gap-2 hover:text-gold transition-colors">
+                <Mail className="w-4 h-4 text-gold" />
+                vyavena@gmail.com
+              </a>
+              <a href="mailto:vyvianavena-60987P@adv.oa.pt" className="flex items-center gap-2 hover:text-gold transition-colors text-warmwhite/60">
                 <Mail className="w-4 h-4 text-gold" />
                 vyvianavena-60987P@adv.oa.pt
               </a>

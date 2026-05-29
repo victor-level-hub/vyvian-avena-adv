@@ -1,5 +1,5 @@
 import { useForm, ValidationError } from "@formspree/react";
-import { Phone, Mail, Clock, MessageCircle } from "lucide-react";
+import { Phone, Mail, Clock, MessageCircle, Instagram } from "lucide-react";
 import ScrollReveal from "../components/ScrollReveal";
 import ContactMap from "../components/ContactMap";
 
@@ -159,7 +159,10 @@ export default function Contacto() {
                 <Mail className="w-5 h-5 text-gold mt-1 shrink-0" />
                 <div>
                   <div className="font-body text-xs tracking-widest uppercase text-forest/40 mb-1">Email</div>
-                  <a href="mailto:vyvianavena-60987P@adv.oa.pt" className="font-body text-forest hover:text-gold transition-colors">
+                  <a href="mailto:vyavena@gmail.com" className="font-body text-forest hover:text-gold transition-colors block">
+                    vyavena@gmail.com
+                  </a>
+                  <a href="mailto:vyvianavena-60987P@adv.oa.pt" className="font-body text-forest/70 hover:text-gold transition-colors block text-sm mt-1">
                     vyvianavena-60987P@adv.oa.pt
                   </a>
                 </div>
@@ -171,6 +174,16 @@ export default function Contacto() {
                   <a href="https://wa.me/351911831530" target="_blank" rel="noopener noreferrer"
                     className="font-body text-forest hover:text-gold transition-colors">
                     +351 911 831 530
+                  </a>
+                </div>
+              </div>
+              <div className="flex items-start gap-4">
+                <Instagram className="w-5 h-5 text-gold mt-1 shrink-0" />
+                <div>
+                  <div className="font-body text-xs tracking-widest uppercase text-forest/40 mb-1">Instagram</div>
+                  <a href="https://www.instagram.com/vyvianavenaadv/" target="_blank" rel="noopener noreferrer"
+                    className="font-body text-forest hover:text-gold transition-colors">
+                    @vyvianavenaadv
                   </a>
                 </div>
               </div>
@@ -190,3 +203,4 @@ export default function Contacto() {
     </div>
   );
 }
+

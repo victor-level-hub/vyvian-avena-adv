@@ -55,6 +55,10 @@ export default function Footer() {
                 <Mail className="w-4 h-4 text-gold" />
                 vyvianavena-60987P@adv.oa.pt
               </a>
+              <a href="https://www.instagram.com/vyvianavenaadv/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 hover:text-gold transition-colors">
+                <Instagram className="w-4 h-4 text-gold" />
+                @vyvianavenaadv
+              </a>
             </div>
           </div>
 
@@ -93,3 +97,4 @@ export default function Footer() {
     </footer>
   );
 }
+

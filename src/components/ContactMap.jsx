@@ -29,7 +29,7 @@ export default function ContactMap() {
               letterSpacing: "0.18em",
               textTransform: "uppercase",
               color: "#b8935a",
-              fontFamily: "Jost, sans-serif"
+              fontFamily: "Mulish, sans-serif"
             }}>{office.region}</span>
           </div>
           <div style={{
@@ -53,3 +53,4 @@ export default function ContactMap() {
     </div>
   );
 }
+

@@ -24,7 +24,7 @@ export default function CookieBanner() {
       position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9999,
       background: '#12302a', borderTop: '1.5px solid #b8935a',
       boxShadow: '0 -4px 32px rgba(0,0,0,0.25)',
-      fontFamily: 'Jost, sans-serif',
+      fontFamily: 'Mulish, sans-serif',
     }}>
       <div style={{ maxWidth: '1280px', margin: '0 auto', padding: '24px 32px' }}>
         {!showPrefs ? (
@@ -32,7 +32,7 @@ export default function CookieBanner() {
             <div style={{ flex: 1, minWidth: '260px' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '8px' }}>
                 <span style={{ fontSize: '20px' }}>🍪</span>
-                <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px', fontWeight: 600, color: '#faf8f4', letterSpacing: '0.02em' }}>
+                <span style={{ fontFamily: 'Fraunces, serif', fontSize: '18px', fontWeight: 600, color: '#faf8f4', letterSpacing: '0.02em' }}>
                   Preferências de Privacidade
                 </span>
               </div>
@@ -46,19 +46,19 @@ export default function CookieBanner() {
             <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
               <button
                 onClick={() => accept('essential')}
-                style={{ padding: '9px 20px', border: '1.5px solid #b8935a', background: 'transparent', color: '#b8935a', fontSize: '12px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'Jost, sans-serif', fontWeight: 500 }}
+                style={{ padding: '9px 20px', border: '1.5px solid #b8935a', background: 'transparent', color: '#b8935a', fontSize: '12px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'Mulish, sans-serif', fontWeight: 500 }}
               >
                 Apenas Essenciais
               </button>
               <button
                 onClick={() => setShowPrefs(true)}
-                style={{ padding: '9px 20px', border: 'none', background: 'transparent', color: 'rgba(250,248,244,0.6)', fontSize: '12px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'Jost, sans-serif', fontWeight: 500 }}
+                style={{ padding: '9px 20px', border: 'none', background: 'transparent', color: 'rgba(250,248,244,0.6)', fontSize: '12px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'Mulish, sans-serif', fontWeight: 500 }}
               >
                 Personalizar
               </button>
               <button
                 onClick={() => accept('accepted')}
-                style={{ padding: '9px 22px', border: 'none', background: '#b8935a', color: '#faf8f4', fontSize: '12px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'Jost, sans-serif', fontWeight: 500 }}
+                style={{ padding: '9px 22px', border: 'none', background: '#b8935a', color: '#faf8f4', fontSize: '12px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'Mulish, sans-serif', fontWeight: 500 }}
               >
                 Aceitar Todos
               </button>
@@ -67,7 +67,7 @@ export default function CookieBanner() {
         ) : (
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <span style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px', fontWeight: 600, color: '#faf8f4' }}>
+              <span style={{ fontFamily: 'Fraunces, serif', fontSize: '18px', fontWeight: 600, color: '#faf8f4' }}>
                 Personalizar Preferências
               </span>
               <button onClick={() => setShowPrefs(false)} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'rgba(250,248,244,0.5)' }}>
@@ -105,7 +105,7 @@ export default function CookieBanner() {
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button
                 onClick={() => accept('custom')}
-                style={{ padding: '9px 22px', border: 'none', background: '#b8935a', color: '#faf8f4', fontSize: '12px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'Jost, sans-serif', fontWeight: 500 }}
+                style={{ padding: '9px 22px', border: 'none', background: '#b8935a', color: '#faf8f4', fontSize: '12px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'Mulish, sans-serif', fontWeight: 500 }}
               >
                 Guardar Preferências
               </button>

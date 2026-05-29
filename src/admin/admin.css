@@ -4,7 +4,7 @@
    Todas as classes têm prefixo .adm- para isolamento.
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&family=Jost:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Mulish:wght@300;400;500;600;700&display=swap');
 
 .adm-root {
   --forest: #12302a;
@@ -22,8 +22,8 @@
   --success: #4a7c59;
   --danger: #a04545;
   --warn: #c89656;
-  --serif: 'Cormorant Garamond', Georgia, serif;
-  --sans: 'Jost', -apple-system, sans-serif;
+  --serif: 'Fraunces', Georgia, serif;
+  --sans: 'Mulish', -apple-system, sans-serif;
   --shadow-soft: 0 1px 3px rgba(18, 48, 42, 0.06), 0 8px 24px rgba(18, 48, 42, 0.08);
 
   font-family: var(--sans);
@@ -784,3 +784,4 @@
   color: var(--danger, #bd362f);
   font-size: 0.85rem;
 }
+

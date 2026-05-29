@@ -4,8 +4,8 @@
 
 @layer base {
   :root {
-    --font-heading: 'Cormorant Garamond', serif;
-    --font-body: 'Jost', sans-serif;
+    --font-heading: 'Fraunces', serif;
+    --font-body: 'Mulish', sans-serif;
   }
 
   html {
@@ -63,3 +63,4 @@
     color: #faf8f4;
   }
 }
+

@@ -18,10 +18,11 @@ export default {
         border: 'rgba(18,48,42,0.12)',
       },
       fontFamily: {
-        heading: ['Cormorant Garamond', 'serif'],
-        body: ['Jost', 'sans-serif'],
+        heading: ['Fraunces', 'serif'],
+        body: ['Mulish', 'sans-serif'],
       },
     },
   },
   plugins: [],
 }
+

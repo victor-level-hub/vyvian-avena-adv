@@ -36,18 +36,21 @@ export default function Sobre() {
               Com mais de 15 anos de experiência em Portugal e Brasil, a Dra. Vyvian Avena dedica a sua prática à defesa dos direitos dos seus clientes com proximidade, empatia e rigor profissional.
             </p>
           </ScrollReveal>
-          <ScrollReveal delay={200}>
-            <div className="relative mx-auto max-w-[420px]">
-              {/* moldura dourada decorativa deslocada (toque editorial) */}
-              <div className="absolute -inset-3 border border-gold/30 rounded-md pointer-events-none" />
-              <div className="relative aspect-[3/4] max-h-[520px] overflow-hidden rounded-md ring-1 ring-gold/40 shadow-2xl shadow-black/30">
+          <ScrollReveal delay={200} className="flex justify-center lg:justify-end">
+            {/* padding uniforme garante moldura simétrica em todos os lados */}
+            <div className="relative w-full max-w-[400px] p-4">
+              {/* brilho dourado suave atrás da foto */}
+              <div className="absolute inset-0 rounded-lg bg-gold/20 blur-2xl scale-95 pointer-events-none" aria-hidden="true" />
+              {/* moldura dourada decorativa, simétrica (inset igual a toda a volta) */}
+              <div className="absolute inset-1 border border-gold/30 rounded-md pointer-events-none" aria-hidden="true" />
+              <div className="relative aspect-[3/4] max-h-[520px] overflow-hidden rounded-md ring-1 ring-gold/50 shadow-2xl shadow-black/40">
                 <img
                   src={ABOUT_IMAGE}
                   alt="Dra. Vyvian Avena"
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover transition-transform duration-700 ease-out hover:scale-[1.03]"
                 />
-                {/* gradiente que funde a base da foto no verde do site */}
-                <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-forest/50 to-transparent pointer-events-none" />
+                {/* vinheta suave + fusão da base no verde do site */}
+                <div className="absolute inset-0 pointer-events-none bg-gradient-to-t from-forest/45 via-transparent to-forest/10" aria-hidden="true" />
               </div>
             </div>
           </ScrollReveal>
@@ -155,4 +158,5 @@ export default function Sobre() {
     </div>
   );
 }
+
 

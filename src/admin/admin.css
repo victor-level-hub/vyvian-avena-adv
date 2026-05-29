@@ -767,3 +767,20 @@
 .adm-th-sort:hover {
   color: var(--gold, #b8935a);
 }
+
+/* Ações do plano de pagamento (gerar PDF / enviar) */
+.adm-plan-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+.adm-plan-msg-ok {
+  color: var(--success, #2e7d4f);
+  font-size: 0.85rem;
+}
+.adm-plan-msg-error {
+  color: var(--danger, #bd362f);
+  font-size: 0.85rem;
+}

@@ -192,6 +192,43 @@ export const procuracoes = {
   },
 };
 
+// ============ PLANOS DE PAGAMENTO ============
+export const planos = {
+  // Resumo do plano do cliente: { total, paid, outstanding, count, plan_number, has_email }
+  info: (clientId) => request(`/api/planos/${clientId}/info`),
+
+  // Envia o plano (PDF anexo) ao cliente por email. body: { client_id, channel?, local? }
+  enviar: (clientId, opts = {}) =>
+    request('/api/planos/enviar', { method: 'POST', body: { client_id: clientId, channel: 'email', ...opts } }),
+
+  // Gera o PDF do plano e abre numa nova aba (Bearer + à prova de popup-blocker).
+  async generateOpen(clientId, opts = {}) {
+    const tab = window.open('', '_blank');
+    try {
+      const token = getToken();
+      const res = await fetch('/api/planos/gerar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({ client_id: clientId, ...opts }),
+      });
+      if (!res.ok) {
+        let msg = `HTTP ${res.status}`;
+        try { const e = await res.json(); msg = e.error || msg; } catch {}
+        if (tab) tab.close();
+        const err = new Error(msg); err.status = res.status; throw err;
+      }
+      const blob = await res.blob();
+      const objUrl = URL.createObjectURL(blob);
+      if (tab) tab.location.href = objUrl;
+      else { const a = document.createElement('a'); a.href = objUrl; a.download = `plano-pagamento.pdf`; document.body.appendChild(a); a.click(); a.remove(); }
+      setTimeout(() => URL.revokeObjectURL(objUrl), 60000);
+    } catch (err) {
+      if (tab && !tab.closed) tab.close();
+      throw err;
+    }
+  },
+};
+
 // ============ UPLOAD TOKENS (admin) ============
 export const uploadTokens = {
   // body: { client_id, instructions?, days? }
@@ -228,3 +265,4 @@ export const clientDocs = {
     }
   },
 };
+

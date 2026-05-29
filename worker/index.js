@@ -8,6 +8,7 @@ import { handleNotifications } from './routes/notifications.js';
 import { handleDashboard } from './routes/dashboard.js';
 import { handleRecibos } from './routes/recibos.js'; // Fase 3
 import { handleProcuracoes } from './routes/procuracoes.js'; // Procurações
+import { handlePlanos } from './routes/planos.js'; // Plano de pagamento (PDF + envio)
 import { handleExtracao } from './routes/extracao.js'; // IA: extração de documentos
 import { handleUploadTokens, handleClientDocuments, handlePublicUpload } from './routes/cliente_docs.js'; // Upload pelo cliente
 import { runDailyCron } from './cron.js'; // Fase 2
@@ -72,6 +73,9 @@ export default {
         if (path.startsWith('/api/procuracoes')) {
           return await handleProcuracoes(request, env, path, session);
         }
+        if (path.startsWith('/api/planos')) {
+          return await handlePlanos(request, env, path, session);
+        }
         if (path === '/api/cadastro/extrair-documento') {
           return await handleExtracao(request, env, path, session);
         }
@@ -108,3 +112,4 @@ export default {
     );
   },
 };
+

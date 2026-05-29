@@ -1,7 +1,7 @@
 // src/admin/pages/ClientDetail.jsx
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { clients as clientsApi, installments as installmentsApi, recibos as recibosApi, procuracoes as procApi, uploadTokens as utApi, clientDocs as docsApi } from '../apiClient';
+import { clients as clientsApi, installments as installmentsApi, recibos as recibosApi, procuracoes as procApi, planos as planosApi, uploadTokens as utApi, clientDocs as docsApi } from '../apiClient';
 
 function fmtMoney(amount, currency = 'EUR') {
   const symbol = currency === 'BRL' ? 'R$' : '€';
@@ -43,6 +43,9 @@ export default function ClientDetail() {
   const [reciboInfo, setReciboInfo] = useState({}); // { installmentId: {exists, filename} }
   const [reciboBusy, setReciboBusy] = useState(null);
   const [sendBusy, setSendBusy] = useState(null);
+  const [planPdfBusy, setPlanPdfBusy] = useState(false);
+  const [planSendBusy, setPlanSendBusy] = useState(false);
+  const [planMsg, setPlanMsg] = useState(null);
   const fileInputRef = React.useRef(null);
   const pendingUploadId = React.useRef(null);
 
@@ -166,6 +169,37 @@ export default function ClientDetail() {
   }, []);
 
   // Quando muda o modelo escolhido, fazer preview do texto preenchido
+  const handleGeneratePlanPdf = async () => {
+    setPlanPdfBusy(true);
+    setPlanMsg(null);
+    try {
+      await planosApi.generateOpen(client.id);
+    } catch (err) {
+      setPlanMsg({ type: 'error', text: err.message || 'Falha ao gerar o PDF.' });
+    } finally {
+      setPlanPdfBusy(false);
+    }
+  };
+
+  const handleSendPlan = async () => {
+    if (!client.email) {
+      setPlanMsg({ type: 'error', text: 'Cliente sem email registado. Adicione um email para enviar o plano.' });
+      return;
+    }
+    if (!window.confirm(`Enviar o plano de pagamento para ${client.email}?`)) return;
+    setPlanSendBusy(true);
+    setPlanMsg(null);
+    try {
+      const r = await planosApi.enviar(client.id);
+      if (r.skipped) setPlanMsg({ type: 'error', text: `Envio não configurado: ${r.reason}` });
+      else setPlanMsg({ type: 'ok', text: `Plano enviado para ${r.sent_to}.` });
+    } catch (err) {
+      setPlanMsg({ type: 'error', text: err.message || 'Falha no envio.' });
+    } finally {
+      setPlanSendBusy(false);
+    }
+  };
+
   const handlePickTemplate = async (templateId) => {
     setProcTemplateId(templateId);
     setProcOverrides({});
@@ -337,6 +371,28 @@ export default function ClientDetail() {
 
       {activeTab === 'plan' && (
         <>
+          <div className="adm-plan-actions">
+            <button
+              className="adm-btn"
+              onClick={handleGeneratePlanPdf}
+              disabled={planPdfBusy || installments.length === 0}
+            >
+              {planPdfBusy ? 'A gerar…' : '📄 Gerar PDF'}
+            </button>
+            <button
+              className="adm-btn adm-btn-gold"
+              onClick={handleSendPlan}
+              disabled={planSendBusy || installments.length === 0}
+              title={client.email ? `Enviar para ${client.email}` : 'Cliente sem email'}
+            >
+              {planSendBusy ? 'A enviar…' : '✉ Enviar ao cliente'}
+            </button>
+            {planMsg && (
+              <span className={planMsg.type === 'ok' ? 'adm-plan-msg-ok' : 'adm-plan-msg-error'}>
+                {planMsg.text}
+              </span>
+            )}
+          </div>
           <div className="adm-plan-summary">
             <div className="adm-plan-item">
               <div className="adm-plan-item-label">
@@ -639,3 +695,4 @@ export default function ClientDetail() {
     </>
   );
 }
+

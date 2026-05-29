@@ -82,19 +82,14 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="mt-12 pt-8 border-t border-warmwhite/10 flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="mt-12 pt-8 border-t border-warmwhite/10 flex items-center justify-center">
           <p className="text-xs text-warmwhite/50">
             © 2025 Vyvian Avena — Advogada. Todos os direitos reservados.
           </p>
-          <div className="flex items-center gap-4">
-            <a href="https://www.instagram.com/vyvianavenaadv/" target="_blank" rel="noopener noreferrer" aria-label="Instagram" className="text-gold hover:text-gold/70 transition-colors">
-              <Instagram className="w-5 h-5" />
-            </a>
-            <div className="h-px w-16 bg-gold" />
-          </div>
         </div>
       </div>
     </footer>
   );
 }
+
 

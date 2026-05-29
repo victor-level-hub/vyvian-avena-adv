@@ -2,7 +2,7 @@ import { Link } from "react-router-dom";
 import { Heart, Users, Eye, Award, ArrowRight } from "lucide-react";
 import ScrollReveal from "../components/ScrollReveal";
 
-const ABOUT_IMAGE = "https://media.base44.com/images/public/69d8fac37a82caf2f57459fa/380ac6e6f_generated_ae262e56.png";
+const ABOUT_IMAGE = "/images/vyvian-sobre.jpg";
 
 const VALUES = [
   { icon: Heart, title: "Humanização", desc: "Cada pessoa é tratada com empatia e respeito pela sua singularidade." },

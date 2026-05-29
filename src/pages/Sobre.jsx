@@ -37,12 +37,18 @@ export default function Sobre() {
             </p>
           </ScrollReveal>
           <ScrollReveal delay={200}>
-            <div className="aspect-[3/4] max-h-[500px] overflow-hidden">
-              <img
-                src={ABOUT_IMAGE}
-                alt="Dra. Vyvian Avena"
-                className="w-full h-full object-cover"
-              />
+            <div className="relative mx-auto max-w-[420px]">
+              {/* moldura dourada decorativa deslocada (toque editorial) */}
+              <div className="absolute -inset-3 border border-gold/30 rounded-md pointer-events-none" />
+              <div className="relative aspect-[3/4] max-h-[520px] overflow-hidden rounded-md ring-1 ring-gold/40 shadow-2xl shadow-black/30">
+                <img
+                  src={ABOUT_IMAGE}
+                  alt="Dra. Vyvian Avena"
+                  className="w-full h-full object-cover"
+                />
+                {/* gradiente que funde a base da foto no verde do site */}
+                <div className="absolute inset-x-0 bottom-0 h-1/4 bg-gradient-to-t from-forest/50 to-transparent pointer-events-none" />
+              </div>
             </div>
           </ScrollReveal>
         </div>
@@ -149,3 +155,4 @@ export default function Sobre() {
     </div>
   );
 }
+

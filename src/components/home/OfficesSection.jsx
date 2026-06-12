@@ -18,7 +18,7 @@ const OFFICES = [
     flag: "🇧🇷",
     region: "Rio de Janeiro",
     address: "Rua Amilcar de Castro 40, Ed. Marbella 103",
-    city: "Tijuca, RJ 22775-053",
+    city: "Barra Olímpica, RJ 22775-053",
   },
 ];
 

@@ -12,8 +12,8 @@ export default function ContactMap() {
     },
     {
       flag: "🇧🇷",
-      region: "Tijuca — Rio de Janeiro",
-      src: "https://www.google.com/maps?q=Rua+Amilcar+de+Castro+40,+Tijuca,+Rio+de+Janeiro&output=embed"
+      region: "Barra Olímpica — Rio de Janeiro",
+      src: "https://www.google.com/maps?q=Rua+Amilcar+de+Castro+40,+Barra+da+Tijuca,+Rio+de+Janeiro&output=embed"
     }
   ];
 

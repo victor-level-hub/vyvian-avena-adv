@@ -76,7 +76,7 @@ export default function Footer() {
               </div>
               <div className="flex items-start gap-2">
                 <MapPin className="w-4 h-4 text-gold mt-0.5 shrink-0" />
-                <span>🇧🇷 Tijuca — Rio de Janeiro</span>
+                <span>🇧🇷 Barra Olímpica — Rio de Janeiro</span>
               </div>
             </div>
           </div>

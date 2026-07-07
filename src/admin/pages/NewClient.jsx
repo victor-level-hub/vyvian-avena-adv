@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clients as clientsApi, installments as installmentsApi, notifications as notifApi } from '../apiClient';
+import ContactsEditor, { cleanContacts } from '../ContactsEditor';
 
 function makeId(name) {
   return name
@@ -32,8 +33,8 @@ export default function NewClient() {
     personType: 'singular',
     name: '',
     taxId: '',
-    email: '',
-    phone: '',
+    emails: [{ label: 'Pessoal', value: '' }],
+    phones: [{ label: 'Pessoal', value: '' }],
     country: 'PT',
     address: '',
     duns: '',
@@ -98,8 +99,11 @@ export default function NewClient() {
       if (f.person_type === 'coletiva') merge.personType = 'coletiva';
       set('name', f.name);
       set('taxId', f.identification);
-      set('email', f.email);
-      set('phone', f.phone);
+      const aiLabel = (f.person_type === 'coletiva' || merge.personType === 'coletiva') ? 'Empresa' : 'Pessoal';
+      if (f.email && !merge.emails.some((c) => c.value)) merge.emails = [{ label: aiLabel, value: String(f.email) }];
+      else if (f.email && !merge.emails.some((c) => c.value === f.email)) merge.emails = [...merge.emails, { label: aiLabel, value: String(f.email) }];
+      if (f.phone && !merge.phones.some((c) => c.value)) merge.phones = [{ label: aiLabel, value: String(f.phone) }];
+      else if (f.phone && !merge.phones.some((c) => c.value === f.phone)) merge.phones = [...merge.phones, { label: aiLabel, value: String(f.phone) }];
       set('duns', f.duns);
       set('repName', f.rep_name);
       set('repRole', f.rep_role);
@@ -145,9 +149,11 @@ export default function NewClient() {
     setError(null);
 
     // validação manual (os campos obrigatórios podem estar em abas escondidas)
-    if (!form.name.trim() || !form.email.trim() || !form.phone.trim()) {
+    const emailList = cleanContacts(form.emails);
+    const phoneList = cleanContacts(form.phones);
+    if (!form.name.trim() || emailList.length === 0 || phoneList.length === 0) {
       setTab('cliente');
-      setError('Preenche os campos obrigatórios em "Dados do Cliente": nome, e-mail e telefone.');
+      setError('Preenche os campos obrigatórios em "Dados do Cliente": nome, pelo menos um e-mail e um telefone.');
       return;
     }
     if (!form.startDate) {
@@ -183,8 +189,10 @@ export default function NewClient() {
       await clientsApi.create({
         id: clientId,
         name: form.name,
-        email: form.email,
-        phone: form.phone,
+        email: emailList[0].value,
+        phone: phoneList[0].value,
+        emails: JSON.stringify(emailList),
+        phones: JSON.stringify(phoneList),
         country: form.country,
         identification: form.taxId,
         person_type: form.personType,
@@ -403,14 +411,8 @@ export default function NewClient() {
               </div>
             </>
           )}
-          <div className="adm-field">
-            <label>E-mail *</label>
-            <input type="email" value={form.email} onChange={update('email')} disabled={submitting} />
-          </div>
-          <div className="adm-field">
-            <label>Telefone (WhatsApp) *</label>
-            <input type="tel" value={form.phone} onChange={update('phone')} placeholder="+351 91 …" disabled={submitting} />
-          </div>
+          <ContactsEditor kind="email" items={form.emails} onChange={(v) => setForm({ ...form, emails: v })} disabled={submitting} requiredFirst />
+          <ContactsEditor kind="phone" items={form.phones} onChange={(v) => setForm({ ...form, phones: v })} disabled={submitting} requiredFirst />
           <div className="adm-field">
             <label>Jurisdição</label>
             <select value={form.country} onChange={update('country')} disabled={submitting}>

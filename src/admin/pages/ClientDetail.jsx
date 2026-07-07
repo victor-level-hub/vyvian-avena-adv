@@ -1,5 +1,6 @@
 // src/admin/pages/ClientDetail.jsx
 import React, { useState, useEffect } from 'react';
+import ContactsEditor, { parseContacts, cleanContacts } from '../ContactsEditor';
 import { useParams, Link } from 'react-router-dom';
 import { clients as clientsApi, installments as installmentsApi, recibos as recibosApi, procuracoes as procApi, planos as planosApi, uploadTokens as utApi, clientDocs as docsApi } from '../apiClient';
 
@@ -208,8 +209,8 @@ export default function ClientDetail() {
     setEditError(null);
     setEditForm({
       name: client.name || '',
-      email: client.email || '',
-      phone: client.phone || '',
+      emails: parseContacts(client.emails, client.email),
+      phones: parseContacts(client.phones, client.phone),
       identification: client.identification || '',
       person_type: client.person_type || 'singular',
       rep_name: client.rep_name || '',
@@ -238,10 +239,13 @@ export default function ClientDetail() {
 
   const handleSaveEdit = async () => {
     if (!editForm.name.trim()) { setEditError('O nome é obrigatório.'); return; }
+    const emailList = cleanContacts(editForm.emails);
+    const phoneList = cleanContacts(editForm.phones);
     setEditBusy(true);
     setEditError(null);
     try {
-      await clientsApi.update(client.id, editForm);
+      const payload = { ...editForm, emails: JSON.stringify(emailList), phones: JSON.stringify(phoneList), email: emailList[0]?.value || '', phone: phoneList[0]?.value || '' };
+      await clientsApi.update(client.id, payload);
       setEditing(false);
       await loadData();
     } catch (err) {
@@ -393,8 +397,12 @@ export default function ClientDetail() {
                 <span>Nome *</span>
                 <input type="text" value={editForm.name} onChange={editField('name')} disabled={editBusy} />
               </label>
-              <label className="adm-field"><span>Email</span><input type="email" value={editForm.email} onChange={editField('email')} disabled={editBusy} /></label>
-              <label className="adm-field"><span>Telefone</span><input type="tel" value={editForm.phone} onChange={editField('phone')} disabled={editBusy} /></label>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <ContactsEditor kind="email" items={editForm.emails} onChange={(v) => setEditForm((f) => ({ ...f, emails: v }))} disabled={editBusy} />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <ContactsEditor kind="phone" items={editForm.phones} onChange={(v) => setEditForm((f) => ({ ...f, phones: v }))} disabled={editBusy} />
+              </div>
               <label className="adm-field"><span>{editForm.person_type === 'coletiva' ? (client.country === 'BR' ? 'CNPJ' : 'NIPC') : (client.country === 'BR' ? 'CPF' : 'NIF')}</span><input type="text" value={editForm.identification} onChange={editField('identification')} disabled={editBusy} /></label>
               <label className="adm-field">
                 <span>Tipo de cliente</span>
@@ -464,8 +472,12 @@ export default function ClientDetail() {
         <div>
           <h1>{client.name}</h1>
           <div className="adm-client-meta">
-            {client.phone && <span>📞 {client.phone}</span>}
-            {client.email && <span>✉ {client.email}</span>}
+            {parseContacts(client.phones, client.phone).filter((c) => c.value).map((c, i) => (
+              <span key={'p' + i}>📞 {c.value}{c.label && c.label !== 'Pessoal' ? ` (${c.label})` : ''}</span>
+            ))}
+            {parseContacts(client.emails, client.email).filter((c) => c.value).map((c, i) => (
+              <span key={'e' + i}>✉ {c.value}{c.label && c.label !== 'Pessoal' ? ` (${c.label})` : ''}</span>
+            ))}
             {client.identification && (
               <span>{client.person_type === 'coletiva' ? (client.country === 'BR' ? 'CNPJ' : 'NIPC') : (client.country === 'BR' ? 'CPF' : 'NIF')} {client.identification}</span>
             )}

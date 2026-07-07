@@ -98,6 +98,8 @@ export default function NewClient() {
       if (f.person_type === 'coletiva') merge.personType = 'coletiva';
       set('name', f.name);
       set('taxId', f.identification);
+      set('email', f.email);
+      set('phone', f.phone);
       set('duns', f.duns);
       set('repName', f.rep_name);
       set('repRole', f.rep_role);

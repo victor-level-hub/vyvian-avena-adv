@@ -28,6 +28,8 @@ const SCHEMA = `{
   "filiation": "string ou null (nome do pai e/ou da mãe, se visíveis)",
   "marital_status": "string ou null",
   "country": "PT" | "BR" | null,
+  "email": "string ou null (e-mail do CLIENTE — pessoa ou empresa)",
+  "phone": "string ou null (telefone do CLIENTE, com indicativo se visível)",
   "process_summary": "string ou null (resumo do processo/caso jurídico, se o documento contiver essa informação)"
 }`;
 
@@ -50,7 +52,8 @@ Regras:
 - Nome em capitalização natural (não em MAIÚSCULAS gritantes), salvo se for assim no documento.
 - "country": "PT" se for documento português ou indicar Portugal; "BR" se brasileiro; null se ambíguo.
 - "doc_type": escolhe a etiqueta mais próxima da lista; "Título de Residência" para títulos portugueses para estrangeiros.
-- "process_summary": se o documento contiver informação sobre o caso/processo (factos, datas, partes, valores, pedidos), escreve um resumo objetivo em português (5-10 frases, prosa corrida, sem markdown) útil para um advogado: o que aconteceu, quando, quem está envolvido, valores em causa, estado atual e próximos passos se visíveis. Documentos de identificação puros => null.
+- "email"/"phone": APENAS os contactos do próprio CLIENTE (a pessoa ou a empresa cliente do escritório). Num e-mail ou carta há contactos de várias partes — IGNORA os de advogados (ex.: domínios @adv.oa.pt), peritos, seguradoras, tribunais e outros terceiros. Se não conseguires distinguir com confiança, devolve null.
+- "process_summary": se o documento contiver informação sobre o caso/processo (factos, datas, partes, valores, pedidos), escreve um resumo objetivo em português (5-10 frases, prosa corrida, sem markdown) útil para um advogado: o que aconteceu, quando, quem está envolvido, valores em causa, estado atual e próximos passos se visíveis. Documentos de identificação puros => null. Inclui referências de processo/apólice/sinistro se visíveis.
 - Não incluas comentários nem campos extra. SÓ o objeto JSON.`;
 
 // Instrução extra quando já existe um resumo do processo: fundir em vez de substituir.

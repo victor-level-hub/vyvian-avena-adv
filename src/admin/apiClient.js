@@ -266,3 +266,13 @@ export const clientDocs = {
   },
 };
 
+
+export const calendar = {
+  getAll: () => request('/api/calendar'),
+  createEvent: (data) => request('/api/calendar/events', { method: 'POST', body: data }),
+  updateEvent: (id, data) => request(`/api/calendar/events/${id}`, { method: 'PUT', body: data }),
+  deleteEvent: (id) => request(`/api/calendar/events/${id}`, { method: 'DELETE' }),
+  createType: (data) => request('/api/calendar/types', { method: 'POST', body: data }),
+  updateType: (id, data) => request(`/api/calendar/types/${id}`, { method: 'PUT', body: data }),
+  deleteType: (id, strategy) => request(`/api/calendar/types/${id}?strategy=${strategy || 'move'}`, { method: 'DELETE' }),
+};

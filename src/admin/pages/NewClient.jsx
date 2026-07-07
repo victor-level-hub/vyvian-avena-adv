@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clients as clientsApi, installments as installmentsApi, notifications as notifApi } from '../apiClient';
+import ContactsEditor, { cleanContacts } from '../ContactsEditor';
 
 function makeId(name) {
   return name
@@ -22,18 +23,24 @@ export default function NewClient() {
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [tab, setTab] = useState('cliente'); // 'cliente' | 'processo' | 'financeiro'
+  const [invalid, setInvalid] = useState({}); // { name, email, phone, startDate, totalValue, installments, monthlyValue }
   const [aiBusy, setAiBusy] = useState(false);
   const [aiMsg, setAiMsg] = useState(null);
   const [aiDragOver, setAiDragOver] = useState(false);
   const aiFileRef = React.useRef(null);
 
   const [form, setForm] = useState({
+    personType: 'singular',
     name: '',
     taxId: '',
-    email: '',
-    phone: '',
+    emails: [{ label: 'Pessoal', value: '' }],
+    phones: [{ label: 'Pessoal', value: '' }],
     country: 'PT',
     address: '',
+    duns: '',
+    repName: '',
+    repRole: '',
     nationality: '',
     maritalStatus: '',
     rg: '',
@@ -46,6 +53,7 @@ export default function NewClient() {
     filiation: '',
     area: 'Família',
     process: '',
+    processSummary: '',
     planType: 'installment',
     startDate: '',
     totalValue: '',
@@ -55,7 +63,26 @@ export default function NewClient() {
     reminderChannels: 'email+whatsapp',
   });
 
-  const update = (key) => (e) => setForm({ ...form, [key]: e.target.value });
+  const update = (key) => (e) => {
+    setForm({ ...form, [key]: e.target.value });
+    if (invalid[key]) setInvalid((inv) => ({ ...inv, [key]: false }));
+  };
+
+  // estilo de campo obrigatório em falta
+  const invStyle = (k) => (invalid[k] ? { borderColor: '#c00000', boxShadow: '0 0 0 2px rgba(192,0,0,0.14)' } : {});
+  const invLabel = (k) => (invalid[k] ? { color: '#c00000' } : undefined);
+
+  // muda de aba, faz scroll até ao campo e coloca o cursor lá
+  const focusField = (tabKey, elId) => {
+    setTab(tabKey);
+    setTimeout(() => {
+      const el = document.getElementById(elId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.focus({ preventScroll: true });
+      }
+    }, 80);
+  };
 
   // ── Cadastro com IA: arrastar/escolher documento -> extrair campos
   const aiAccept = ['image/png','image/jpeg','image/jpg','image/webp','application/pdf'];
@@ -75,6 +102,8 @@ export default function NewClient() {
         headers: {
           'Content-Type': file.type,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          // envia o resumo atual para a IA melhorar (em vez de substituir às cegas)
+          ...(form.processSummary ? { 'X-Resumo-Atual': encodeURIComponent(form.processSummary.slice(0, 4000)) } : {}),
         },
         body: file,
       });
@@ -87,8 +116,17 @@ export default function NewClient() {
       // mapear campos da IA -> campos do form (apenas preencher se não estiver vazio)
       const merge = { ...form };
       const set = (k, v) => { if (v != null && v !== '' && !merge[k]) merge[k] = String(v); };
+      if (f.person_type === 'coletiva') merge.personType = 'coletiva';
       set('name', f.name);
       set('taxId', f.identification);
+      const aiLabel = (f.person_type === 'coletiva' || merge.personType === 'coletiva') ? 'Empresa' : 'Pessoal';
+      if (f.email && !merge.emails.some((c) => c.value)) merge.emails = [{ label: aiLabel, value: String(f.email) }];
+      else if (f.email && !merge.emails.some((c) => c.value === f.email)) merge.emails = [...merge.emails, { label: aiLabel, value: String(f.email) }];
+      if (f.phone && !merge.phones.some((c) => c.value)) merge.phones = [{ label: aiLabel, value: String(f.phone) }];
+      else if (f.phone && !merge.phones.some((c) => c.value === f.phone)) merge.phones = [...merge.phones, { label: aiLabel, value: String(f.phone) }];
+      set('duns', f.duns);
+      set('repName', f.rep_name);
+      set('repRole', f.rep_role);
       set('address', f.birth_place && !f.address ? '' : f.address); // não mexer se não veio
       if (f.address) merge.address = String(f.address);
       set('nationality', f.nationality);
@@ -101,10 +139,13 @@ export default function NewClient() {
       set('niss', f.niss);
       set('filiation', f.filiation);
       if (f.country && (f.country === 'PT' || f.country === 'BR')) merge.country = f.country;
+      // resumo do processo: a IA já devolve a versão fundida com o resumo anterior
+      const summaryUpdated = !!(f.process_summary && f.process_summary !== form.processSummary);
+      if (f.process_summary) merge.processSummary = String(f.process_summary);
       setForm(merge);
       const filled = Object.keys(f).filter((k) => f[k]).length;
       const u = data.usage || {};
-      setAiMsg({ kind: 'ok', text: `Documento lido — ${filled} campos preenchidos. Reveja antes de guardar. (uso: ${u.input_tokens||0} entrada, ${u.output_tokens||0} saída)` });
+      setAiMsg({ kind: 'ok', text: `Documento lido — ${filled} campos preenchidos${summaryUpdated ? ' · resumo do processo atualizado (ver aba Dados do Processo)' : ''}. Reveja antes de guardar. (uso: ${u.input_tokens||0} entrada, ${u.output_tokens||0} saída)` });
     } catch (err) {
       setAiMsg({ kind: 'err', text: 'Erro: ' + err.message });
     } finally {
@@ -126,6 +167,38 @@ export default function NewClient() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+
+    // validação manual (os campos obrigatórios podem estar em abas escondidas)
+    const emailList = cleanContacts(form.emails);
+    const phoneList = cleanContacts(form.phones);
+    const inv = {};
+    if (!form.name.trim()) inv.name = true;
+    if (emailList.length === 0) inv.email = true;
+    if (phoneList.length === 0) inv.phone = true;
+    if (!form.startDate) inv.startDate = true;
+    if (form.planType === 'installment') {
+      if (!form.totalValue) inv.totalValue = true;
+      if (!form.installments) inv.installments = true;
+    }
+    if (form.planType === 'monthly' && !form.monthlyValue) inv.monthlyValue = true;
+    setInvalid(inv);
+
+    // primeiro campo em falta ganha o scroll + cursor
+    const FIELD_META = [
+      ['name', 'cliente', 'f-name'],
+      ['email', 'cliente', 'f-email'],
+      ['phone', 'cliente', 'f-phone'],
+      ['startDate', 'financeiro', 'f-startDate'],
+      ['totalValue', 'financeiro', 'f-totalValue'],
+      ['installments', 'financeiro', 'f-installments'],
+      ['monthlyValue', 'financeiro', 'f-monthlyValue'],
+    ];
+    const first = FIELD_META.find(([k]) => inv[k]);
+    if (first) {
+      setError('Faltam campos obrigatórios (assinalados a vermelho).');
+      focusField(first[1], first[2]);
+      return;
+    }
     setSubmitting(true);
 
     try {
@@ -140,13 +213,20 @@ export default function NewClient() {
         ? parseInt(form.installments, 10)
         : 0;
 
+      const isColetiva = form.personType === 'coletiva';
       await clientsApi.create({
         id: clientId,
         name: form.name,
-        email: form.email,
-        phone: form.phone,
+        email: emailList[0].value,
+        phone: phoneList[0].value,
+        emails: JSON.stringify(emailList),
+        phones: JSON.stringify(phoneList),
         country: form.country,
         identification: form.taxId,
+        person_type: form.personType,
+        duns: isColetiva ? (form.duns || null) : null,
+        rep_name: isColetiva ? (form.repName || null) : null,
+        rep_role: isColetiva ? (form.repRole || null) : null,
         address: form.address || null,
         nationality: form.nationality || null,
         marital_status: form.maritalStatus || null,
@@ -159,6 +239,7 @@ export default function NewClient() {
         niss: form.niss || null,
         filiation: form.filiation || null,
         practice_area: form.area,
+        process_summary: form.processSummary || null,
         notes: form.process ? `Processo: ${form.process}` : '',
         honorarios_total: totalContracted,
         honorarios_parcelas: numParcelas,
@@ -280,8 +361,8 @@ export default function NewClient() {
             📄 Cadastro rápido com IA
           </div>
           <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: '0.35rem' }}>
-            Arraste aqui (ou clique para escolher) o documento do cliente — Título de Residência, Cartão de Cidadão, Passaporte ou RG.
-            <br />A IA lê o documento e preenche o formulário. Reveja antes de guardar.
+            Arraste aqui (ou clique para escolher) o documento do cliente — Título de Residência, Cartão de Cidadão, Passaporte, RG, ou uma procuração/certidão da empresa.
+            <br />A IA lê o documento e preenche o formulário (incl. empresa, sede, DUNS e representante legal). Reveja antes de guardar.
           </div>
           <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '0.35rem' }}>
             PNG, JPEG, WEBP ou PDF · até 8 MB
@@ -300,24 +381,66 @@ export default function NewClient() {
           )}
         </div>
 
-        <div className="adm-form-section-title">Dados pessoais</div>
+        {/* Abas */}
+        <div style={{ display: 'flex', gap: '0.25rem', borderBottom: '1px solid rgba(0,0,0,0.12)', marginBottom: '1.25rem' }}>
+          {[['cliente', 'Dados do Cliente'], ['processo', 'Dados do Processo'], ['financeiro', 'Dados Financeiros']].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              style={{
+                background: 'none',
+                border: 'none',
+                borderBottom: tab === key ? '2px solid var(--gold, #b8935a)' : '2px solid transparent',
+                color: tab === key ? 'var(--forest, #12302a)' : 'var(--muted, #777)',
+                fontWeight: tab === key ? 600 : 400,
+                padding: '0.6rem 1rem',
+                cursor: 'pointer',
+                fontSize: '0.95rem',
+                marginBottom: '-1px',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'cliente' && (<>
+        <div className="adm-form-section-title">{form.personType === 'coletiva' ? 'Dados da empresa' : 'Dados pessoais'}</div>
         <div className="adm-form-grid">
           <div className="adm-field">
-            <label>Nome completo *</label>
-            <input type="text" value={form.name} onChange={update('name')} required disabled={submitting} />
+            <label>Tipo de cliente *</label>
+            <select value={form.personType} onChange={update('personType')} disabled={submitting}>
+              <option value="singular">Pessoa singular</option>
+              <option value="coletiva">Pessoa coletiva (empresa)</option>
+            </select>
           </div>
           <div className="adm-field">
-            <label>{form.country === 'BR' ? 'CPF' : 'NIF'}</label>
-            <input type="text" value={form.taxId} onChange={update('taxId')} placeholder={form.country === 'BR' ? '123.456.789-00' : '123 456 789'} disabled={submitting} />
+            <label style={invLabel('name')}>{form.personType === 'coletiva' ? 'Denominação da empresa *' : 'Nome completo *'}</label>
+            <input id="f-name" type="text" value={form.name} onChange={update('name')} disabled={submitting} style={invStyle('name')} />
           </div>
           <div className="adm-field">
-            <label>E-mail *</label>
-            <input type="email" value={form.email} onChange={update('email')} required disabled={submitting} />
+            <label>{form.personType === 'coletiva' ? (form.country === 'BR' ? 'CNPJ' : 'NIPC') : (form.country === 'BR' ? 'CPF' : 'NIF')}</label>
+            <input type="text" value={form.taxId} onChange={update('taxId')} placeholder={form.country === 'BR' ? '12.345.678/0001-00' : '123 456 789'} disabled={submitting} />
           </div>
-          <div className="adm-field">
-            <label>Telefone (WhatsApp) *</label>
-            <input type="tel" value={form.phone} onChange={update('phone')} placeholder="+351 91 …" required disabled={submitting} />
-          </div>
+          {form.personType === 'coletiva' && (
+            <>
+              <div className="adm-field">
+                <label>DUNS (opcional)</label>
+                <input type="text" value={form.duns} onChange={update('duns')} placeholder="449683786" disabled={submitting} />
+              </div>
+              <div className="adm-field">
+                <label>Representante legal</label>
+                <input type="text" value={form.repName} onChange={update('repName')} placeholder="Nome completo do representante" disabled={submitting} />
+              </div>
+              <div className="adm-field">
+                <label>Cargo do representante</label>
+                <input type="text" value={form.repRole} onChange={update('repRole')} placeholder="sócio-gerente, administrador…" disabled={submitting} />
+              </div>
+            </>
+          )}
+          <ContactsEditor kind="email" items={form.emails} onChange={(v) => { setForm({ ...form, emails: v }); if (invalid.email) setInvalid((i) => ({ ...i, email: false })); }} disabled={submitting} requiredFirst invalid={invalid.email} inputId="f-email" />
+          <ContactsEditor kind="phone" items={form.phones} onChange={(v) => { setForm({ ...form, phones: v }); if (invalid.phone) setInvalid((i) => ({ ...i, phone: false })); }} disabled={submitting} requiredFirst invalid={invalid.phone} inputId="f-phone" />
           <div className="adm-field">
             <label>Jurisdição</label>
             <select value={form.country} onChange={update('country')} disabled={submitting}>
@@ -326,36 +449,40 @@ export default function NewClient() {
             </select>
           </div>
           <div className="adm-field">
-            <label>Morada / Endereço</label>
+            <label>{form.personType === 'coletiva' ? 'Sede' : 'Morada / Endereço'}</label>
             <input type="text" value={form.address} onChange={update('address')} placeholder={form.country === 'BR' ? 'Rua, nº, bairro, cidade - UF' : 'Rua, nº, código postal, localidade'} disabled={submitting} />
           </div>
-          <div className="adm-field">
-            <label>Nacionalidade</label>
-            <input type="text" value={form.nationality} onChange={update('nationality')} placeholder={form.country === 'BR' ? 'brasileiro(a)' : 'português(a)'} disabled={submitting} />
-          </div>
-          <div className="adm-field">
-            <label>Estado civil</label>
-            <select value={form.maritalStatus} onChange={update('maritalStatus')} disabled={submitting}>
-              <option value="">—</option>
-              <option value="solteiro(a)">Solteiro(a)</option>
-              <option value="casado(a)">Casado(a)</option>
-              <option value="divorciado(a)">Divorciado(a)</option>
-              <option value="viúvo(a)">Viúvo(a)</option>
-              <option value="união estável">União estável / convivente</option>
-            </select>
-          </div>
-          <div className="adm-field">
-            <label>Data de nascimento</label>
-            <input type="date" value={form.birthDate} onChange={update('birthDate')} disabled={submitting} />
-          </div>
-          <div className="adm-field">
-            <label>Naturalidade</label>
-            <input type="text" value={form.birthPlace} onChange={update('birthPlace')} placeholder="Cidade, Estado/Distrito, País" disabled={submitting} />
-          </div>
+          {form.personType === 'singular' && (
+            <>
+              <div className="adm-field">
+                <label>Nacionalidade</label>
+                <input type="text" value={form.nationality} onChange={update('nationality')} placeholder={form.country === 'BR' ? 'brasileiro(a)' : 'português(a)'} disabled={submitting} />
+              </div>
+              <div className="adm-field">
+                <label>Estado civil</label>
+                <select value={form.maritalStatus} onChange={update('maritalStatus')} disabled={submitting}>
+                  <option value="">—</option>
+                  <option value="solteiro(a)">Solteiro(a)</option>
+                  <option value="casado(a)">Casado(a)</option>
+                  <option value="divorciado(a)">Divorciado(a)</option>
+                  <option value="viúvo(a)">Viúvo(a)</option>
+                  <option value="união estável">União estável / convivente</option>
+                </select>
+              </div>
+              <div className="adm-field">
+                <label>Data de nascimento</label>
+                <input type="date" value={form.birthDate} onChange={update('birthDate')} disabled={submitting} />
+              </div>
+              <div className="adm-field">
+                <label>Naturalidade</label>
+                <input type="text" value={form.birthPlace} onChange={update('birthPlace')} placeholder="Cidade, Estado/Distrito, País" disabled={submitting} />
+              </div>
+            </>
+          )}
 
           {/* Documento de identificação — necessário para procurações */}
           <div className="adm-field">
-            <label>Tipo de documento</label>
+            <label>{form.personType === 'coletiva' ? 'Tipo de documento (representante)' : 'Tipo de documento'}</label>
             <select value={form.docType} onChange={update('docType')} disabled={submitting}>
               <option value="">—</option>
               <option value="Título de Residência">Título de Residência</option>
@@ -365,29 +492,37 @@ export default function NewClient() {
             </select>
           </div>
           <div className="adm-field">
-            <label>Nº do documento</label>
+            <label>{form.personType === 'coletiva' ? 'Nº do documento (representante)' : 'Nº do documento'}</label>
             <input type="text" value={form.docNumber} onChange={update('docNumber')} placeholder="Ex.: X6D997798" disabled={submitting} />
           </div>
           <div className="adm-field">
             <label>Validade do documento</label>
             <input type="date" value={form.docValidity} onChange={update('docValidity')} disabled={submitting} />
           </div>
-          {form.country === 'BR' && (
+          {form.personType === 'singular' && form.country === 'BR' && (
             <div className="adm-field">
               <label>RG</label>
               <input type="text" value={form.rg} onChange={update('rg')} placeholder="12.345.678-9" disabled={submitting} />
             </div>
           )}
-          {form.country === 'PT' && (
+          {form.personType === 'singular' && form.country === 'PT' && (
             <div className="adm-field">
               <label>NISS (opcional)</label>
               <input type="text" value={form.niss} onChange={update('niss')} placeholder="120 772 806 32" disabled={submitting} />
             </div>
           )}
-          <div className="adm-field">
-            <label>Filiação (opcional)</label>
-            <input type="text" value={form.filiation} onChange={update('filiation')} placeholder="Nome do pai e da mãe" disabled={submitting} />
-          </div>
+          {form.personType === 'singular' && (
+            <div className="adm-field">
+              <label>Filiação (opcional)</label>
+              <input type="text" value={form.filiation} onChange={update('filiation')} placeholder="Nome do pai e da mãe" disabled={submitting} />
+            </div>
+          )}
+        </div>
+        </>)}
+
+        {tab === 'processo' && (<>
+        <div className="adm-form-section-title">Dados do Processo</div>
+        <div className="adm-form-grid">
           <div className="adm-field">
             <label>Área de atuação</label>
             <select value={form.area} onChange={update('area')} disabled={submitting}>
@@ -397,12 +532,26 @@ export default function NewClient() {
               <option>Empresarial</option>
             </select>
           </div>
-          <div className="adm-field adm-full">
+          <div className="adm-field">
             <label>Processo / referência interna</label>
             <input type="text" value={form.process} onChange={update('process')} placeholder="Ex.: 1289/26 · Divórcio consensual" disabled={submitting} />
           </div>
+          <div className="adm-field adm-full">
+            <label>Resumo do processo</label>
+            <textarea
+              rows={9}
+              value={form.processSummary}
+              onChange={update('processSummary')}
+              placeholder="Arraste documentos do caso (e-mails, participações de sinistro, contratos…) na caixa de IA acima — o resumo é criado automaticamente e melhorado a cada documento novo. Também pode escrever ou editar à mão."
+              disabled={submitting}
+              style={{ resize: 'vertical', width: '100%', fontFamily: 'inherit', fontSize: '0.9rem', lineHeight: 1.55, padding: '0.6rem 0.75rem' }}
+            />
+            <div className="adm-field-helper">Gerado pela IA a partir dos documentos · sempre editável · reveja antes de guardar</div>
+          </div>
         </div>
+        </>)}
 
+        {tab === 'financeiro' && (
         <div className="adm-form-section">
           <div className="adm-form-section-title">Plano financeiro</div>
           <div className="adm-form-grid">
@@ -414,19 +563,19 @@ export default function NewClient() {
               </select>
             </div>
             <div className="adm-field">
-              <label>Data da primeira cobrança *</label>
-              <input type="date" value={form.startDate} onChange={update('startDate')} required disabled={submitting} />
+              <label style={invLabel('startDate')}>Data da primeira cobrança *</label>
+              <input id="f-startDate" type="date" value={form.startDate} onChange={update('startDate')} disabled={submitting} style={invStyle('startDate')} />
             </div>
 
             {form.planType === 'installment' && (
               <>
                 <div className="adm-field">
-                  <label>Valor total contratado *</label>
-                  <input type="text" value={form.totalValue} onChange={update('totalValue')} placeholder="3120" required disabled={submitting} />
+                  <label style={invLabel('totalValue')}>Valor total contratado *</label>
+                  <input id="f-totalValue" type="text" value={form.totalValue} onChange={update('totalValue')} placeholder="3120" disabled={submitting} style={invStyle('totalValue')} />
                 </div>
                 <div className="adm-field">
-                  <label>Número de parcelas *</label>
-                  <input type="number" min="1" value={form.installments} onChange={update('installments')} placeholder="6" required disabled={submitting} />
+                  <label style={invLabel('installments')}>Número de parcelas *</label>
+                  <input id="f-installments" type="number" min="1" value={form.installments} onChange={update('installments')} placeholder="6" disabled={submitting} style={invStyle('installments')} />
                   {planPreview && <div className="adm-field-helper">{planPreview}</div>}
                 </div>
               </>
@@ -434,8 +583,8 @@ export default function NewClient() {
 
             {form.planType === 'monthly' && (
               <div className="adm-field adm-full">
-                <label>Valor mensal *</label>
-                <input type="text" value={form.monthlyValue} onChange={update('monthlyValue')} placeholder="450" required disabled={submitting} />
+                <label style={invLabel('monthlyValue')}>Valor mensal *</label>
+                <input id="f-monthlyValue" type="text" value={form.monthlyValue} onChange={update('monthlyValue')} placeholder="450" disabled={submitting} style={invStyle('monthlyValue')} />
                 {planPreview && <div className="adm-field-helper">{planPreview}</div>}
               </div>
             )}
@@ -458,6 +607,7 @@ export default function NewClient() {
             </div>
           </div>
         </div>
+        )}
 
         <div className="adm-form-actions">
           <button type="button" className="adm-btn adm-btn-ghost" onClick={() => navigate('/admin/clientes')} disabled={submitting}>

@@ -11,6 +11,7 @@ import { handleProcuracoes } from './routes/procuracoes.js'; // Procurações
 import { handlePlanos } from './routes/planos.js'; // Plano de pagamento (PDF + envio)
 import { handleExtracao } from './routes/extracao.js'; // IA: extração de documentos
 import { handleUploadTokens, handleClientDocuments, handlePublicUpload } from './routes/cliente_docs.js'; // Upload pelo cliente
+import { handleCalendar } from './routes/calendar.js'; // Calendário jurídico
 import { runDailyCron } from './cron.js'; // Fase 2
 import { jsonError, jsonResponse } from './lib/response.js';
 import { requireAuth } from './lib/auth.js';
@@ -78,6 +79,9 @@ export default {
         }
         if (path === '/api/cadastro/extrair-documento') {
           return await handleExtracao(request, env, path, session);
+        }
+        if (path.startsWith('/api/calendar')) {
+          return await handleCalendar(request, env, path, session);
         }
         if (path.startsWith('/api/upload-tokens')) {
           return await handleUploadTokens(request, env, path, session);

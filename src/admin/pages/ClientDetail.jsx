@@ -1,5 +1,6 @@
 // src/admin/pages/ClientDetail.jsx
 import React, { useState, useEffect } from 'react';
+import ContactsEditor, { parseContacts, cleanContacts } from '../ContactsEditor';
 import { useParams, Link } from 'react-router-dom';
 import { clients as clientsApi, installments as installmentsApi, recibos as recibosApi, procuracoes as procApi, planos as planosApi, uploadTokens as utApi, clientDocs as docsApi } from '../apiClient';
 
@@ -47,6 +48,10 @@ export default function ClientDetail() {
   const [planSendBusy, setPlanSendBusy] = useState(false);
   const [planMsg, setPlanMsg] = useState(null);
   const [editing, setEditing] = useState(false);
+  const [aiBusy, setAiBusy] = useState(false);
+  const [aiMsg, setAiMsg] = useState(null);
+  const [aiDragOver, setAiDragOver] = useState(false);
+  const aiFileRef = React.useRef(null);
   const [editForm, setEditForm] = useState(null);
   const [editBusy, setEditBusy] = useState(false);
   const [editError, setEditError] = useState(null);
@@ -70,6 +75,92 @@ export default function ClientDetail() {
   const [instructions, setInstructions] = useState('');
   const [tokenBusy, setTokenBusy] = useState(false);
   const [copied, setCopied] = useState(null);
+
+  // ── IA: ler mais documentos e completar a ficha (só preenche campos VAZIOS; funde o resumo)
+  const AI_ACCEPT = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'application/pdf'];
+  const FIELD_PT = {
+    identification: 'NIF/NIPC', address: 'morada/sede', nationality: 'nacionalidade',
+    marital_status: 'estado civil', birth_date: 'nascimento', birth_place: 'naturalidade',
+    doc_type: 'tipo de documento', doc_number: 'nº documento', doc_validity: 'validade',
+    niss: 'NISS', filiation: 'filiação', duns: 'DUNS', rep_name: 'representante',
+    rep_role: 'cargo', person_type: 'tipo de cliente', emails: 'e-mail', phones: 'telefone',
+    process_summary: 'resumo do processo',
+  };
+
+  const aiExtractFile = async (file) => {
+    const client = data?.client;
+    if (!client || !file) return;
+    if (!AI_ACCEPT.includes(file.type)) {
+      setAiMsg({ kind: 'err', text: 'Tipo não suportado. Use PNG, JPEG, WEBP ou PDF.' });
+      return;
+    }
+    setAiBusy(true);
+    setAiMsg({ kind: 'info', text: 'A ler o documento com IA…' });
+    try {
+      const token = sessionStorage.getItem('vyvian_admin_token');
+      const res = await fetch('/api/cadastro/extrair-documento', {
+        method: 'POST',
+        headers: {
+          'Content-Type': file.type,
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(client.process_summary ? { 'X-Resumo-Atual': encodeURIComponent(client.process_summary.slice(0, 4000)) } : {}),
+        },
+        body: file,
+      });
+      const r = await res.json();
+      if (!res.ok || !r.ok) { setAiMsg({ kind: 'err', text: r.error || `HTTP ${res.status}` }); return; }
+      const f = r.fields || {};
+
+      const upd = {};
+      const fillIfEmpty = (col, v) => { if (v != null && v !== '' && !client[col]) upd[col] = String(v); };
+      fillIfEmpty('identification', f.identification);
+      fillIfEmpty('address', f.address);
+      fillIfEmpty('nationality', f.nationality);
+      fillIfEmpty('marital_status', f.marital_status);
+      fillIfEmpty('birth_date', f.birth_date);
+      fillIfEmpty('birth_place', f.birth_place);
+      fillIfEmpty('doc_type', f.doc_type);
+      fillIfEmpty('doc_number', f.doc_number);
+      fillIfEmpty('doc_validity', f.doc_validity);
+      fillIfEmpty('niss', f.niss);
+      fillIfEmpty('filiation', f.filiation);
+      fillIfEmpty('duns', f.duns);
+      fillIfEmpty('rep_name', f.rep_name);
+      fillIfEmpty('rep_role', f.rep_role);
+      if (f.person_type === 'coletiva' && client.person_type !== 'coletiva') upd.person_type = 'coletiva';
+
+      // contactos: acrescentar se ainda não existirem
+      const ctLabel = (f.person_type === 'coletiva' || client.person_type === 'coletiva') ? 'Empresa' : 'Pessoal';
+      const curEmails = parseContacts(client.emails, client.email).filter((c) => c.value);
+      if (f.email && !curEmails.some((c) => c.value.toLowerCase() === String(f.email).toLowerCase())) {
+        const next = [...curEmails, { label: ctLabel, value: String(f.email) }];
+        upd.emails = JSON.stringify(next);
+        if (!client.email) upd.email = next[0].value;
+      }
+      const curPhones = parseContacts(client.phones, client.phone).filter((c) => c.value);
+      if (f.phone && !curPhones.some((c) => c.value.replace(/\s/g, '') === String(f.phone).replace(/\s/g, ''))) {
+        const next = [...curPhones, { label: ctLabel, value: String(f.phone) }];
+        upd.phones = JSON.stringify(next);
+        if (!client.phone) upd.phone = next[0].value;
+      }
+
+      // resumo: a IA devolve a versão fundida com o existente
+      if (f.process_summary && f.process_summary !== client.process_summary) upd.process_summary = f.process_summary;
+
+      if (Object.keys(upd).length === 0) {
+        setAiMsg({ kind: 'ok', text: 'Documento lido — sem informação nova para acrescentar.' });
+        return;
+      }
+      await clientsApi.update(client.id, upd);
+      await loadData();
+      const changed = [...new Set(Object.keys(upd).filter((k) => k !== 'email' && k !== 'phone').map((k) => FIELD_PT[k] || k))];
+      setAiMsg({ kind: 'ok', text: `Documento lido — atualizado: ${changed.join(', ')}.` });
+    } catch (err) {
+      setAiMsg({ kind: 'err', text: 'Erro: ' + err.message });
+    } finally {
+      setAiBusy(false);
+    }
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -208,9 +299,14 @@ export default function ClientDetail() {
     setEditError(null);
     setEditForm({
       name: client.name || '',
-      email: client.email || '',
-      phone: client.phone || '',
+      emails: parseContacts(client.emails, client.email),
+      phones: parseContacts(client.phones, client.phone),
       identification: client.identification || '',
+      person_type: client.person_type || 'singular',
+      rep_name: client.rep_name || '',
+      rep_role: client.rep_role || '',
+      duns: client.duns || '',
+      process_summary: client.process_summary || '',
       practice_area: client.practice_area || '',
       address: client.address || '',
       nationality: client.nationality || '',
@@ -233,10 +329,13 @@ export default function ClientDetail() {
 
   const handleSaveEdit = async () => {
     if (!editForm.name.trim()) { setEditError('O nome é obrigatório.'); return; }
+    const emailList = cleanContacts(editForm.emails);
+    const phoneList = cleanContacts(editForm.phones);
     setEditBusy(true);
     setEditError(null);
     try {
-      await clientsApi.update(client.id, editForm);
+      const payload = { ...editForm, emails: JSON.stringify(emailList), phones: JSON.stringify(phoneList), email: emailList[0]?.value || '', phone: phoneList[0]?.value || '' };
+      await clientsApi.update(client.id, payload);
       setEditing(false);
       await loadData();
     } catch (err) {
@@ -388,9 +487,27 @@ export default function ClientDetail() {
                 <span>Nome *</span>
                 <input type="text" value={editForm.name} onChange={editField('name')} disabled={editBusy} />
               </label>
-              <label className="adm-field"><span>Email</span><input type="email" value={editForm.email} onChange={editField('email')} disabled={editBusy} /></label>
-              <label className="adm-field"><span>Telefone</span><input type="tel" value={editForm.phone} onChange={editField('phone')} disabled={editBusy} /></label>
-              <label className="adm-field"><span>{client.country === 'BR' ? 'CPF/CNPJ' : 'NIF'}</span><input type="text" value={editForm.identification} onChange={editField('identification')} disabled={editBusy} /></label>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <ContactsEditor kind="email" items={editForm.emails} onChange={(v) => setEditForm((f) => ({ ...f, emails: v }))} disabled={editBusy} />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <ContactsEditor kind="phone" items={editForm.phones} onChange={(v) => setEditForm((f) => ({ ...f, phones: v }))} disabled={editBusy} />
+              </div>
+              <label className="adm-field"><span>{editForm.person_type === 'coletiva' ? (client.country === 'BR' ? 'CNPJ' : 'NIPC') : (client.country === 'BR' ? 'CPF' : 'NIF')}</span><input type="text" value={editForm.identification} onChange={editField('identification')} disabled={editBusy} /></label>
+              <label className="adm-field">
+                <span>Tipo de cliente</span>
+                <select value={editForm.person_type} onChange={editField('person_type')} disabled={editBusy}>
+                  <option value="singular">Pessoa singular</option>
+                  <option value="coletiva">Pessoa coletiva (empresa)</option>
+                </select>
+              </label>
+              {editForm.person_type === 'coletiva' && (
+                <>
+                  <label className="adm-field"><span>DUNS</span><input type="text" value={editForm.duns} onChange={editField('duns')} disabled={editBusy} /></label>
+                  <label className="adm-field"><span>Representante legal</span><input type="text" value={editForm.rep_name} onChange={editField('rep_name')} disabled={editBusy} /></label>
+                  <label className="adm-field"><span>Cargo do representante</span><input type="text" value={editForm.rep_role} onChange={editField('rep_role')} disabled={editBusy} /></label>
+                </>
+              )}
               <label className="adm-field">
                 <span>Área de atuação</span>
                 <select value={editForm.practice_area} onChange={editField('practice_area')} disabled={editBusy}>
@@ -422,6 +539,10 @@ export default function ClientDetail() {
                 </select>
               </label>
               <label className="adm-field" style={{ gridColumn: '1 / -1' }}>
+                <span>Resumo do processo</span>
+                <textarea rows={6} value={editForm.process_summary} onChange={editField('process_summary')} disabled={editBusy} placeholder="Resumo gerado pela IA no cadastro — editável" />
+              </label>
+              <label className="adm-field" style={{ gridColumn: '1 / -1' }}>
                 <span>Notas privadas</span>
                 <textarea rows={3} value={editForm.notes} onChange={editField('notes')} disabled={editBusy} />
               </label>
@@ -441,20 +562,61 @@ export default function ClientDetail() {
         <div>
           <h1>{client.name}</h1>
           <div className="adm-client-meta">
-            {client.phone && <span>📞 {client.phone}</span>}
-            {client.email && <span>✉ {client.email}</span>}
+            {parseContacts(client.phones, client.phone).filter((c) => c.value).map((c, i) => (
+              <span key={'p' + i}>📞 {c.value}{c.label && c.label !== 'Pessoal' ? ` (${c.label})` : ''}</span>
+            ))}
+            {parseContacts(client.emails, client.email).filter((c) => c.value).map((c, i) => (
+              <span key={'e' + i}>✉ {c.value}{c.label && c.label !== 'Pessoal' ? ` (${c.label})` : ''}</span>
+            ))}
             {client.identification && (
-              <span>{client.country === 'BR' ? 'CPF/CNPJ' : 'NIF'} {client.identification}</span>
+              <span>{client.person_type === 'coletiva' ? (client.country === 'BR' ? 'CNPJ' : 'NIPC') : (client.country === 'BR' ? 'CPF' : 'NIF')} {client.identification}</span>
             )}
+            {client.person_type === 'coletiva' && client.duns && <span>DUNS {client.duns}</span>}
           </div>
           <div className="adm-client-meta" style={{ marginTop: '0.4rem' }}>
             <span>{client.practice_area || '—'} · {client.country}</span>
+            {client.person_type === 'coletiva' && (
+              <span>🏢 Pessoa coletiva{client.rep_name ? ` · Rep.: ${client.rep_name}${client.rep_role ? ` (${client.rep_role})` : ''}` : ''}</span>
+            )}
           </div>
         </div>
         <div className="adm-client-actions">
           <button onClick={openEdit}>Editar</button>
           <button className="primary" onClick={() => alert('Registo de pagamento avulso — em desenvolvimento')}>+ Pagamento</button>
         </div>
+      </div>
+
+      <input ref={aiFileRef} type="file" accept="image/png,image/jpeg,image/webp,application/pdf" style={{ display: 'none' }} onChange={(e) => { const f = e.target.files && e.target.files[0]; if (f) aiExtractFile(f); e.target.value = ''; }} />
+      <div
+        onDragOver={(e) => { e.preventDefault(); setAiDragOver(true); }}
+        onDragLeave={() => setAiDragOver(false)}
+        onDrop={(e) => { e.preventDefault(); setAiDragOver(false); const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) aiExtractFile(f); }}
+        onClick={() => !aiBusy && aiFileRef.current && aiFileRef.current.click()}
+        style={{
+          border: `2px dashed ${aiDragOver ? 'var(--gold, #b8935a)' : 'rgba(0,0,0,0.15)'}`,
+          background: aiDragOver ? 'rgba(184,147,90,0.08)' : 'var(--cream, #f5f0e8)',
+          borderRadius: 8,
+          padding: '0.7rem 1rem',
+          textAlign: 'center',
+          cursor: aiBusy ? 'wait' : 'pointer',
+          margin: '1rem 0',
+          opacity: aiBusy ? 0.7 : 1,
+          fontSize: '0.85rem',
+          color: 'var(--muted, #666)',
+          transition: 'background 0.15s, border-color 0.15s',
+        }}
+      >
+        <span style={{ fontWeight: 600, color: 'var(--forest, #12302a)' }}>📄 Ler mais documentos com IA</span>
+        {' — arraste (ou clique) para completar campos vazios, acrescentar contactos e atualizar o resumo do processo.'}
+        {aiMsg && (
+          <div style={{
+            marginTop: '0.5rem', padding: '0.4rem 0.75rem', borderRadius: 4, display: 'inline-block',
+            background: aiMsg.kind === 'ok' ? 'rgba(34,134,58,0.10)' : aiMsg.kind === 'err' ? 'rgba(176,0,0,0.10)' : 'rgba(0,0,0,0.06)',
+            color: aiMsg.kind === 'ok' ? '#1f6b32' : aiMsg.kind === 'err' ? '#b00' : 'var(--ink, #333)',
+          }}>
+            {aiMsg.text}
+          </div>
+        )}
       </div>
 
       <div className="adm-tabs">
@@ -619,6 +781,15 @@ export default function ClientDetail() {
             <p>
               Lembretes configurados: {data.rules.map(r => `${r.days_before}d antes via ${r.channel}`).join(', ')}.
             </p>
+          )}
+          {client.process_summary && (
+            <>
+              <div className="adm-card-title" style={{ marginTop: '1.5rem' }}>Resumo do processo</div>
+              <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.65 }}>{client.process_summary}</p>
+              <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+                Gerado pela IA a partir dos documentos do cadastro · editável em "Editar"
+              </div>
+            </>
           )}
         </div>
       )}

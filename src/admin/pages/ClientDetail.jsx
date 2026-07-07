@@ -211,6 +211,11 @@ export default function ClientDetail() {
       email: client.email || '',
       phone: client.phone || '',
       identification: client.identification || '',
+      person_type: client.person_type || 'singular',
+      rep_name: client.rep_name || '',
+      rep_role: client.rep_role || '',
+      duns: client.duns || '',
+      process_summary: client.process_summary || '',
       practice_area: client.practice_area || '',
       address: client.address || '',
       nationality: client.nationality || '',
@@ -390,7 +395,21 @@ export default function ClientDetail() {
               </label>
               <label className="adm-field"><span>Email</span><input type="email" value={editForm.email} onChange={editField('email')} disabled={editBusy} /></label>
               <label className="adm-field"><span>Telefone</span><input type="tel" value={editForm.phone} onChange={editField('phone')} disabled={editBusy} /></label>
-              <label className="adm-field"><span>{client.country === 'BR' ? 'CPF/CNPJ' : 'NIF'}</span><input type="text" value={editForm.identification} onChange={editField('identification')} disabled={editBusy} /></label>
+              <label className="adm-field"><span>{editForm.person_type === 'coletiva' ? (client.country === 'BR' ? 'CNPJ' : 'NIPC') : (client.country === 'BR' ? 'CPF' : 'NIF')}</span><input type="text" value={editForm.identification} onChange={editField('identification')} disabled={editBusy} /></label>
+              <label className="adm-field">
+                <span>Tipo de cliente</span>
+                <select value={editForm.person_type} onChange={editField('person_type')} disabled={editBusy}>
+                  <option value="singular">Pessoa singular</option>
+                  <option value="coletiva">Pessoa coletiva (empresa)</option>
+                </select>
+              </label>
+              {editForm.person_type === 'coletiva' && (
+                <>
+                  <label className="adm-field"><span>DUNS</span><input type="text" value={editForm.duns} onChange={editField('duns')} disabled={editBusy} /></label>
+                  <label className="adm-field"><span>Representante legal</span><input type="text" value={editForm.rep_name} onChange={editField('rep_name')} disabled={editBusy} /></label>
+                  <label className="adm-field"><span>Cargo do representante</span><input type="text" value={editForm.rep_role} onChange={editField('rep_role')} disabled={editBusy} /></label>
+                </>
+              )}
               <label className="adm-field">
                 <span>Área de atuação</span>
                 <select value={editForm.practice_area} onChange={editField('practice_area')} disabled={editBusy}>
@@ -422,6 +441,10 @@ export default function ClientDetail() {
                 </select>
               </label>
               <label className="adm-field" style={{ gridColumn: '1 / -1' }}>
+                <span>Resumo do processo</span>
+                <textarea rows={6} value={editForm.process_summary} onChange={editField('process_summary')} disabled={editBusy} placeholder="Resumo gerado pela IA no cadastro — editável" />
+              </label>
+              <label className="adm-field" style={{ gridColumn: '1 / -1' }}>
                 <span>Notas privadas</span>
                 <textarea rows={3} value={editForm.notes} onChange={editField('notes')} disabled={editBusy} />
               </label>
@@ -444,11 +467,15 @@ export default function ClientDetail() {
             {client.phone && <span>📞 {client.phone}</span>}
             {client.email && <span>✉ {client.email}</span>}
             {client.identification && (
-              <span>{client.country === 'BR' ? 'CPF/CNPJ' : 'NIF'} {client.identification}</span>
+              <span>{client.person_type === 'coletiva' ? (client.country === 'BR' ? 'CNPJ' : 'NIPC') : (client.country === 'BR' ? 'CPF' : 'NIF')} {client.identification}</span>
             )}
+            {client.person_type === 'coletiva' && client.duns && <span>DUNS {client.duns}</span>}
           </div>
           <div className="adm-client-meta" style={{ marginTop: '0.4rem' }}>
             <span>{client.practice_area || '—'} · {client.country}</span>
+            {client.person_type === 'coletiva' && (
+              <span>🏢 Pessoa coletiva{client.rep_name ? ` · Rep.: ${client.rep_name}${client.rep_role ? ` (${client.rep_role})` : ''}` : ''}</span>
+            )}
           </div>
         </div>
         <div className="adm-client-actions">
@@ -619,6 +646,15 @@ export default function ClientDetail() {
             <p>
               Lembretes configurados: {data.rules.map(r => `${r.days_before}d antes via ${r.channel}`).join(', ')}.
             </p>
+          )}
+          {client.process_summary && (
+            <>
+              <div className="adm-card-title" style={{ marginTop: '1.5rem' }}>Resumo do processo</div>
+              <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.65 }}>{client.process_summary}</p>
+              <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
+                Gerado pela IA a partir dos documentos do cadastro · editável em "Editar"
+              </div>
+            </>
           )}
         </div>
       )}

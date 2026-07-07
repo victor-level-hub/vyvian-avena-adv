@@ -24,6 +24,7 @@ export default function NewClient() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [tab, setTab] = useState('cliente'); // 'cliente' | 'processo' | 'financeiro'
+  const [invalid, setInvalid] = useState({}); // { name, email, phone, startDate, totalValue, installments, monthlyValue }
   const [aiBusy, setAiBusy] = useState(false);
   const [aiMsg, setAiMsg] = useState(null);
   const [aiDragOver, setAiDragOver] = useState(false);
@@ -62,7 +63,26 @@ export default function NewClient() {
     reminderChannels: 'email+whatsapp',
   });
 
-  const update = (key) => (e) => setForm({ ...form, [key]: e.target.value });
+  const update = (key) => (e) => {
+    setForm({ ...form, [key]: e.target.value });
+    if (invalid[key]) setInvalid((inv) => ({ ...inv, [key]: false }));
+  };
+
+  // estilo de campo obrigatório em falta
+  const invStyle = (k) => (invalid[k] ? { borderColor: '#c00000', boxShadow: '0 0 0 2px rgba(192,0,0,0.14)' } : {});
+  const invLabel = (k) => (invalid[k] ? { color: '#c00000' } : undefined);
+
+  // muda de aba, faz scroll até ao campo e coloca o cursor lá
+  const focusField = (tabKey, elId) => {
+    setTab(tabKey);
+    setTimeout(() => {
+      const el = document.getElementById(elId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.focus({ preventScroll: true });
+      }
+    }, 80);
+  };
 
   // ── Cadastro com IA: arrastar/escolher documento -> extrair campos
   const aiAccept = ['image/png','image/jpeg','image/jpg','image/webp','application/pdf'];
@@ -151,24 +171,32 @@ export default function NewClient() {
     // validação manual (os campos obrigatórios podem estar em abas escondidas)
     const emailList = cleanContacts(form.emails);
     const phoneList = cleanContacts(form.phones);
-    if (!form.name.trim() || emailList.length === 0 || phoneList.length === 0) {
-      setTab('cliente');
-      setError('Preenche os campos obrigatórios em "Dados do Cliente": nome, pelo menos um e-mail e um telefone.');
-      return;
+    const inv = {};
+    if (!form.name.trim()) inv.name = true;
+    if (emailList.length === 0) inv.email = true;
+    if (phoneList.length === 0) inv.phone = true;
+    if (!form.startDate) inv.startDate = true;
+    if (form.planType === 'installment') {
+      if (!form.totalValue) inv.totalValue = true;
+      if (!form.installments) inv.installments = true;
     }
-    if (!form.startDate) {
-      setTab('financeiro');
-      setError('Indica a data da primeira cobrança em "Dados Financeiros".');
-      return;
-    }
-    if (form.planType === 'installment' && (!form.totalValue || !form.installments)) {
-      setTab('financeiro');
-      setError('Preenche o valor total e o número de parcelas em "Dados Financeiros".');
-      return;
-    }
-    if (form.planType === 'monthly' && !form.monthlyValue) {
-      setTab('financeiro');
-      setError('Preenche o valor mensal em "Dados Financeiros".');
+    if (form.planType === 'monthly' && !form.monthlyValue) inv.monthlyValue = true;
+    setInvalid(inv);
+
+    // primeiro campo em falta ganha o scroll + cursor
+    const FIELD_META = [
+      ['name', 'cliente', 'f-name'],
+      ['email', 'cliente', 'f-email'],
+      ['phone', 'cliente', 'f-phone'],
+      ['startDate', 'financeiro', 'f-startDate'],
+      ['totalValue', 'financeiro', 'f-totalValue'],
+      ['installments', 'financeiro', 'f-installments'],
+      ['monthlyValue', 'financeiro', 'f-monthlyValue'],
+    ];
+    const first = FIELD_META.find(([k]) => inv[k]);
+    if (first) {
+      setError('Faltam campos obrigatórios (assinalados a vermelho).');
+      focusField(first[1], first[2]);
       return;
     }
     setSubmitting(true);
@@ -388,8 +416,8 @@ export default function NewClient() {
             </select>
           </div>
           <div className="adm-field">
-            <label>{form.personType === 'coletiva' ? 'Denominação da empresa *' : 'Nome completo *'}</label>
-            <input type="text" value={form.name} onChange={update('name')} disabled={submitting} />
+            <label style={invLabel('name')}>{form.personType === 'coletiva' ? 'Denominação da empresa *' : 'Nome completo *'}</label>
+            <input id="f-name" type="text" value={form.name} onChange={update('name')} disabled={submitting} style={invStyle('name')} />
           </div>
           <div className="adm-field">
             <label>{form.personType === 'coletiva' ? (form.country === 'BR' ? 'CNPJ' : 'NIPC') : (form.country === 'BR' ? 'CPF' : 'NIF')}</label>
@@ -411,8 +439,8 @@ export default function NewClient() {
               </div>
             </>
           )}
-          <ContactsEditor kind="email" items={form.emails} onChange={(v) => setForm({ ...form, emails: v })} disabled={submitting} requiredFirst />
-          <ContactsEditor kind="phone" items={form.phones} onChange={(v) => setForm({ ...form, phones: v })} disabled={submitting} requiredFirst />
+          <ContactsEditor kind="email" items={form.emails} onChange={(v) => { setForm({ ...form, emails: v }); if (invalid.email) setInvalid((i) => ({ ...i, email: false })); }} disabled={submitting} requiredFirst invalid={invalid.email} inputId="f-email" />
+          <ContactsEditor kind="phone" items={form.phones} onChange={(v) => { setForm({ ...form, phones: v }); if (invalid.phone) setInvalid((i) => ({ ...i, phone: false })); }} disabled={submitting} requiredFirst invalid={invalid.phone} inputId="f-phone" />
           <div className="adm-field">
             <label>Jurisdição</label>
             <select value={form.country} onChange={update('country')} disabled={submitting}>
@@ -535,19 +563,19 @@ export default function NewClient() {
               </select>
             </div>
             <div className="adm-field">
-              <label>Data da primeira cobrança *</label>
-              <input type="date" value={form.startDate} onChange={update('startDate')} disabled={submitting} />
+              <label style={invLabel('startDate')}>Data da primeira cobrança *</label>
+              <input id="f-startDate" type="date" value={form.startDate} onChange={update('startDate')} disabled={submitting} style={invStyle('startDate')} />
             </div>
 
             {form.planType === 'installment' && (
               <>
                 <div className="adm-field">
-                  <label>Valor total contratado *</label>
-                  <input type="text" value={form.totalValue} onChange={update('totalValue')} placeholder="3120" disabled={submitting} />
+                  <label style={invLabel('totalValue')}>Valor total contratado *</label>
+                  <input id="f-totalValue" type="text" value={form.totalValue} onChange={update('totalValue')} placeholder="3120" disabled={submitting} style={invStyle('totalValue')} />
                 </div>
                 <div className="adm-field">
-                  <label>Número de parcelas *</label>
-                  <input type="number" min="1" value={form.installments} onChange={update('installments')} placeholder="6" disabled={submitting} />
+                  <label style={invLabel('installments')}>Número de parcelas *</label>
+                  <input id="f-installments" type="number" min="1" value={form.installments} onChange={update('installments')} placeholder="6" disabled={submitting} style={invStyle('installments')} />
                   {planPreview && <div className="adm-field-helper">{planPreview}</div>}
                 </div>
               </>
@@ -555,8 +583,8 @@ export default function NewClient() {
 
             {form.planType === 'monthly' && (
               <div className="adm-field adm-full">
-                <label>Valor mensal *</label>
-                <input type="text" value={form.monthlyValue} onChange={update('monthlyValue')} placeholder="450" disabled={submitting} />
+                <label style={invLabel('monthlyValue')}>Valor mensal *</label>
+                <input id="f-monthlyValue" type="text" value={form.monthlyValue} onChange={update('monthlyValue')} placeholder="450" disabled={submitting} style={invStyle('monthlyValue')} />
                 {planPreview && <div className="adm-field-helper">{planPreview}</div>}
               </div>
             )}

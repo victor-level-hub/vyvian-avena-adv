@@ -16,8 +16,9 @@ function saveCustomLabel(label) {
   }
 }
 
-export default function ContactsEditor({ kind, items, onChange, disabled, requiredFirst }) {
+export default function ContactsEditor({ kind, items, onChange, disabled, requiredFirst, invalid, inputId }) {
   // kind: 'email' | 'phone'
+  // invalid: marca a primeira linha a vermelho; inputId: id do primeiro input (para scroll/focus)
   const [customLabels, setCustomLabels] = useState(loadCustomLabels);
   const isEmail = kind === 'email';
 
@@ -47,9 +48,10 @@ export default function ContactsEditor({ kind, items, onChange, disabled, requir
 
   return (
     <div className="adm-field adm-full">
-      <label>
+      <label style={invalid ? { color: '#c00000' } : undefined}>
         {isEmail ? 'E-mails' : 'Telefones (WhatsApp)'}
         {requiredFirst ? ' *' : ''}
+        {invalid && <span style={{ fontWeight: 400 }}> — obrigatório</span>}
       </label>
       {items.map((it, idx) => (
         <div key={idx} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'center' }}>
@@ -64,12 +66,13 @@ export default function ContactsEditor({ kind, items, onChange, disabled, requir
             <option value="__nova__">＋ Nova label…</option>
           </select>
           <input
+            id={idx === 0 ? inputId : undefined}
             type={isEmail ? 'email' : 'tel'}
             value={it.value}
             onChange={(e) => setItem(idx, { value: e.target.value })}
             placeholder={isEmail ? 'nome@exemplo.pt' : '+351 91 …'}
             disabled={disabled}
-            style={{ flex: 1 }}
+            style={{ flex: 1, ...(invalid && idx === 0 ? { borderColor: '#c00000', boxShadow: '0 0 0 2px rgba(192,0,0,0.14)' } : {}) }}
           />
           {items.length > 1 && (
             <button

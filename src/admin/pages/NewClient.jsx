@@ -22,6 +22,7 @@ export default function NewClient() {
   const navigate = useNavigate();
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [tab, setTab] = useState('cliente'); // 'cliente' | 'processo' | 'financeiro'
   const [aiBusy, setAiBusy] = useState(false);
   const [aiMsg, setAiMsg] = useState(null);
   const [aiDragOver, setAiDragOver] = useState(false);
@@ -50,6 +51,7 @@ export default function NewClient() {
     filiation: '',
     area: 'Família',
     process: '',
+    processSummary: '',
     planType: 'installment',
     startDate: '',
     totalValue: '',
@@ -79,6 +81,8 @@ export default function NewClient() {
         headers: {
           'Content-Type': file.type,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          // envia o resumo atual para a IA melhorar (em vez de substituir às cegas)
+          ...(form.processSummary ? { 'X-Resumo-Atual': encodeURIComponent(form.processSummary.slice(0, 4000)) } : {}),
         },
         body: file,
       });
@@ -109,10 +113,13 @@ export default function NewClient() {
       set('niss', f.niss);
       set('filiation', f.filiation);
       if (f.country && (f.country === 'PT' || f.country === 'BR')) merge.country = f.country;
+      // resumo do processo: a IA já devolve a versão fundida com o resumo anterior
+      const summaryUpdated = !!(f.process_summary && f.process_summary !== form.processSummary);
+      if (f.process_summary) merge.processSummary = String(f.process_summary);
       setForm(merge);
       const filled = Object.keys(f).filter((k) => f[k]).length;
       const u = data.usage || {};
-      setAiMsg({ kind: 'ok', text: `Documento lido — ${filled} campos preenchidos. Reveja antes de guardar. (uso: ${u.input_tokens||0} entrada, ${u.output_tokens||0} saída)` });
+      setAiMsg({ kind: 'ok', text: `Documento lido — ${filled} campos preenchidos${summaryUpdated ? ' · resumo do processo atualizado (ver aba Dados do Processo)' : ''}. Reveja antes de guardar. (uso: ${u.input_tokens||0} entrada, ${u.output_tokens||0} saída)` });
     } catch (err) {
       setAiMsg({ kind: 'err', text: 'Erro: ' + err.message });
     } finally {
@@ -134,6 +141,28 @@ export default function NewClient() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError(null);
+
+    // validação manual (os campos obrigatórios podem estar em abas escondidas)
+    if (!form.name.trim() || !form.email.trim() || !form.phone.trim()) {
+      setTab('cliente');
+      setError('Preenche os campos obrigatórios em "Dados do Cliente": nome, e-mail e telefone.');
+      return;
+    }
+    if (!form.startDate) {
+      setTab('financeiro');
+      setError('Indica a data da primeira cobrança em "Dados Financeiros".');
+      return;
+    }
+    if (form.planType === 'installment' && (!form.totalValue || !form.installments)) {
+      setTab('financeiro');
+      setError('Preenche o valor total e o número de parcelas em "Dados Financeiros".');
+      return;
+    }
+    if (form.planType === 'monthly' && !form.monthlyValue) {
+      setTab('financeiro');
+      setError('Preenche o valor mensal em "Dados Financeiros".');
+      return;
+    }
     setSubmitting(true);
 
     try {
@@ -172,6 +201,7 @@ export default function NewClient() {
         niss: form.niss || null,
         filiation: form.filiation || null,
         practice_area: form.area,
+        process_summary: form.processSummary || null,
         notes: form.process ? `Processo: ${form.process}` : '',
         honorarios_total: totalContracted,
         honorarios_parcelas: numParcelas,
@@ -313,6 +343,31 @@ export default function NewClient() {
           )}
         </div>
 
+        {/* Abas */}
+        <div style={{ display: 'flex', gap: '0.25rem', borderBottom: '1px solid rgba(0,0,0,0.12)', marginBottom: '1.25rem' }}>
+          {[['cliente', 'Dados do Cliente'], ['processo', 'Dados do Processo'], ['financeiro', 'Dados Financeiros']].map(([key, label]) => (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              style={{
+                background: 'none',
+                border: 'none',
+                borderBottom: tab === key ? '2px solid var(--gold, #b8935a)' : '2px solid transparent',
+                color: tab === key ? 'var(--forest, #12302a)' : 'var(--muted, #777)',
+                fontWeight: tab === key ? 600 : 400,
+                padding: '0.6rem 1rem',
+                cursor: 'pointer',
+                fontSize: '0.95rem',
+                marginBottom: '-1px',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {tab === 'cliente' && (<>
         <div className="adm-form-section-title">{form.personType === 'coletiva' ? 'Dados da empresa' : 'Dados pessoais'}</div>
         <div className="adm-form-grid">
           <div className="adm-field">
@@ -324,7 +379,7 @@ export default function NewClient() {
           </div>
           <div className="adm-field">
             <label>{form.personType === 'coletiva' ? 'Denominação da empresa *' : 'Nome completo *'}</label>
-            <input type="text" value={form.name} onChange={update('name')} required disabled={submitting} />
+            <input type="text" value={form.name} onChange={update('name')} disabled={submitting} />
           </div>
           <div className="adm-field">
             <label>{form.personType === 'coletiva' ? (form.country === 'BR' ? 'CNPJ' : 'NIPC') : (form.country === 'BR' ? 'CPF' : 'NIF')}</label>
@@ -348,11 +403,11 @@ export default function NewClient() {
           )}
           <div className="adm-field">
             <label>E-mail *</label>
-            <input type="email" value={form.email} onChange={update('email')} required disabled={submitting} />
+            <input type="email" value={form.email} onChange={update('email')} disabled={submitting} />
           </div>
           <div className="adm-field">
             <label>Telefone (WhatsApp) *</label>
-            <input type="tel" value={form.phone} onChange={update('phone')} placeholder="+351 91 …" required disabled={submitting} />
+            <input type="tel" value={form.phone} onChange={update('phone')} placeholder="+351 91 …" disabled={submitting} />
           </div>
           <div className="adm-field">
             <label>Jurisdição</label>
@@ -430,6 +485,12 @@ export default function NewClient() {
               <input type="text" value={form.filiation} onChange={update('filiation')} placeholder="Nome do pai e da mãe" disabled={submitting} />
             </div>
           )}
+        </div>
+        </>)}
+
+        {tab === 'processo' && (<>
+        <div className="adm-form-section-title">Dados do Processo</div>
+        <div className="adm-form-grid">
           <div className="adm-field">
             <label>Área de atuação</label>
             <select value={form.area} onChange={update('area')} disabled={submitting}>
@@ -439,12 +500,26 @@ export default function NewClient() {
               <option>Empresarial</option>
             </select>
           </div>
-          <div className="adm-field adm-full">
+          <div className="adm-field">
             <label>Processo / referência interna</label>
             <input type="text" value={form.process} onChange={update('process')} placeholder="Ex.: 1289/26 · Divórcio consensual" disabled={submitting} />
           </div>
+          <div className="adm-field adm-full">
+            <label>Resumo do processo</label>
+            <textarea
+              rows={9}
+              value={form.processSummary}
+              onChange={update('processSummary')}
+              placeholder="Arraste documentos do caso (e-mails, participações de sinistro, contratos…) na caixa de IA acima — o resumo é criado automaticamente e melhorado a cada documento novo. Também pode escrever ou editar à mão."
+              disabled={submitting}
+              style={{ resize: 'vertical', width: '100%', fontFamily: 'inherit', fontSize: '0.9rem', lineHeight: 1.55, padding: '0.6rem 0.75rem' }}
+            />
+            <div className="adm-field-helper">Gerado pela IA a partir dos documentos · sempre editável · reveja antes de guardar</div>
+          </div>
         </div>
+        </>)}
 
+        {tab === 'financeiro' && (
         <div className="adm-form-section">
           <div className="adm-form-section-title">Plano financeiro</div>
           <div className="adm-form-grid">
@@ -457,18 +532,18 @@ export default function NewClient() {
             </div>
             <div className="adm-field">
               <label>Data da primeira cobrança *</label>
-              <input type="date" value={form.startDate} onChange={update('startDate')} required disabled={submitting} />
+              <input type="date" value={form.startDate} onChange={update('startDate')} disabled={submitting} />
             </div>
 
             {form.planType === 'installment' && (
               <>
                 <div className="adm-field">
                   <label>Valor total contratado *</label>
-                  <input type="text" value={form.totalValue} onChange={update('totalValue')} placeholder="3120" required disabled={submitting} />
+                  <input type="text" value={form.totalValue} onChange={update('totalValue')} placeholder="3120" disabled={submitting} />
                 </div>
                 <div className="adm-field">
                   <label>Número de parcelas *</label>
-                  <input type="number" min="1" value={form.installments} onChange={update('installments')} placeholder="6" required disabled={submitting} />
+                  <input type="number" min="1" value={form.installments} onChange={update('installments')} placeholder="6" disabled={submitting} />
                   {planPreview && <div className="adm-field-helper">{planPreview}</div>}
                 </div>
               </>
@@ -477,7 +552,7 @@ export default function NewClient() {
             {form.planType === 'monthly' && (
               <div className="adm-field adm-full">
                 <label>Valor mensal *</label>
-                <input type="text" value={form.monthlyValue} onChange={update('monthlyValue')} placeholder="450" required disabled={submitting} />
+                <input type="text" value={form.monthlyValue} onChange={update('monthlyValue')} placeholder="450" disabled={submitting} />
                 {planPreview && <div className="adm-field-helper">{planPreview}</div>}
               </div>
             )}
@@ -500,6 +575,7 @@ export default function NewClient() {
             </div>
           </div>
         </div>
+        )}
 
         <div className="adm-form-actions">
           <button type="button" className="adm-btn adm-btn-ghost" onClick={() => navigate('/admin/clientes')} disabled={submitting}>

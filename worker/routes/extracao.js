@@ -27,13 +27,15 @@ const SCHEMA = `{
   "niss": "string ou null (Número de Identificação da Segurança Social, se visível)",
   "filiation": "string ou null (nome do pai e/ou da mãe, se visíveis)",
   "marital_status": "string ou null",
-  "country": "PT" | "BR" | null
+  "country": "PT" | "BR" | null,
+  "process_summary": "string ou null (resumo do processo/caso jurídico, se o documento contiver essa informação)"
 }`;
 
 const PROMPT =
 `Recebes um documento para registo de cliente num escritório de advocacia. Pode ser:
-(a) um documento de identificação pessoal (Título de Residência português, Cartão de Cidadão, Passaporte, RG/BI ou similar), ou
-(b) um documento societário/legal (procuração, certidão permanente, contrato) onde o cliente é uma EMPRESA (pessoa coletiva).
+(a) um documento de identificação pessoal (Título de Residência português, Cartão de Cidadão, Passaporte, RG/BI ou similar),
+(b) um documento societário/legal (procuração, certidão permanente, contrato) onde o cliente é uma EMPRESA (pessoa coletiva), ou
+(c) um documento sobre o CASO/PROCESSO do cliente (e-mail, participação de sinistro, citação, contrato em disputa, sentença…).
 
 Extrai os campos visíveis e devolve EXCLUSIVAMENTE JSON válido com esta estrutura (sem markdown, sem texto antes ou depois):
 
@@ -48,7 +50,16 @@ Regras:
 - Nome em capitalização natural (não em MAIÚSCULAS gritantes), salvo se for assim no documento.
 - "country": "PT" se for documento português ou indicar Portugal; "BR" se brasileiro; null se ambíguo.
 - "doc_type": escolhe a etiqueta mais próxima da lista; "Título de Residência" para títulos portugueses para estrangeiros.
+- "process_summary": se o documento contiver informação sobre o caso/processo (factos, datas, partes, valores, pedidos), escreve um resumo objetivo em português (5-10 frases, prosa corrida, sem markdown) útil para um advogado: o que aconteceu, quando, quem está envolvido, valores em causa, estado atual e próximos passos se visíveis. Documentos de identificação puros => null.
 - Não incluas comentários nem campos extra. SÓ o objeto JSON.`;
+
+// Instrução extra quando já existe um resumo do processo: fundir em vez de substituir.
+const MERGE_NOTE = (atual) =>
+`\n\nNOTA: já existe o seguinte resumo do processo deste cliente:
+---
+${atual}
+---
+Se este documento acrescentar informação relevante ao caso, devolve em "process_summary" uma versão MELHORADA que integre o resumo existente com os factos novos (sem perder informação, sem duplicar, mantendo prosa corrida). Se o documento não acrescentar nada ao caso, devolve "process_summary": null.`;
 
 export async function handleExtracao(request, env, path, session) {
   if (request.method !== "POST") return jsonError("Method not allowed", 405);
@@ -73,17 +84,25 @@ export async function handleExtracao(request, env, path, session) {
   for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
   const b64 = btoa(bin);
 
+  // resumo do processo já existente (opcional) — enviado pelo frontend para melhoria incremental
+  let resumoAtual = "";
+  const rh = request.headers.get("x-resumo-atual");
+  if (rh) {
+    try { resumoAtual = decodeURIComponent(rh).slice(0, 6000); } catch { resumoAtual = ""; }
+  }
+  const promptFinal = resumoAtual ? PROMPT + MERGE_NOTE(resumoAtual) : PROMPT;
+
   const body = {
     contents: [{
       parts: [
         { inline_data: { mime_type: geminiMime, data: b64 } },
-        { text: PROMPT },
+        { text: promptFinal },
       ],
     }],
     generationConfig: {
       temperature: 0,
       responseMimeType: "application/json", // força JSON limpo (sem fences markdown)
-      maxOutputTokens: 2048,                 // folga p/ tokens de "thinking" do 2.5 Pro
+      maxOutputTokens: 4096,                 // folga p/ thinking + resumo do processo
     },
   };
 

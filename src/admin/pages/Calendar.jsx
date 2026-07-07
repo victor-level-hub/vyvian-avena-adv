@@ -78,6 +78,7 @@ export default function Calendar() {
 
   const [currentDate, setCurrentDate] = useState(new Date(TODAY_REAL));
   const [selectedDate, setSelectedDate] = useState(null);
+  const dayDetailRef = React.useRef(null);
   const [allInstallments, setAllInstallments] = useState([]);
   const [types, setTypes] = useState([]);
   const [events, setEvents] = useState([]);
@@ -168,6 +169,13 @@ export default function Calendar() {
   const prevMonth = () => { setCurrentDate(new Date(year, month - 1, 1)); setSelectedDate(null); };
   const nextMonth = () => { setCurrentDate(new Date(year, month + 1, 1)); setSelectedDate(null); };
   const goToday = () => { setCurrentDate(new Date(TODAY_REAL)); setSelectedDate(null); };
+
+  // ao escolher um dia, scroll suave até ao início da relação de compromissos
+  useEffect(() => {
+    if (selectedDate && view === 'month' && dayDetailRef.current) {
+      dayDetailRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }, [selectedDate, view]);
 
   const selectedKey = selectedDate ? dateKey(selectedDate) : null;
   const selectedInstallments = selectedKey ? (installmentsByDate[selectedKey] || []) : [];
@@ -470,7 +478,7 @@ export default function Calendar() {
       </div>
 
       {view === 'month' && selectedDate && (
-        <div className="adm-day-detail">
+        <div className="adm-day-detail" ref={dayDetailRef} style={{ scrollMarginTop: '1rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
             <h3 style={{ margin: 0 }}>Dia {fmtDate(selectedKey)}</h3>
             <button className="adm-btn" onClick={() => openCreateEvent(selectedKey)}>+ Adicionar evento neste dia</button>

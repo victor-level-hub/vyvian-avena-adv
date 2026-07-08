@@ -61,6 +61,28 @@ export const clients = {
 };
 
 // ============ INSTALLMENTS ============
+// ── Logo do cliente ──
+export const clientLogo = {
+  async upload(clientId, file) {
+    const token = getToken();
+    const res = await fetch(`/api/clients/${clientId}/logo`, {
+      method: 'POST',
+      headers: { 'Content-Type': file.type, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: file,
+    });
+    if (!res.ok) { let m = `HTTP ${res.status}`; try { const e = await res.json(); m = e.error || m; } catch {} throw new Error(m); }
+    return res.json();
+  },
+  async fetchUrl(clientId) {
+    const token = getToken();
+    const res = await fetch(`/api/clients/${clientId}/logo`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return URL.createObjectURL(blob);
+  },
+  remove: (clientId) => request(`/api/clients/${clientId}/logo`, { method: 'DELETE' }),
+};
+
 export const installments = {
   list: (filters = {}) => {
     const qs = new URLSearchParams(filters).toString();

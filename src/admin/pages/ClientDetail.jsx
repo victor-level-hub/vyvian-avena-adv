@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import ContactsEditor, { parseContacts, cleanContacts } from '../ContactsEditor';
 import AddressEditor, { EMPTY_ADDRESS, composeAddress, hasAddress, parseAddressParts } from '../AddressEditor';
 import { useParams, Link } from 'react-router-dom';
-import { clients as clientsApi, installments as installmentsApi, recibos as recibosApi, procuracoes as procApi, planos as planosApi, uploadTokens as utApi, clientDocs as docsApi } from '../apiClient';
+import { clients as clientsApi, installments as installmentsApi, recibos as recibosApi, procuracoes as procApi, planos as planosApi, uploadTokens as utApi, clientDocs as docsApi, clientLogo } from '../apiClient';
 
 function fmtMoney(amount, currency = 'EUR') {
   const symbol = currency === 'BRL' ? 'R$' : '€';
@@ -58,6 +58,9 @@ export default function ClientDetail() {
   const [editError, setEditError] = useState(null);
   const fileInputRef = React.useRef(null);
   const pendingUploadId = React.useRef(null);
+  const logoInputRef = React.useRef(null);
+  const [logoUrl, setLogoUrl] = useState(null);
+  const [logoBusy, setLogoBusy] = useState(false);
 
   // ── Procurações
   const [procTemplates, setProcTemplates] = useState([]);
@@ -197,6 +200,39 @@ export default function ClientDetail() {
   };
 
   useEffect(() => { loadData(); }, [clientId]);
+
+  // logo do cliente (fetch autenticado -> objectURL)
+  useEffect(() => {
+    let url = null;
+    if (data?.client?.logo_key) {
+      clientLogo.fetchUrl(clientId).then((u) => { url = u; setLogoUrl(u); });
+    } else {
+      setLogoUrl(null);
+    }
+    return () => { if (url) URL.revokeObjectURL(url); };
+  }, [data?.client?.logo_key, clientId]);
+
+  const handleLogoChosen = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'].includes(file.type)) {
+      alert('Tipo não suportado. Use PNG, JPEG, WEBP ou SVG.');
+      return;
+    }
+    setLogoBusy(true);
+    try { await clientLogo.upload(clientId, file); await loadData(); }
+    catch (err) { alert('Erro ao carregar logo: ' + err.message); }
+    finally { setLogoBusy(false); }
+  };
+
+  const handleLogoRemove = async () => {
+    if (!confirm('Remover a logo do cliente?')) return;
+    setLogoBusy(true);
+    try { await clientLogo.remove(clientId); await loadData(); }
+    catch (err) { alert('Erro: ' + err.message); }
+    finally { setLogoBusy(false); }
+  };
 
   const handleMarkPaid = async (installmentId) => {
     if (!confirm('Marcar esta parcela como paga (hoje)?')) return;
@@ -620,6 +656,11 @@ export default function ClientDetail() {
                 <span>Resumo do processo</span>
                 <textarea rows={6} value={editForm.process_summary} onChange={editField('process_summary')} disabled={editBusy} placeholder="Resumo gerado pela IA no cadastro — editável" />
               </label>
+              {client.logo_key && (
+                <div style={{ gridColumn: '1 / -1', fontSize: '0.8rem' }}>
+                  <a href="#" onClick={(e) => { e.preventDefault(); handleLogoRemove(); }} style={{ color: '#b00' }}>Remover logo do cliente</a>
+                </div>
+              )}
               <label className="adm-field" style={{ gridColumn: '1 / -1' }}>
                 <span>Notas</span>
                 <textarea rows={3} value={editForm.notes} onChange={editField('notes')} disabled={editBusy} />
@@ -635,8 +676,22 @@ export default function ClientDetail() {
           </div>
         </div>
       )}
+      <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/webp,image/svg+xml" style={{ display: 'none' }} onChange={handleLogoChosen} />
       <div className="adm-client-head">
-        <div className="adm-client-avatar">{initials || 'C'}</div>
+        <div
+          className="adm-client-avatar"
+          onClick={() => !logoBusy && logoInputRef.current && logoInputRef.current.click()}
+          title={logoUrl ? 'Clique para substituir a logo' : 'Clique para adicionar a logo do cliente'}
+          style={{ cursor: 'pointer', position: 'relative', overflow: 'hidden', ...(logoUrl ? { background: '#fff', padding: 0 } : {}) }}
+        >
+          {logoUrl ? (
+            // object-fit: contain — a logo (mesmo retangular) aparece INTEIRA dentro do círculo, sem corte
+            <img src={logoUrl} alt="logo" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '12%', boxSizing: 'border-box', background: '#fff', borderRadius: '50%' }} />
+          ) : (
+            initials || 'C'
+          )}
+          <span style={{ position: 'absolute', bottom: 0, right: 0, background: 'rgba(18,48,42,0.85)', color: '#fff', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem' }}>📷</span>
+        </div>
         <div>
           <h1>{client.name}</h1>
           <div className="adm-client-meta">

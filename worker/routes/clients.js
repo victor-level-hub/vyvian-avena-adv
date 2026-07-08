@@ -3,8 +3,13 @@ import { jsonResponse, jsonError } from '../lib/response.js';
 
 export async function handleClients(request, env, path, session) {
   const method = request.method;
-  const segments = path.split('/').filter(Boolean); // ['api', 'clients', ':id'?]
+  const segments = path.split('/').filter(Boolean); // ['api', 'clients', ':id'?, 'logo'?]
   const clientId = segments[2];
+
+  // Logo do cliente (R2)
+  if (clientId && segments[3] === 'logo') {
+    return handleLogo(request, env, clientId, method);
+  }
 
   // GET /api/clients
   if (!clientId && method === 'GET') {
@@ -140,4 +145,47 @@ function serializeContacts(v) {
   if (v == null || v === '') return null;
   if (typeof v === 'string') return v;
   try { return JSON.stringify(v); } catch { return null; }
+}
+
+// ── Logo do cliente ─────────────────────────────────────────────
+// POST: corpo binário (image/png|jpeg|webp|svg, máx 2 MB) -> guarda no R2
+// GET: devolve a imagem · DELETE: remove
+const LOGO_MAX = 2 * 1024 * 1024;
+const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
+
+async function handleLogo(request, env, clientId, method) {
+  const client = await env.DB.prepare('SELECT id, logo_key, logo_type FROM clients WHERE id = ?').bind(clientId).first();
+  if (!client) return jsonError('Cliente não encontrado', 404);
+  const key = `logos/${clientId}`;
+
+  if (method === 'POST' || method === 'PUT') {
+    const ct = (request.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
+    if (!LOGO_TYPES.includes(ct)) return jsonError('Tipo não suportado. Use PNG, JPEG, WEBP ou SVG.', 415);
+    const buf = await request.arrayBuffer();
+    if (!buf || buf.byteLength === 0) return jsonError('Ficheiro vazio.', 400);
+    if (buf.byteLength > LOGO_MAX) return jsonError('Ficheiro demasiado grande (máx. 2 MB).', 413);
+    await env.RECIBOS.put(key, buf, { httpMetadata: { contentType: ct } });
+    await env.DB.prepare("UPDATE clients SET logo_key = ?, logo_type = ?, updated_at = datetime('now') WHERE id = ?").bind(key, ct, clientId).run();
+    return jsonResponse({ ok: true });
+  }
+
+  if (method === 'GET') {
+    if (!client.logo_key) return jsonError('Sem logo', 404);
+    const obj = await env.RECIBOS.get(client.logo_key);
+    if (!obj) return jsonError('Sem logo', 404);
+    return new Response(obj.body, {
+      headers: {
+        'Content-Type': client.logo_type || 'image/png',
+        'Cache-Control': 'private, max-age=300',
+      },
+    });
+  }
+
+  if (method === 'DELETE') {
+    if (client.logo_key) await env.RECIBOS.delete(client.logo_key);
+    await env.DB.prepare("UPDATE clients SET logo_key = NULL, logo_type = NULL, updated_at = datetime('now') WHERE id = ?").bind(clientId).run();
+    return jsonResponse({ ok: true });
+  }
+
+  return jsonError('Method not allowed', 405);
 }

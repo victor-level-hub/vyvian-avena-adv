@@ -60,9 +60,10 @@ export async function generateProcuracaoPDF({ texto, local, data, nomeOutorgante
 
   const page = doc.addPage([595.28, 841.89]); // A4
   const { width, height } = page.getSize();
-  const F  = await doc.embedFont(StandardFonts.TimesRoman);
-  const FB = await doc.embedFont(StandardFonts.TimesRomanBold);
-  const sans = await doc.embedFont(StandardFonts.Helvetica);
+  // corpo em Helvetica (equivalente Arial das fontes padrão do PDF)
+  const F  = await doc.embedFont(StandardFonts.Helvetica);
+  const FB = await doc.embedFont(StandardFonts.HelveticaBold);
+  const sans = F;
 
   const M = 64;
   const maxW = width - 2 * M;
@@ -100,10 +101,7 @@ export async function generateProcuracaoPDF({ texto, local, data, nomeOutorgante
     y -= 6; // espaço entre parágrafos
   }
 
-  // local e data
-  y -= 18;
-  const ld = `${local || "Santa Maria da Feira"}, ${fmtDateLong(data || new Date().toISOString())}.`;
-  page.drawText(ld, { x: width - M - F.widthOfTextAtSize(ld, size), y, size: size, font: F, color: INK });
+  // (dateline removida a pedido — a procuração não leva local/data)
   y -= 60;
 
   // linha de assinatura do outorgante
@@ -118,12 +116,6 @@ export async function generateProcuracaoPDF({ texto, local, data, nomeOutorgante
   const lbl = "(O(A) Outorgante)";
   const lblW = sans.widthOfTextAtSize(lbl, 8);
   page.drawText(lbl, { x: (width - lblW) / 2, y, size: 8, font: sans, color: MUTE });
-
-  // rodapé
-  page.drawLine({ start: { x: M, y: 56 }, end: { x: width - M, y: 56 }, thickness: 0.5, color: GOLD });
-  const rod = "Vyvian Avena \u2014 Advogada \u00b7 Rua Comendador S\u00e1 Couto, 112, 4.\u00ba, Sala 2, 4520-192 Santa Maria da Feira";
-  const rodW = sans.widthOfTextAtSize(rod, 7.5);
-  page.drawText(rod, { x: (width - rodW) / 2, y: 44, size: 7.5, font: sans, color: MUTE });
 
   return await doc.save();
 

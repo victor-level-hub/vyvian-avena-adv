@@ -48,8 +48,9 @@
   margin: 0;
 }
 
-.adm-root button { font-family: var(--sans); cursor: pointer; }
-.adm-root input, .adm-root select, .adm-root textarea { font-family: var(--sans); }
+.adm-root button { font-family: 'Arial Unicode MS', Arial, 'Helvetica Neue', sans-serif; cursor: pointer; }
+.adm-root input, .adm-root select, .adm-root textarea { font-family: 'Arial Unicode MS', Arial, 'Helvetica Neue', sans-serif; }
+.adm-root label, .adm-root .adm-field, .adm-root .adm-field span, .adm-root .adm-field label { font-family: 'Arial Unicode MS', Arial, 'Helvetica Neue', sans-serif; }
 .adm-root a { color: var(--gold-deep); text-decoration: none; }
 
 /* ============ LAYOUT GERAL ============ */

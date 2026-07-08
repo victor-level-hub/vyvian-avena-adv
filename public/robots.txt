@@ -1,0 +1,8 @@
+# robots.txt — vyavenaadv.com
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /api/
+Disallow: /upload/
+
+Sitemap: https://vyavenaadv.com/sitemap.xml

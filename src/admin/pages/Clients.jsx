@@ -1,7 +1,41 @@
 // src/admin/pages/Clients.jsx
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { clients as clientsApi, installments as installmentsApi } from '../apiClient';
+import { clients as clientsApi, installments as installmentsApi, clientLogo } from '../apiClient';
+
+// cache de logos (objectURL) para não refazer o fetch a cada render
+const logoCache = new Map();
+
+// Avatar discreto da lista: logo (contain, sem corte) ou iniciais
+function RowAvatar({ client }) {
+  const [url, setUrl] = useState(logoCache.get(client.id) || null);
+  useEffect(() => {
+    if (!client.logo_key || logoCache.has(client.id)) return;
+    let alive = true;
+    clientLogo.fetchUrl(client.id).then((u) => {
+      if (u) logoCache.set(client.id, u);
+      if (alive) setUrl(u);
+    });
+    return () => { alive = false; };
+  }, [client.id, client.logo_key]);
+
+  const initials = (client.name || '').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+  const base = {
+    width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+    fontSize: '0.66rem', fontWeight: 700,
+  };
+  if (url) {
+    return (
+      <span style={{ ...base, background: '#fff', border: '1px solid rgba(0,0,0,0.1)', overflow: 'hidden' }}>
+        <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 3, boxSizing: 'border-box' }} />
+      </span>
+    );
+  }
+  return (
+    <span style={{ ...base, background: 'var(--gold, #b8935a)', color: '#fff' }}>{initials || 'C'}</span>
+  );
+}
 
 function fmtMoney(amount, currency = 'EUR') {
   const symbol = currency === 'BRL' ? 'R$' : '€';
@@ -238,11 +272,16 @@ export default function Clients() {
                   onClick={() => navigate(`/admin/clientes/${c.id}`)}
                 >
                   <td>
-                    <strong>{c.name}</strong>
-                    <br />
-                    <small style={{ color: 'var(--muted)' }}>
-                      {c.country === 'BR' ? c.phone : c.email}
-                    </small>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                      <RowAvatar client={c} />
+                      <span>
+                        <strong>{c.name}</strong>
+                        <br />
+                        <small style={{ color: 'var(--muted)' }}>
+                          {c.country === 'BR' ? c.phone : c.email}
+                        </small>
+                      </span>
+                    </span>
                   </td>
                   <td>{c.practice_area || '—'}</td>
                   <td>{c.country}</td>

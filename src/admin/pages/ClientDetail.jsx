@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import ContactsEditor, { parseContacts, cleanContacts } from '../ContactsEditor';
 import AddressEditor, { EMPTY_ADDRESS, composeAddress, hasAddress, parseAddressParts } from '../AddressEditor';
 import { useParams, Link } from 'react-router-dom';
-import { clients as clientsApi, installments as installmentsApi, recibos as recibosApi, procuracoes as procApi, planos as planosApi, uploadTokens as utApi, clientDocs as docsApi, clientLogo } from '../apiClient';
+import { clients as clientsApi, installments as installmentsApi, recibos as recibosApi, procuracoes as procApi, planos as planosApi, uploadTokens as utApi, clientDocs as docsApi, clientLogo, calendar as calendarApi } from '../apiClient';
 import { IconPhone, IconBuilding, IconCamera, IconDoc, IconUpload } from '../icons';
 
 function fmtMoney(amount, currency = 'EUR') {
@@ -72,6 +72,8 @@ export default function ClientDetail() {
   const [procLocal, setProcLocal] = useState('Santa Maria da Feira');
   const [procData, setProcData] = useState(new Date().toISOString().slice(0, 10));
   const [procBusy, setProcBusy] = useState(false);
+  const [procRefs, setProcRefs] = useState([]);          // processos conhecidos do cliente
+  const [procSelectedRef, setProcSelectedRef] = useState('');
 
   // ── Documentos do cliente / link de upload
   const [docs, setDocs] = useState([]);
@@ -315,6 +317,43 @@ export default function ClientDetail() {
     })();
   }, []);
 
+  // Referências de processo conhecidas: notas do cliente + eventos do calendário deste cliente
+  useEffect(() => {
+    if (activeTab !== 'procuracoes' || !data?.client) return;
+    (async () => {
+      const refs = new Set();
+      const m = (data.client.notes || '').match(/Processo:\s*(.+)/i);
+      if (m && m[1].trim()) refs.add(m[1].trim());
+      try {
+        const norm = (x) => (x || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+        const nc = norm(data.client.name).slice(0, 14);
+        const r = await calendarApi.getAll();
+        (r.events || []).forEach((ev) => {
+          if (!ev.case_reference) return;
+          const ne = norm(ev.client_name);
+          if (ne && nc && (ne.includes(nc) || nc.includes(ne.slice(0, 14)))) refs.add(ev.case_reference.trim());
+        });
+      } catch (e) { /* opcional */ }
+      setProcRefs([...refs]);
+    })();
+  }, [activeTab, data?.client?.id]);
+
+  // aplicar a referência escolhida ao bloco de poderes (substitui [INDICAR] ou a ref anterior)
+  const applyProcessoRef = (ref) => {
+    setProcOverrides((prev) => {
+      let poderes = prev.poderes || '';
+      if (procSelectedRef && poderes.includes(procSelectedRef)) {
+        poderes = poderes.replace(procSelectedRef, ref || '[INDICAR]');
+      } else if (poderes.includes('[INDICAR]')) {
+        poderes = poderes.replace('[INDICAR]', ref || '[INDICAR]');
+      } else if (ref) {
+        poderes = poderes ? `${poderes} (Processo n.º ${ref}.)` : `Processo n.º ${ref}.`;
+      }
+      return { ...prev, poderes };
+    });
+    setProcSelectedRef(ref);
+  };
+
   // Quando muda o modelo escolhido, fazer preview do texto preenchido
   const handleGeneratePlanPdf = async () => {
     setPlanPdfBusy(true);
@@ -417,6 +456,7 @@ export default function ClientDetail() {
   const handlePickTemplate = async (templateId) => {
     setProcTemplateId(templateId);
     setProcOverrides({});
+    setProcSelectedRef('');
     setProcText('');
     setProcEditable([]);
     if (!templateId) return;
@@ -1080,6 +1120,18 @@ export default function ClientDetail() {
 
           {procTemplateId && (
             <>
+              {procEditable.includes('poderes') && (
+                <div className="adm-field" style={{ maxWidth: 520 }}>
+                  <label>Processo</label>
+                  <select value={procSelectedRef} onChange={(e) => applyProcessoRef(e.target.value)} disabled={procBusy}>
+                    <option value="">— digitar manualmente no texto —</option>
+                    {procRefs.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                  <div className="adm-field-helper">
+                    Referências vindas das notas do cliente e dos eventos do calendário. Ao escolher, substitui o [INDICAR] nos poderes.
+                  </div>
+                </div>
+              )}
               {procEditable.includes('poderes') && (
                 <div className="adm-field">
                   <label>Poderes específicos (editável)</label>

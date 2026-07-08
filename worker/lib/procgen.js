@@ -50,8 +50,9 @@ export function valoresDoCliente(client) {
  * @param {string} p.local         local de emissão (ex.: "Santa Maria da Feira")
  * @param {string} p.data          data ISO da emissão
  * @param {string} p.nomeOutorgante  nome para a linha de assinatura
+ * @param {string[]} [p.boldSegments] trechos do corpo a renderizar a negrito (nomes das partes)
  */
-export async function generateProcuracaoPDF({ texto, local, data, nomeOutorgante }) {
+export async function generateProcuracaoPDF({ texto, local, data, nomeOutorgante, boldSegments = [] }) {
   const doc = await PDFDocument.create();
   doc.setTitle(`Procura\u00e7\u00e3o \u2014 ${nomeOutorgante || ""}`);
   doc.setAuthor("Vyvian Avena Advogada");
@@ -71,11 +72,14 @@ export async function generateProcuracaoPDF({ texto, local, data, nomeOutorgante
   page.drawRectangle({ x: 0, y: height - headH, width, height: headH, color: FOREST });
   try {
     const logo = await doc.embedPng(LOGO_WHITE_PNG);
-    const lh = 34, lw = lh * (logo.width / logo.height);
+    const lh = 42, lw = lh * (logo.width / logo.height);
     page.drawImage(logo, { x: M, y: height - headH / 2 - lh / 2, width: lw, height: lh });
   } catch (e) {
     page.drawText("VYVIAN AVENA", { x: M, y: height - 44, size: 16, font: FB, color: CREAM });
   }
+
+  // marca d'água: balança da justiça estilizada, centrada, bege claro, atrás do texto
+  drawWatermark();
 
   let y = height - headH - 56;
 
@@ -87,11 +91,12 @@ export async function generateProcuracaoPDF({ texto, local, data, nomeOutorgante
   page.drawLine({ start: { x: (width - 120) / 2, y }, end: { x: (width + 120) / 2, y }, thickness: 1, color: GOLD });
   y -= 40;
 
-  // corpo justificado, por parágrafos
+  // corpo justificado, por parágrafos, com negrito nos trechos indicados (nomes das partes)
   const size = 11.5, lh = 18;
+  const boldList = (boldSegments || []).filter((b) => b && b.trim().length > 2);
   for (const para of String(texto).split("\n")) {
     if (para.trim() === "") { y -= lh; continue; }
-    y = drawJustified(para.trim(), y);
+    y = drawJustified(tokenize(para.trim()), y);
     y -= 6; // espaço entre parágrafos
   }
 
@@ -122,30 +127,78 @@ export async function generateProcuracaoPDF({ texto, local, data, nomeOutorgante
 
   return await doc.save();
 
-  // justificação simples por palavra (último parágrafo/linha alinha à esquerda)
-  function drawJustified(text, yy) {
-    const words = text.split(" ");
+  // divide o parágrafo em palavras, marcando as que caem dentro de um trecho a negrito
+  function tokenize(text) {
+    const ranges = [];
+    for (const seg of boldList) {
+      let idx = 0;
+      while ((idx = text.indexOf(seg, idx)) !== -1) {
+        ranges.push([idx, idx + seg.length]);
+        idx += seg.length;
+      }
+    }
+    const tokens = [];
+    let pos = 0;
+    for (const w of text.split(" ")) {
+      const start = pos, end = pos + w.length;
+      const bold = ranges.some(([a, b]) => start < b && end > a);
+      tokens.push({ w, bold });
+      pos = end + 1;
+    }
+    return tokens;
+  }
+
+  function wWidth(t) { return (t.bold ? FB : F).widthOfTextAtSize(t.w, size); }
+
+  // justificação por palavra com fonte por-token (última linha alinha à esquerda)
+  function drawJustified(tokens, yy) {
+    const spaceW = F.widthOfTextAtSize(" ", size);
     let line = [];
-    for (let i = 0; i < words.length; i++) {
-      const test = [...line, words[i]].join(" ");
-      if (F.widthOfTextAtSize(test, size) > maxW && line.length) {
-        drawLine(line, yy, false); yy -= lh; line = [words[i]];
-      } else line.push(words[i]);
+    let lineW = 0;
+    for (const t of tokens) {
+      const tw = wWidth(t);
+      const test = lineW + (line.length ? spaceW : 0) + tw;
+      if (test > maxW && line.length) {
+        drawLine(line, yy, false); yy -= lh; line = [t]; lineW = tw;
+      } else { line.push(t); lineW = test; }
     }
     if (line.length) { drawLine(line, yy, true); yy -= lh; }
     return yy;
   }
-  function drawLine(words, yy, last) {
-    if (last || words.length === 1) {
-      page.drawText(words.join(" "), { x: M, y: yy, size, font: F, color: INK });
-      return;
-    }
-    const textW = words.reduce((s, w) => s + F.widthOfTextAtSize(w, size), 0);
-    const gap = (maxW - textW) / (words.length - 1);
+  function drawLine(tokens, yy, last) {
+    const spaceW = F.widthOfTextAtSize(" ", size);
+    const wordsW = tokens.reduce((sum, t) => sum + wWidth(t), 0);
+    const gap = (last || tokens.length === 1) ? spaceW : (maxW - wordsW) / (tokens.length - 1);
     let x = M;
-    for (const w of words) {
-      page.drawText(w, { x, y: yy, size, font: F, color: INK });
-      x += F.widthOfTextAtSize(w, size) + gap;
+    for (const t of tokens) {
+      page.drawText(t.w, { x, y: yy, size, font: t.bold ? FB : F, color: INK });
+      x += wWidth(t) + gap;
     }
+  }
+
+  // balança da justiça em traço fino, bege claro, centrada (marca d'água do documento real)
+  function drawWatermark() {
+    const path = [
+      "M50 12 L50 74",                 // haste
+      "M44 9 Q50 3 56 9",              // topo
+      "M20 22 L80 22",                 // travessão
+      "M20 22 L11 47 M20 22 L29 47",   // cordas esq.
+      "M9 47 L31 47 M9 47 Q20 60 31 47",   // prato esq.
+      "M80 22 L71 47 M80 22 L89 47",   // cordas dir.
+      "M69 47 L91 47 M69 47 Q80 60 91 47", // prato dir.
+      "M40 76 L60 76 M34 82 L66 82",   // base
+    ].join(" ");
+    const scale = 3.6;               // ~360pt de largura
+    const w = 100 * scale;
+    const x = (width - w) / 2;
+    const yTop = (height / 2) + (86 * scale) / 2 - 40; // centrado verticalmente
+    try {
+      page.drawSvgPath(path, {
+        x, y: yTop, scale,
+        borderColor: rgb(0.878, 0.845, 0.775), // bege claro
+        borderWidth: 2.4,
+        borderOpacity: 0.55,
+      });
+    } catch (e) { /* marca d'água é decorativa — nunca bloquear a geração */ }
   }
 }

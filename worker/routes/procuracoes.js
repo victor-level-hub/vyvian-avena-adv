@@ -51,6 +51,8 @@ async function montarTexto(request, env, comoPDF) {
     local: local || "Santa Maria da Feira",
     data: data || new Date().toISOString(),
     nomeOutorgante: client.name,
+    // nomes das partes a negrito no corpo (como no documento original do escritório)
+    boldSegments: [client.name, client.rep_name, "Vyvian Avena", "Juliana Santos"].filter(Boolean),
   });
   return new Response(bytes, {
     headers: {

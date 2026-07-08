@@ -158,7 +158,7 @@ export const procuracoes = {
 
   // Preview: texto preenchido + lista de campos editáveis ainda em aberto.
   // body: { template_id, client_id }
-  preview: (body) => request('/api/procuracoes/preview', { method: 'POST', body: JSON.stringify(body) }),
+  preview: (body) => request('/api/procuracoes/preview', { method: 'POST', body }),
 
   // Gera o PDF e abre numa nova aba (com Bearer + à prova de popup-blocker).
   // body: { template_id, client_id, overrides?, local?, data? }
@@ -232,7 +232,7 @@ export const planos = {
 // ============ UPLOAD TOKENS (admin) ============
 export const uploadTokens = {
   // body: { client_id, instructions?, days? }
-  create: (body) => request('/api/upload-tokens', { method: 'POST', body: JSON.stringify(body) }),
+  create: (body) => request('/api/upload-tokens', { method: 'POST', body }),
   list: (clientId) => request('/api/upload-tokens?client_id=' + encodeURIComponent(clientId)),
   revoke: (token) => request('/api/upload-tokens/' + encodeURIComponent(token), { method: 'DELETE' }),
 };

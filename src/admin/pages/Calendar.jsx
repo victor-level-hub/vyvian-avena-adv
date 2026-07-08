@@ -243,6 +243,12 @@ export default function Calendar() {
     [allInstallments, search],
   );
 
+  const setAllTypes = (visible) => {
+    const next = Object.fromEntries(types.map((t) => [t.id, visible]));
+    setVisOverride(next);
+    try { localStorage.setItem(VIS_KEY, JSON.stringify(next)); } catch {}
+  };
+
   const toggleType = (id) => {
     const t = typeById[id];
     const next = { ...visOverride, [id]: !(visOverride[id] !== undefined ? visOverride[id] : !!(t && t.is_visible)) };
@@ -552,7 +558,14 @@ export default function Calendar() {
 
         {/* painel de filtros */}
         {showFilters && (
-          <div className="gcal-glass" style={{ marginTop: '0.8rem', padding: '0.8rem 0.9rem', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+          <div className="gcal-glass" style={{ marginTop: '0.8rem', padding: '0.8rem 0.9rem', display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+            <button className="gcal-filterchip" onClick={() => setAllTypes(true)} style={{ borderColor: 'rgba(213,177,124,0.6)', color: '#e8cfa4', fontWeight: 600 }}>
+              ✓ Selecionar todos
+            </button>
+            <button className="gcal-filterchip" onClick={() => setAllTypes(false)} style={{ fontWeight: 600 }}>
+              ✕ Desselecionar todos
+            </button>
+            <span style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.15)', margin: '0 2px' }} />
             {types.map((t) => {
               const on = isVisible(t);
               return (
@@ -575,6 +588,11 @@ export default function Calendar() {
                 <span className="gcal-dot" style={{ background: t.color }} />{t.label} ✕
               </button>
             ))}
+            {hiddenTypes.length > 1 && (
+              <button className="gcal-filterchip" onClick={() => setAllTypes(true)} style={{ borderColor: 'rgba(213,177,124,0.6)', color: '#e8cfa4', fontWeight: 600 }}>
+                ✓ Mostrar todos
+              </button>
+            )}
           </div>
         )}
 
@@ -770,6 +788,10 @@ export default function Calendar() {
               Ative/desative os tipos visíveis no calendário. Os tipos nativos não podem ser apagados; pode criar tipos personalizados.
             </p>
 
+            <div style={{ display: 'flex', gap: 8, marginBottom: '0.6rem' }}>
+              <button className="gcal-btn" onClick={() => setAllTypes(true)} style={{ fontSize: '0.75rem' }}>✓ Selecionar todos</button>
+              <button className="gcal-btn" onClick={() => setAllTypes(false)} style={{ fontSize: '0.75rem' }}>✕ Desselecionar todos</button>
+            </div>
             {types.map((t) => (
               <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', padding: '0.45rem 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                 <input type="checkbox" checked={isVisible(t)} onChange={() => toggleType(t.id)} style={{ width: 'auto' }} />

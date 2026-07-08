@@ -509,7 +509,7 @@ export default function ClientDetail() {
 
       {editing && editForm && (
         <div
-          onClick={(e) => { if (e.target === e.currentTarget && !editBusy) setEditing(false); }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget && !editBusy) setEditing(false); }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '3rem 1rem', zIndex: 1000, overflowY: 'auto' }}
         >
           <div style={{ background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 640, padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>

@@ -554,7 +554,7 @@ export default function Calendar() {
       {/* ── Modal: criar/editar evento ── */}
       {evModal && (
         <div
-          onClick={(e) => { if (e.target === e.currentTarget && !busy) setEvModal(null); }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) setEvModal(null); }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '3rem 1rem', zIndex: 1000, overflowY: 'auto' }}
         >
           <div style={{ background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 560, padding: '1.6rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
@@ -639,7 +639,7 @@ export default function Calendar() {
       {/* ── Modal: gestão de tipos de data ── */}
       {typeMgrOpen && (
         <div
-          onClick={(e) => { if (e.target === e.currentTarget && !busy) { setTypeMgrOpen(false); setTypeForm(null); setTypeDeleting(null); } }}
+          onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) { setTypeMgrOpen(false); setTypeForm(null); setTypeDeleting(null); } }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '3rem 1rem', zIndex: 1000, overflowY: 'auto' }}
         >
           <div style={{ background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 640, padding: '1.6rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>

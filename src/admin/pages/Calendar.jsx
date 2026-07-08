@@ -1,10 +1,8 @@
 // src/admin/pages/Calendar.jsx
-// Calendário jurídico configurável:
-//  - tipos de data (nativos + personalizados) com cores próprias
-//  - filtros por tipo (persistidos em localStorage)
-//  - eventos manuais (criar/editar/apagar) e eventos de sistema (seed 2026)
-//  - eventos de vários dias, vistas mensal/lista/próximos 30 dias
-//  - vencimentos (parcelas) continuam a alimentar o resumo financeiro
+// Calendário jurídico — merge de funcionalidades "event-manager" (pesquisa,
+// filtros, vistas Mês/Semana/Dia/Lista, hover com detalhes) com visual
+// glassmorphism, adaptado à paleta do site (verde-floresta + dourado).
+// Dados: tipos/eventos em D1 (API /api/calendar) + vencimentos (parcelas).
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { installments as installmentsApi, calendar as calendarApi } from '../apiClient';
@@ -19,15 +17,17 @@ const VIS_KEY = 'vyvian_cal_visibility';
 function fmtMoney(amount, currency = 'EUR', compact = false) {
   const symbol = currency === 'BRL' ? 'R$' : '€';
   const n = Number(amount || 0);
-  if (compact && n >= 1000) {
-    return symbol + ' ' + (n / 1000).toFixed(1).replace('.0', '') + 'k';
-  }
-  return symbol + ' ' + n.toLocaleString('pt-PT', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  if (compact && n >= 1000) return symbol + ' ' + (n / 1000).toFixed(1).replace('.0', '') + 'k';
+  return symbol + ' ' + n.toLocaleString('pt-PT', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
 function fmtDate(dateStr) {
   const d = new Date(dateStr + 'T00:00:00');
   return d.toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+function fmtDateShort(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return d.toLocaleDateString('pt-PT', { day: '2-digit', month: 'short' });
 }
 
 function isSameDay(a, b) {
@@ -46,7 +46,6 @@ function addDays(key, n) {
   return dateKey(d);
 }
 
-// lista de dias (keys) de um evento, limitada para segurança
 function eventDays(ev) {
   const days = [ev.start_date];
   if (ev.end_date && ev.end_date > ev.start_date) {
@@ -72,6 +71,114 @@ const EMPTY_EVENT = {
   client_name: '', case_reference: '',
 };
 
+// ── Estilos glass (scoped gcal-*) — paleta do site: floresta + dourado ──
+const GLASS_CSS = `
+.gcal-wrap {
+  background:
+    radial-gradient(1100px 500px at 85% -10%, rgba(184,147,90,0.22), transparent 60%),
+    radial-gradient(800px 420px at -10% 110%, rgba(184,147,90,0.12), transparent 55%),
+    linear-gradient(140deg, #0d241e 0%, #123a2f 48%, #16463a 100%);
+  border-radius: 22px;
+  padding: 1.4rem;
+  color: #f4efe6;
+  box-shadow: 0 24px 70px rgba(10,30,25,0.45);
+}
+.gcal-glass {
+  background: rgba(255,255,255,0.07);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid rgba(255,255,255,0.13);
+  border-radius: 16px;
+}
+.gcal-title { font-family: var(--serif, Fraunces, serif); font-size: 2rem; font-weight: 600; letter-spacing: 0.01em; color: #fff; }
+.gcal-sub { font-size: 0.82rem; color: rgba(244,239,230,0.65); }
+.gcal-btn {
+  background: rgba(255,255,255,0.09); color: #f4efe6; border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 10px; padding: 0.42rem 0.85rem; font-size: 0.82rem; cursor: pointer;
+  transition: background 0.15s, border-color 0.15s; white-space: nowrap;
+}
+.gcal-btn:hover { background: rgba(255,255,255,0.16); }
+.gcal-btn-gold {
+  background: linear-gradient(135deg, var(--gold, #b8935a), #d5b17c); color: #12302a;
+  border: none; font-weight: 600; box-shadow: 0 6px 18px rgba(184,147,90,0.35);
+}
+.gcal-btn-gold:hover { filter: brightness(1.06); background: linear-gradient(135deg, var(--gold, #b8935a), #d5b17c); }
+.gcal-pill { border-radius: 999px; padding: 0.32rem 0.9rem; font-size: 0.78rem; cursor: pointer; border: 1px solid transparent; color: rgba(244,239,230,0.7); background: transparent; transition: all 0.15s; }
+.gcal-pill:hover { color: #fff; }
+.gcal-pill.on { background: rgba(255,255,255,0.92); color: #12302a; font-weight: 700; box-shadow: 0 3px 10px rgba(0,0,0,0.25); }
+.gcal-input {
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16); border-radius: 10px;
+  color: #f4efe6; padding: 0.5rem 0.8rem 0.5rem 2.1rem; font-size: 0.85rem; width: 100%;
+}
+.gcal-input::placeholder { color: rgba(244,239,230,0.45); }
+.gcal-input:focus { outline: none; border-color: rgba(213,177,124,0.6); }
+.gcal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+.gcal-dh { text-align: center; font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(244,239,230,0.5); padding: 0.35rem 0; }
+.gcal-day {
+  min-height: 96px; border-radius: 12px; padding: 0.4rem 0.45rem; cursor: pointer;
+  background: rgba(255,255,255,0.045); border: 1px solid rgba(255,255,255,0.07);
+  transition: background 0.15s, transform 0.12s, border-color 0.15s; position: relative;
+}
+.gcal-day:hover { background: rgba(255,255,255,0.11); }
+.gcal-day.muted { opacity: 0.38; }
+.gcal-day.today { border-color: rgba(213,177,124,0.75); box-shadow: inset 0 0 0 1px rgba(213,177,124,0.5); }
+.gcal-day.sel { background: rgba(213,177,124,0.18); border-color: rgba(213,177,124,0.6); }
+.gcal-daynum { font-size: 0.82rem; font-weight: 600; color: rgba(255,255,255,0.85); }
+.gcal-day.today .gcal-daynum {
+  display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center;
+  border-radius: 50%; background: linear-gradient(135deg, var(--gold,#b8935a), #d5b17c); color: #12302a;
+}
+.gcal-chip { position: relative; display: block; margin-top: 3px; }
+.gcal-chip-label {
+  display: block; font-size: 0.63rem; line-height: 1.3; padding: 0.1rem 0.35rem; border-radius: 5px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; cursor: pointer;
+  transition: transform 0.12s;
+}
+.gcal-chip:hover .gcal-chip-label { transform: scale(1.04); }
+.gcal-pop {
+  display: none; position: absolute; top: calc(100% + 4px); left: 0; z-index: 80; width: 250px;
+  background: rgba(13,36,30,0.97); border: 1px solid rgba(213,177,124,0.4); border-radius: 12px;
+  padding: 0.7rem 0.8rem; box-shadow: 0 16px 40px rgba(0,0,0,0.5); cursor: default; text-align: left;
+}
+.gcal-chip:hover .gcal-pop { display: block; }
+.gcal-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 2px; }
+.gcal-amount { font-size: 0.66rem; font-weight: 700; color: #d5b17c; margin-top: 2px; }
+.gcal-amount.late { color: #e88; }
+.gcal-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; font-size: 0.72rem; color: rgba(244,239,230,0.72); margin-top: 0.9rem; }
+.gcal-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.gcal-filterchip {
+  display: inline-flex; align-items: center; gap: 0.4rem; border-radius: 999px; padding: 0.26rem 0.75rem;
+  font-size: 0.75rem; cursor: pointer; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.06);
+  color: rgba(244,239,230,0.85); transition: all 0.15s;
+}
+.gcal-filterchip.off { opacity: 0.45; }
+.gcal-row { border-radius: 12px; padding: 0.7rem 0.9rem; background: rgba(255,255,255,0.055); border: 1px solid rgba(255,255,255,0.08); transition: background 0.15s, transform 0.12s; }
+.gcal-row:hover { background: rgba(255,255,255,0.1); transform: translateY(-1px); }
+.gcal-modal-bg { position: fixed; inset: 0; background: rgba(8,22,18,0.72); backdrop-filter: blur(6px); display: flex; align-items: flex-start; justify-content: center; padding: 3rem 1rem; z-index: 1000; overflow-y: auto; }
+.gcal-modal {
+  background: linear-gradient(150deg, rgba(19,50,41,0.96), rgba(13,36,30,0.98));
+  border: 1px solid rgba(213,177,124,0.35); border-radius: 18px; width: 100%; padding: 1.6rem;
+  box-shadow: 0 30px 80px rgba(0,0,0,0.55); color: #f4efe6;
+}
+.gcal-modal h2 { font-family: var(--serif, Fraunces, serif); color: #fff; }
+.gcal-modal label span { display: block; font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(244,239,230,0.6); margin-bottom: 0.3rem; }
+.gcal-modal input, .gcal-modal select, .gcal-modal textarea {
+  width: 100%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 9px; color: #f4efe6; padding: 0.5rem 0.7rem; font-size: 0.88rem; font-family: inherit;
+}
+.gcal-modal input:focus, .gcal-modal select:focus, .gcal-modal textarea:focus { outline: none; border-color: rgba(213,177,124,0.6); }
+.gcal-modal select option { background: #12302a; color: #f4efe6; }
+.gcal-modal input[type="checkbox"] { width: auto; }
+.gcal-modal input[type="color"] { padding: 2px; height: 38px; }
+.gcal-badge { display: inline-block; border-radius: 999px; padding: 0.1rem 0.55rem; font-size: 0.68rem; font-weight: 600; }
+.gcal-badge.paid { background: rgba(80,160,110,0.25); color: #8fd6ae; }
+.gcal-badge.pending { background: rgba(213,177,124,0.22); color: #e8cfa4; }
+.gcal-badge.late { background: rgba(200,80,80,0.25); color: #f0a0a0; }
+.gcal-a { color: #d5b17c; text-decoration: none; }
+.gcal-a:hover { text-decoration: underline; }
+@media (max-width: 760px) { .gcal-day { min-height: 70px; } .gcal-title { font-size: 1.4rem; } }
+`;
+
 export default function Calendar() {
   const TODAY_REAL = new Date();
   TODAY_REAL.setHours(0, 0, 0, 0);
@@ -83,12 +190,13 @@ export default function Calendar() {
   const [types, setTypes] = useState([]);
   const [events, setEvents] = useState([]);
   const [visOverride, setVisOverride] = useState(loadVisibility);
-  const [view, setView] = useState('month'); // 'month' | 'list' | 'next30'
+  const [view, setView] = useState('month'); // 'month' | 'week' | 'day' | 'list' | 'next30'
+  const [search, setSearch] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [typeMgrOpen, setTypeMgrOpen] = useState(false);
-  const [typeForm, setTypeForm] = useState(null); // {mode:'create'|'edit', id?, label, color, description}
-  const [typeDeleting, setTypeDeleting] = useState(null); // type object pendente de decisão
-  const [evModal, setEvModal] = useState(null); // {mode:'create'|'edit', id?, form:{...}}
+  const [typeForm, setTypeForm] = useState(null);
+  const [typeDeleting, setTypeDeleting] = useState(null);
+  const [evModal, setEvModal] = useState(null);
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -111,12 +219,28 @@ export default function Calendar() {
   const year = currentDate.getFullYear();
   const month = currentDate.getMonth();
 
-  // visibilidade efetiva: override do browser > default do tipo
   const isVisible = (t) => (visOverride[t.id] !== undefined ? !!visOverride[t.id] : !!t.is_visible);
   const typeById = useMemo(() => Object.fromEntries(types.map((t) => [t.id, t])), [types]);
+
+  // pesquisa (event-manager): título, descrição, cliente, referência, tipo
+  const matchesSearch = (ev) => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return (ev.title || '').toLowerCase().includes(q)
+      || (ev.description || '').toLowerCase().includes(q)
+      || (ev.client_name || '').toLowerCase().includes(q)
+      || (ev.case_reference || '').toLowerCase().includes(q)
+      || (typeById[ev.type_id]?.label || '').toLowerCase().includes(q);
+  };
+  const instMatchesSearch = (i) => !search || (i.client_name || '').toLowerCase().includes(search.toLowerCase());
+
   const visibleEvents = useMemo(
-    () => events.filter((ev) => { const t = typeById[ev.type_id]; return t ? isVisible(t) : true; }),
-    [events, typeById, visOverride],
+    () => events.filter((ev) => { const t = typeById[ev.type_id]; return (t ? isVisible(t) : true) && matchesSearch(ev); }),
+    [events, typeById, visOverride, search],
+  );
+  const visibleInstallments = useMemo(
+    () => allInstallments.filter(instMatchesSearch),
+    [allInstallments, search],
   );
 
   const toggleType = (id) => {
@@ -142,23 +266,28 @@ export default function Calendar() {
     return cells;
   }, [year, month]);
 
+  const weekDays = useMemo(() => {
+    const d = new Date(currentDate);
+    const dow = (d.getDay() + 6) % 7; // 0 = segunda
+    d.setDate(d.getDate() - dow);
+    return Array.from({ length: 7 }, (_, i) => { const x = new Date(d); x.setDate(d.getDate() + i); return x; });
+  }, [currentDate]);
+
   const installmentsByDate = useMemo(() => {
     const map = {};
-    allInstallments.forEach((i) => { (map[i.due_date] = map[i.due_date] || []).push(i); });
+    visibleInstallments.forEach((i) => { (map[i.due_date] = map[i.due_date] || []).push(i); });
     return map;
-  }, [allInstallments]);
+  }, [visibleInstallments]);
 
   const eventsByDate = useMemo(() => {
     const map = {};
-    visibleEvents.forEach((ev) => {
-      eventDays(ev).forEach((k) => { (map[k] = map[k] || []).push(ev); });
-    });
+    visibleEvents.forEach((ev) => { eventDays(ev).forEach((k) => { (map[k] = map[k] || []).push(ev); }); });
     return map;
   }, [visibleEvents]);
 
-  // ── Resumo financeiro do mês: parcelas + eventos financeiros visíveis (pending/overdue)
+  // resumo financeiro do mês
   const monthKeyPrefix = `${year}-${String(month + 1).padStart(2, '0')}`;
-  const monthInstallments = allInstallments.filter((i) => (i.due_date || '').startsWith(monthKeyPrefix));
+  const monthInstallments = visibleInstallments.filter((i) => (i.due_date || '').startsWith(monthKeyPrefix));
   const finEvents = visibleEvents.filter((ev) =>
     ev.type_id === 'financeiro' && (ev.status === 'pending' || ev.status === 'overdue') &&
     (ev.start_date || '').startsWith(monthKeyPrefix));
@@ -166,13 +295,19 @@ export default function Calendar() {
     + finEvents.filter((e) => e.currency === 'EUR').reduce((s, e) => s + Number(e.amount || 0), 0);
   const numVenc = monthInstallments.length + finEvents.length;
 
-  const prevMonth = () => { setCurrentDate(new Date(year, month - 1, 1)); setSelectedDate(null); };
-  const nextMonth = () => { setCurrentDate(new Date(year, month + 1, 1)); setSelectedDate(null); };
+  // navegação adapta-se à vista (event-manager)
+  const navigate = (dir) => {
+    const d = new Date(currentDate);
+    if (view === 'week') d.setDate(d.getDate() + dir * 7);
+    else if (view === 'day') d.setDate(d.getDate() + dir);
+    else d.setMonth(d.getMonth() + dir);
+    setCurrentDate(d);
+    setSelectedDate(null);
+  };
   const goToday = () => { setCurrentDate(new Date(TODAY_REAL)); setSelectedDate(null); };
 
-  // ao escolher um dia, scroll suave até ao início da relação de compromissos
   useEffect(() => {
-    if (selectedDate && view === 'month' && dayDetailRef.current) {
+    if (selectedDate && (view === 'month' || view === 'week') && dayDetailRef.current) {
       dayDetailRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
     }
   }, [selectedDate, view]);
@@ -181,21 +316,17 @@ export default function Calendar() {
   const selectedInstallments = selectedKey ? (installmentsByDate[selectedKey] || []) : [];
   const selectedEvents = selectedKey ? (eventsByDate[selectedKey] || []) : [];
 
-  // ── Eventos: criar/editar/apagar
-  const openCreateEvent = (dayKey) => {
-    setEvModal({ mode: 'create', form: { ...EMPTY_EVENT, start_date: dayKey || dateKey(TODAY_REAL) } });
-  };
-  const openEditEvent = (ev) => {
-    setEvModal({
-      mode: 'edit', id: ev.id, source: ev.source,
-      form: {
-        title: ev.title || '', description: ev.description || '', type_id: ev.type_id,
-        start_date: ev.start_date || '', end_date: ev.end_date || '', is_all_day: !!ev.is_all_day,
-        amount: ev.amount || '', currency: ev.currency || 'EUR', status: ev.status || 'none',
-        client_name: ev.client_name || '', case_reference: ev.case_reference || '',
-      },
-    });
-  };
+  // ── CRUD eventos
+  const openCreateEvent = (dayKey) => setEvModal({ mode: 'create', form: { ...EMPTY_EVENT, start_date: dayKey || dateKey(TODAY_REAL) } });
+  const openEditEvent = (ev) => setEvModal({
+    mode: 'edit', id: ev.id, source: ev.source,
+    form: {
+      title: ev.title || '', description: ev.description || '', type_id: ev.type_id,
+      start_date: ev.start_date || '', end_date: ev.end_date || '', is_all_day: !!ev.is_all_day,
+      amount: ev.amount || '', currency: ev.currency || 'EUR', status: ev.status || 'none',
+      client_name: ev.client_name || '', case_reference: ev.case_reference || '',
+    },
+  });
   const evField = (k) => (e) => setEvModal((m) => ({ ...m, form: { ...m.form, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value } }));
 
   const saveEvent = async () => {
@@ -224,7 +355,7 @@ export default function Calendar() {
     catch (err) { alert('Erro: ' + err.message); }
   };
 
-  // ── Tipos: criar/editar/apagar
+  // ── CRUD tipos
   const saveType = async () => {
     if (!typeForm.label.trim()) { alert('A label é obrigatória.'); return; }
     setBusy(true);
@@ -247,368 +378,356 @@ export default function Calendar() {
     finally { setBusy(false); }
   };
 
-  // ── Listas (vista lista do mês / próximos 30 dias)
+  // ── listas (Lista do mês / 30 dias / Dia)
   const listItems = useMemo(() => {
     const items = [];
+    const t0 = dateKey(TODAY_REAL);
     const inRange = (k) => {
       if (view === 'list') return k.startsWith(monthKeyPrefix);
-      const t0 = dateKey(TODAY_REAL);
+      if (view === 'day') return k === dateKey(currentDate);
       return k >= t0 && k <= addDays(t0, 30);
     };
     visibleEvents.forEach((ev) => {
-      if (inRange(ev.start_date) || (ev.end_date && inRange(ev.end_date))) {
-        items.push({ kind: 'event', key: ev.start_date, ev });
-      }
+      const days = eventDays(ev);
+      if (days.some(inRange)) items.push({ kind: 'event', key: ev.start_date, ev });
     });
-    allInstallments.forEach((i) => {
+    visibleInstallments.forEach((i) => {
       if (i.due_date && inRange(i.due_date)) items.push({ kind: 'installment', key: i.due_date, inst: i });
     });
     return items.sort((a, b) => a.key.localeCompare(b.key));
-  }, [view, visibleEvents, allInstallments, monthKeyPrefix]);
+  }, [view, visibleEvents, visibleInstallments, monthKeyPrefix, currentDate]);
 
   if (loading) return <div className="adm-empty" style={{ padding: '3rem' }}>A carregar calendário…</div>;
   if (error) return <div className="adm-login-error">{error}</div>;
 
   const activeTypes = types.filter(isVisible);
+  const hiddenTypes = types.filter((t) => !isVisible(t));
   const focusType = evModal ? (typeById[evModal.form.type_id] || null) : null;
   const isFin = evModal && evModal.form.type_id === 'financeiro';
   const isCli = evModal && evModal.form.type_id === 'cliente';
   const isProc = evModal && evModal.form.type_id === 'processo';
 
-  const badgeStyle = (color) => ({
-    display: 'block', fontSize: '0.62rem', lineHeight: 1.25, padding: '0.08rem 0.3rem',
-    borderRadius: 3, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-    background: color + '22', color: color, borderLeft: `3px solid ${color}`, textAlign: 'left',
-  });
+  const viewTitle =
+    view === 'week' ? `Semana de ${fmtDateShort(dateKey(weekDays[0]))}` :
+    view === 'day' ? new Date(currentDate).toLocaleDateString('pt-PT', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) :
+    view === 'next30' ? 'Próximos 30 dias' :
+    `${MONTHS_PT[month]} · ${year}`;
+
+  // chip de evento com popover hover (EventCard do event-manager)
+  const EventChip = ({ ev, k }) => {
+    const t = typeById[ev.type_id];
+    const color = t?.color || '#888';
+    const multi = ev.end_date && ev.end_date > ev.start_date;
+    return (
+      <span className="gcal-chip" onClick={(e) => { e.stopPropagation(); if (ev.source === 'manual') openEditEvent(ev); }}>
+        <span className="gcal-chip-label" style={{ background: color + '55', borderLeft: `3px solid ${color}` }}>
+          {multi && k && k !== ev.start_date ? '· ' : ''}{ev.title}
+        </span>
+        <span className="gcal-pop">
+          <span style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
+            <strong style={{ fontSize: '0.85rem', color: '#fff' }}>{ev.title}</strong>
+            <span className="gcal-dot" style={{ background: color, width: 10, height: 10, flexShrink: 0, marginTop: 3 }} />
+          </span>
+          <span style={{ display: 'block', fontSize: '0.72rem', color: 'rgba(244,239,230,0.75)', marginTop: 3 }}>
+            {t?.label || ev.type_id} · {fmtDateShort(ev.start_date)}{ev.end_date ? ` → ${fmtDateShort(ev.end_date)}` : ''}
+          </span>
+          {ev.description && <span style={{ display: 'block', fontSize: '0.72rem', color: 'rgba(244,239,230,0.62)', marginTop: 5 }}>{ev.description.slice(0, 140)}{ev.description.length > 140 ? '…' : ''}</span>}
+          {(ev.client_name || ev.case_reference || Number(ev.amount) > 0) && (
+            <span style={{ display: 'block', fontSize: '0.72rem', marginTop: 5, color: 'rgba(244,239,230,0.85)' }}>
+              {ev.client_name && <>👤 {ev.client_name}  </>}
+              {ev.case_reference && <>📁 {ev.case_reference}  </>}
+              {Number(ev.amount) > 0 && <strong style={{ color: '#d5b17c' }}>{fmtMoney(ev.amount, ev.currency)}</strong>}
+            </span>
+          )}
+          {ev.source === 'manual' && <span style={{ display: 'block', fontSize: '0.68rem', color: 'rgba(213,177,124,0.8)', marginTop: 6 }}>clique para editar</span>}
+        </span>
+      </span>
+    );
+  };
+
+  const StatusBadge = ({ s }) => (
+    s === 'paid' ? <span className="gcal-badge paid">Pago</span> :
+    s === 'late' || s === 'overdue' ? <span className="gcal-badge late">Atrasado</span> :
+    s === 'due_today' ? <span className="gcal-badge pending">Hoje</span> :
+    <span className="gcal-badge pending">Pendente</span>
+  );
+
+  const renderListRows = (items) => items.length === 0
+    ? <div style={{ padding: '2rem', textAlign: 'center', color: 'rgba(244,239,230,0.55)' }}>Sem eventos no período.</div>
+    : (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {items.map((item, i) => item.kind === 'event' ? (
+          <div key={'e' + item.ev.id + i} className="gcal-row" style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <span className="gcal-dot" style={{ background: typeById[item.ev.type_id]?.color || '#888', width: 10, height: 10, marginTop: 6, flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <strong style={{ color: '#fff' }}>{item.ev.title}</strong>
+              <span className="gcal-sub"> · {typeById[item.ev.type_id]?.label}</span>
+              <div className="gcal-sub" style={{ marginTop: 2 }}>
+                {fmtDate(item.ev.start_date)}{item.ev.end_date ? ` → ${fmtDate(item.ev.end_date)}` : ''}
+                {item.ev.client_name ? ` · 👤 ${item.ev.client_name}` : ''}
+                {item.ev.case_reference ? ` · 📁 ${item.ev.case_reference}` : ''}
+              </div>
+              {item.ev.description && <div className="gcal-sub" style={{ marginTop: 2, fontSize: '0.76rem' }}>{item.ev.description.slice(0, 160)}{item.ev.description.length > 160 ? '…' : ''}</div>}
+            </div>
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              {Number(item.ev.amount) > 0 && <div style={{ color: '#d5b17c', fontWeight: 700, fontSize: '0.85rem' }}>{fmtMoney(item.ev.amount, item.ev.currency)}</div>}
+              {item.ev.status !== 'none' && <div style={{ marginTop: 3 }}><StatusBadge s={item.ev.status} /></div>}
+              {item.ev.source === 'manual' && (
+                <div style={{ fontSize: '0.72rem', marginTop: 5 }}>
+                  <a href="#" className="gcal-a" onClick={(e) => { e.preventDefault(); openEditEvent(item.ev); }} style={{ marginRight: 8 }}>Editar</a>
+                  <a href="#" onClick={(e) => { e.preventDefault(); deleteEvent(item.ev); }} style={{ color: '#f0a0a0', textDecoration: 'none' }}>Apagar</a>
+                </div>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div key={'i' + item.inst.id} className="gcal-row" style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+            <span className="gcal-dot" style={{ background: typeById['financeiro']?.color || '#4F8A67', width: 10, height: 10, flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <Link to={`/admin/clientes/${item.inst.client_id}`} className="gcal-a"><strong>{item.inst.client_name}</strong></Link>
+              <span className="gcal-sub"> · parcela {item.inst.installment_number}/{item.inst.total_installments}</span>
+              <div className="gcal-sub" style={{ marginTop: 2 }}>{fmtDate(item.inst.due_date)}</div>
+            </div>
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <div style={{ color: '#d5b17c', fontWeight: 700, fontSize: '0.85rem' }}>{fmtMoney(item.inst.amount, item.inst.currency)}</div>
+              <div style={{ marginTop: 3 }}><StatusBadge s={item.inst.status} /></div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
 
   return (
     <>
+      <style>{GLASS_CSS}</style>
       <header className="adm-page-header">
         <div>
           <h1>Calendário</h1>
-          <div className="adm-sub">Agenda jurídica, prazos e vencimentos do mês</div>
-        </div>
-        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-          <button className="adm-btn" onClick={() => setShowFilters((v) => !v)}>Filtros{activeTypes.length < types.length ? ` (${activeTypes.length}/${types.length})` : ''}</button>
-          <button className="adm-btn" onClick={() => setTypeMgrOpen(true)}>Tipos de data</button>
-          <button className="adm-btn adm-btn-gold" onClick={() => openCreateEvent(selectedKey)}>+ Evento</button>
+          <div className="adm-sub">Agenda jurídica, prazos e vencimentos</div>
         </div>
       </header>
 
-      {showFilters && (
-        <div style={{ background: 'var(--cream, #f5f0e8)', borderRadius: 8, padding: '0.9rem 1rem', marginBottom: '1rem', display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-          {types.map((t) => {
-            const on = isVisible(t);
-            return (
-              <button
-                key={t.id}
-                onClick={() => toggleType(t.id)}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer',
-                  border: `1px solid ${on ? t.color : 'rgba(0,0,0,0.15)'}`, borderRadius: 999,
-                  padding: '0.25rem 0.7rem', fontSize: '0.78rem',
-                  background: on ? t.color + '18' : 'transparent',
-                  color: on ? t.color : 'var(--muted, #888)',
-                  opacity: on ? 1 : 0.7,
-                }}
-                title={t.description || ''}
-              >
-                <span style={{ width: 9, height: 9, borderRadius: '50%', background: on ? t.color : 'rgba(0,0,0,0.2)' }} />
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
-      )}
+      <div className="gcal-wrap">
+        {/* topo: título + navegação + vistas + ações */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.9rem', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', flexWrap: 'wrap' }}>
+            <div>
+              <div className="gcal-title">{viewTitle}</div>
+              <div className="gcal-sub">{numVenc} vencimentos · {fmtMoney(totalEur)} previstos (EUR)</div>
+            </div>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <button className="gcal-btn" onClick={() => navigate(-1)}>‹</button>
+              <button className="gcal-btn" onClick={goToday}>Hoje</button>
+              <button className="gcal-btn" onClick={() => navigate(1)}>›</button>
+            </div>
+          </div>
 
-      <div className="adm-cal-head">
-        <div>
-          <h2>{MONTHS_PT[month]} · {year}</h2>
-          <div className="adm-sub">
-            {numVenc} vencimentos · {fmtMoney(totalEur)} previstos (EUR)
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div className="gcal-glass" style={{ display: 'flex', gap: 2, padding: 4, borderRadius: 999 }}>
+              {[['month', 'Mês'], ['week', 'Semana'], ['day', 'Dia'], ['list', 'Lista'], ['next30', '30 dias']].map(([k, l]) => (
+                <button key={k} className={'gcal-pill' + (view === k ? ' on' : '')} onClick={() => { setView(k); setSelectedDate(null); }}>{l}</button>
+              ))}
+            </div>
+            <button className="gcal-btn" onClick={() => setShowFilters((v) => !v)}>
+              ⚙ Filtros{hiddenTypes.length > 0 ? ` (${activeTypes.length}/${types.length})` : ''}
+            </button>
+            <button className="gcal-btn" onClick={() => setTypeMgrOpen(true)}>Tipos de data</button>
+            <button className="gcal-btn gcal-btn-gold" onClick={() => openCreateEvent(selectedKey)}>＋ Evento</button>
           </div>
         </div>
-        <div className="adm-cal-nav" style={{ display: 'flex', gap: '0.35rem', alignItems: 'center' }}>
-          <button onClick={() => setView('month')} style={view === 'month' ? { fontWeight: 700 } : {}}>Mês</button>
-          <button onClick={() => setView('list')} style={view === 'list' ? { fontWeight: 700 } : {}}>Lista</button>
-          <button onClick={() => setView('next30')} style={view === 'next30' ? { fontWeight: 700 } : {}}>30 dias</button>
-          <span style={{ width: 10 }} />
-          <button onClick={prevMonth}>‹</button>
-          <button onClick={goToday}>Hoje</button>
-          <button onClick={nextMonth}>›</button>
-        </div>
-      </div>
 
-      {view === 'month' && (
-        <div className="adm-cal-grid">
-          {DAYS_PT.map((d) => <div key={d} className="adm-cal-dh">{d}</div>)}
-          {grid.map((cell, idx) => {
-            const k = dateKey(cell.date);
-            const inst = installmentsByDate[k] || [];
-            const evs = eventsByDate[k] || [];
-            const isToday = isSameDay(cell.date, TODAY_REAL);
-            const isSelected = selectedDate && isSameDay(cell.date, selectedDate);
-            const dayCurrency = inst[0]?.currency || 'EUR';
-            const dayTotal = inst.reduce((s, i) => (i.currency === dayCurrency ? s + Number(i.amount) : s), 0);
-            const hasLate = inst.some((i) => i.status === 'late');
-
-            const maxBadges = inst.length > 0 ? 2 : 3;
-            const shown = evs.slice(0, maxBadges);
-            const extra = evs.length - shown.length;
-
-            return (
-              <div
-                key={idx}
-                className={
-                  'adm-cal-day' +
-                  (cell.current ? '' : ' adm-cal-day-muted') +
-                  (isToday ? ' adm-cal-day-today' : '') +
-                  (isSelected ? ' adm-row-highlight' : '')
-                }
-                onClick={() => cell.current && setSelectedDate(cell.date)}
-                style={isSelected ? { background: 'var(--cream-soft)' } : {}}
-              >
-                <div className="adm-cal-day-num">{cell.date.getDate()}</div>
-                {inst.length > 0 && (
-                  <>
-                    <div className="adm-cal-dots">
-                      {inst.slice(0, 6).map((i) => (
-                        <span key={i.id} className={'adm-cal-dot ' + (i.status === 'paid' ? 'adm-cal-dot-paid' : i.status === 'late' ? 'adm-cal-dot-late' : 'adm-cal-dot-pend')} />
-                      ))}
-                    </div>
-                    <div className={'adm-cal-amount' + (hasLate ? ' adm-cal-amount-late' : '')}>
-                      {fmtMoney(dayTotal, dayCurrency, true)}
-                    </div>
-                  </>
-                )}
-                {shown.map((ev) => {
-                  const t = typeById[ev.type_id];
-                  const multi = ev.end_date && ev.end_date > ev.start_date;
-                  return (
-                    <span key={ev.id} style={badgeStyle(t?.color || '#888')} title={ev.title + (ev.description ? ' — ' + ev.description : '')}>
-                      {multi && k !== ev.start_date ? '· ' : ''}{ev.title}
-                    </span>
-                  );
-                })}
-                {extra > 0 && (
-                  <span style={{ display: 'block', fontSize: '0.62rem', color: 'var(--muted, #888)', marginTop: 2 }}>
-                    +{extra} evento{extra > 1 ? 's' : ''}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {(view === 'list' || view === 'next30') && (
-        <div className="adm-card" style={{ marginBottom: '1rem' }}>
-          <div className="adm-card-title">{view === 'list' ? `Lista de ${MONTHS_PT[month]} ${year}` : 'Próximos 30 dias'}</div>
-          {listItems.length === 0 ? (
-            <div className="adm-empty" style={{ padding: '1rem 0' }}>Sem eventos no período.</div>
-          ) : (
-            <table className="adm-table adm-table-small">
-              <thead>
-                <tr><th>Data</th><th>Evento</th><th>Tipo</th><th className="adm-text-right">Valor</th><th></th></tr>
-              </thead>
-              <tbody>
-                {listItems.map((item, i) => item.kind === 'event' ? (
-                  <tr key={'e' + item.ev.id + i}>
-                    <td>{fmtDate(item.ev.start_date)}{item.ev.end_date ? ` → ${fmtDate(item.ev.end_date)}` : ''}</td>
-                    <td>
-                      <strong>{item.ev.title}</strong>
-                      {item.ev.client_name ? <span style={{ color: 'var(--muted)' }}> · {item.ev.client_name}</span> : null}
-                      {item.ev.case_reference ? <span style={{ color: 'var(--muted)' }}> · {item.ev.case_reference}</span> : null}
-                    </td>
-                    <td>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 9, height: 9, borderRadius: '50%', background: typeById[item.ev.type_id]?.color || '#888' }} />
-                        {typeById[item.ev.type_id]?.label || item.ev.type_id}
-                      </span>
-                    </td>
-                    <td className="adm-text-right adm-val">{Number(item.ev.amount) > 0 ? fmtMoney(item.ev.amount, item.ev.currency) : '—'}</td>
-                    <td className="adm-text-right">
-                      {item.ev.source === 'manual' && (
-                        <>
-                          <a href="#" onClick={(e) => { e.preventDefault(); openEditEvent(item.ev); }} style={{ fontSize: '0.75rem', marginRight: 8 }}>Editar</a>
-                          <a href="#" onClick={(e) => { e.preventDefault(); deleteEvent(item.ev); }} style={{ fontSize: '0.75rem', color: '#b00' }}>Apagar</a>
-                        </>
-                      )}
-                    </td>
-                  </tr>
-                ) : (
-                  <tr key={'i' + item.inst.id}>
-                    <td>{fmtDate(item.inst.due_date)}</td>
-                    <td>
-                      <Link to={`/admin/clientes/${item.inst.client_id}`} style={{ color: 'inherit' }}>
-                        <strong>{item.inst.client_name}</strong>
-                      </Link>
-                      <span style={{ color: 'var(--muted)' }}> · parcela {item.inst.installment_number}/{item.inst.total_installments}</span>
-                    </td>
-                    <td>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <span style={{ width: 9, height: 9, borderRadius: '50%', background: typeById['financeiro']?.color || '#4F8A67' }} />
-                        Financeiro
-                      </span>
-                    </td>
-                    <td className="adm-text-right adm-val">{fmtMoney(item.inst.amount, item.inst.currency)}</td>
-                    <td className="adm-text-right">
-                      {item.inst.status === 'paid' && <span className="adm-badge adm-badge-paid">Pago</span>}
-                      {item.inst.status === 'pending' && <span className="adm-badge adm-badge-pending">Pendente</span>}
-                      {item.inst.status === 'due_today' && <span className="adm-badge adm-badge-warn">Hoje</span>}
-                      {item.inst.status === 'late' && <span className="adm-badge adm-badge-late">Vencido</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {/* pesquisa */}
+        <div style={{ position: 'relative', marginTop: '1rem' }}>
+          <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.5, fontSize: '0.9rem' }}>🔍</span>
+          <input
+            className="gcal-input"
+            placeholder="Pesquisar eventos, clientes, processos…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          {search && (
+            <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'rgba(244,239,230,0.6)', cursor: 'pointer', fontSize: '1rem' }}>✕</button>
           )}
         </div>
-      )}
 
-      {/* Legenda: estados financeiros + tipos ativos */}
-      <div className="adm-cal-legend" style={{ flexWrap: 'wrap', rowGap: '0.4rem' }}>
-        <span><span className="adm-cal-legend-dot" style={{ background: 'var(--success)' }} />Pago</span>
-        <span><span className="adm-cal-legend-dot" style={{ background: 'var(--gold)' }} />A vencer</span>
-        <span><span className="adm-cal-legend-dot" style={{ background: 'var(--danger)' }} />Atrasado</span>
-        <span style={{ opacity: 0.35, margin: '0 0.25rem' }}>|</span>
-        {activeTypes.map((t) => (
-          <span key={t.id}><span className="adm-cal-legend-dot" style={{ background: t.color }} />{t.label}</span>
-        ))}
-      </div>
-
-      {view === 'month' && selectedDate && (
-        <div className="adm-day-detail" ref={dayDetailRef} style={{ scrollMarginTop: '1rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap' }}>
-            <h3 style={{ margin: 0 }}>Dia {fmtDate(selectedKey)}</h3>
-            <button className="adm-btn" onClick={() => openCreateEvent(selectedKey)}>+ Adicionar evento neste dia</button>
+        {/* painel de filtros */}
+        {showFilters && (
+          <div className="gcal-glass" style={{ marginTop: '0.8rem', padding: '0.8rem 0.9rem', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {types.map((t) => {
+              const on = isVisible(t);
+              return (
+                <button key={t.id} className={'gcal-filterchip' + (on ? '' : ' off')} onClick={() => toggleType(t.id)} title={t.description || ''}
+                  style={on ? { borderColor: t.color, background: t.color + '2e' } : {}}>
+                  <span className="gcal-dot" style={{ background: on ? t.color : 'rgba(255,255,255,0.3)' }} />
+                  {t.label}
+                </button>
+              );
+            })}
           </div>
+        )}
 
-          {selectedEvents.length > 0 && (
-            <div style={{ margin: '0.9rem 0 0.5rem' }}>
-              {selectedEvents.map((ev) => {
-                const t = typeById[ev.type_id];
+        {/* filtros ativos (tipos ocultos) — badges com X, estilo event-manager */}
+        {hiddenTypes.length > 0 && !showFilters && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: '0.7rem', alignItems: 'center' }}>
+            <span className="gcal-sub">Ocultos:</span>
+            {hiddenTypes.map((t) => (
+              <button key={t.id} className="gcal-filterchip off" onClick={() => toggleType(t.id)} title="Clique para voltar a mostrar">
+                <span className="gcal-dot" style={{ background: t.color }} />{t.label} ✕
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ── vista MÊS ── */}
+        {view === 'month' && (
+          <div style={{ marginTop: '1rem' }}>
+            <div className="gcal-grid" style={{ marginBottom: 4 }}>
+              {DAYS_PT.map((d) => <div key={d} className="gcal-dh">{d}</div>)}
+            </div>
+            <div className="gcal-grid">
+              {grid.map((cell, idx) => {
+                const k = dateKey(cell.date);
+                const inst = installmentsByDate[k] || [];
+                const evs = eventsByDate[k] || [];
+                const isToday = isSameDay(cell.date, TODAY_REAL);
+                const isSel = selectedDate && isSameDay(cell.date, selectedDate);
+                const dayCurrency = inst[0]?.currency || 'EUR';
+                const dayTotal = inst.reduce((s, i) => (i.currency === dayCurrency ? s + Number(i.amount) : s), 0);
+                const hasLate = inst.some((i) => i.status === 'late');
+                const maxBadges = inst.length > 0 ? 2 : 3;
+                const shown = evs.slice(0, maxBadges);
+                const extra = evs.length - shown.length;
+
                 return (
-                  <div key={ev.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.6rem', padding: '0.5rem 0', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
-                    <span style={{ width: 10, height: 10, borderRadius: '50%', background: t?.color || '#888', marginTop: 5, flexShrink: 0 }} />
-                    <div style={{ flex: 1 }}>
-                      <strong>{ev.title}</strong>
-                      <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}> · {t?.label || ev.type_id}</span>
-                      {ev.end_date && ev.end_date > ev.start_date && (
-                        <span style={{ color: 'var(--muted)', fontSize: '0.8rem' }}> · {fmtDate(ev.start_date)} → {fmtDate(ev.end_date)}</span>
-                      )}
-                      {ev.description && <div style={{ fontSize: '0.82rem', color: 'var(--muted)', marginTop: 2 }}>{ev.description}</div>}
-                      {(ev.client_name || ev.case_reference || Number(ev.amount) > 0) && (
-                        <div style={{ fontSize: '0.8rem', marginTop: 2 }}>
-                          {ev.client_name && <span>👤 {ev.client_name} </span>}
-                          {ev.case_reference && <span>📁 {ev.case_reference} </span>}
-                          {Number(ev.amount) > 0 && <span className="adm-val">{fmtMoney(ev.amount, ev.currency)}</span>}
-                          {ev.status === 'paid' && <span className="adm-badge adm-badge-paid" style={{ marginLeft: 6 }}>Pago</span>}
-                          {ev.status === 'pending' && <span className="adm-badge adm-badge-pending" style={{ marginLeft: 6 }}>A vencer</span>}
-                          {ev.status === 'overdue' && <span className="adm-badge adm-badge-late" style={{ marginLeft: 6 }}>Atrasado</span>}
+                  <div key={idx}
+                    className={'gcal-day' + (cell.current ? '' : ' muted') + (isToday ? ' today' : '') + (isSel ? ' sel' : '')}
+                    onClick={() => cell.current && setSelectedDate(cell.date)}>
+                    <div className="gcal-daynum">{cell.date.getDate()}</div>
+                    {inst.length > 0 && (
+                      <>
+                        <div style={{ marginTop: 3 }}>
+                          {inst.slice(0, 6).map((i) => (
+                            <span key={i.id} className="gcal-dot" style={{ background: i.status === 'paid' ? '#5fae7f' : i.status === 'late' ? '#d97b7b' : '#d5b17c' }} />
+                          ))}
                         </div>
-                      )}
-                    </div>
-                    {ev.source === 'manual' && (
-                      <div style={{ flexShrink: 0, fontSize: '0.75rem' }}>
-                        <a href="#" onClick={(e) => { e.preventDefault(); openEditEvent(ev); }} style={{ marginRight: 8 }}>Editar</a>
-                        <a href="#" onClick={(e) => { e.preventDefault(); deleteEvent(ev); }} style={{ color: '#b00' }}>Apagar</a>
-                      </div>
+                        <div className={'gcal-amount' + (hasLate ? ' late' : '')}>{fmtMoney(dayTotal, dayCurrency, true)}</div>
+                      </>
                     )}
+                    {shown.map((ev) => <EventChip key={ev.id} ev={ev} k={k} />)}
+                    {extra > 0 && <span style={{ display: 'block', fontSize: '0.62rem', color: 'rgba(244,239,230,0.5)', marginTop: 2 }}>+{extra} evento{extra > 1 ? 's' : ''}</span>}
                   </div>
                 );
               })}
             </div>
-          )}
+          </div>
+        )}
 
-          <h4 style={{ margin: '1rem 0 0.4rem' }}>Vencimentos</h4>
-          {selectedInstallments.length === 0 ? (
-            <div className="adm-empty" style={{ padding: '0.5rem 0' }}>Sem vencimentos neste dia.</div>
-          ) : (
-            <table className="adm-table adm-table-small">
-              <thead>
-                <tr><th>Cliente</th><th>Parcela</th><th className="adm-text-right">Valor</th><th>Estado</th></tr>
-              </thead>
-              <tbody>
-                {selectedInstallments.map((i) => (
-                  <tr key={i.id}>
-                    <td>
-                      <Link to={`/admin/clientes/${i.client_id}`} style={{ color: 'inherit' }}><strong>{i.client_name}</strong></Link>
-                    </td>
-                    <td>{i.installment_number}/{i.total_installments}</td>
-                    <td className="adm-text-right adm-val">{fmtMoney(i.amount, i.currency)}</td>
-                    <td>
-                      {i.status === 'paid' && <span className="adm-badge adm-badge-paid">Pago</span>}
-                      {i.status === 'pending' && <span className="adm-badge adm-badge-pending">Pendente</span>}
-                      {i.status === 'due_today' && <span className="adm-badge adm-badge-warn">Hoje</span>}
-                      {i.status === 'late' && <span className="adm-badge adm-badge-late">Vencido</span>}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+        {/* ── vista SEMANA ── */}
+        {view === 'week' && (
+          <div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+            {weekDays.map((d) => {
+              const k = dateKey(d);
+              const inst = installmentsByDate[k] || [];
+              const evs = eventsByDate[k] || [];
+              const isToday = isSameDay(d, TODAY_REAL);
+              return (
+                <div key={k} className={'gcal-day' + (isToday ? ' today' : '')} style={{ minHeight: 190, cursor: 'pointer' }} onClick={() => setSelectedDate(new Date(d))}>
+                  <div className="gcal-dh" style={{ padding: 0, textAlign: 'left' }}>{DAYS_PT[(d.getDay() + 6) % 7]}</div>
+                  <div className="gcal-daynum" style={{ marginTop: 2 }}>{d.getDate()}</div>
+                  {inst.length > 0 && (
+                    <div style={{ marginTop: 4 }}>
+                      {inst.map((i) => (
+                        <div key={i.id} style={{ fontSize: '0.63rem', color: '#d5b17c', fontWeight: 700 }}>
+                          <span className="gcal-dot" style={{ background: i.status === 'paid' ? '#5fae7f' : i.status === 'late' ? '#d97b7b' : '#d5b17c' }} />
+                          {fmtMoney(i.amount, i.currency, true)} · {(i.client_name || '').split(' ')[0]}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {evs.map((ev) => <EventChip key={ev.id} ev={ev} k={k} />)}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* ── vistas DIA / LISTA / 30 DIAS ── */}
+        {(view === 'day' || view === 'list' || view === 'next30') && (
+          <div className="gcal-glass" style={{ marginTop: '1rem', padding: '1rem' }}>
+            {renderListRows(listItems)}
+          </div>
+        )}
+
+        {/* legenda */}
+        <div className="gcal-legend">
+          <span><span className="gcal-dot" style={{ background: '#5fae7f' }} />Pago</span>
+          <span><span className="gcal-dot" style={{ background: '#d5b17c' }} />A vencer</span>
+          <span><span className="gcal-dot" style={{ background: '#d97b7b' }} />Atrasado</span>
+          <span style={{ opacity: 0.3 }}>|</span>
+          {activeTypes.map((t) => (
+            <span key={t.id}><span className="gcal-dot" style={{ background: t.color }} />{t.label}</span>
+          ))}
         </div>
-      )}
 
-      {/* ── Modal: criar/editar evento ── */}
+        {/* detalhe do dia (Mês/Semana) */}
+        {(view === 'month' || view === 'week') && selectedDate && (
+          <div ref={dayDetailRef} className="gcal-glass" style={{ marginTop: '1rem', padding: '1.1rem', scrollMarginTop: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.7rem' }}>
+              <strong style={{ fontFamily: 'var(--serif, Fraunces, serif)', fontSize: '1.1rem', color: '#fff' }}>Dia {fmtDate(selectedKey)}</strong>
+              <button className="gcal-btn gcal-btn-gold" onClick={() => openCreateEvent(selectedKey)}>＋ Adicionar evento neste dia</button>
+            </div>
+            {renderListRows([
+              ...selectedEvents.map((ev) => ({ kind: 'event', key: ev.start_date, ev })),
+              ...selectedInstallments.map((inst) => ({ kind: 'installment', key: inst.due_date, inst })),
+            ])}
+          </div>
+        )}
+      </div>
+
+      {/* ── Modal: evento ── */}
       {evModal && (
-        <div
-          onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) setEvModal(null); }}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '3rem 1rem', zIndex: 1000, overflowY: 'auto' }}
-        >
-          <div style={{ background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 560, padding: '1.6rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-            <h2 style={{ margin: '0 0 1.1rem', fontFamily: 'var(--serif)' }}>
+        <div className="gcal-modal-bg" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) setEvModal(null); }}>
+          <div className="gcal-modal" style={{ maxWidth: 560 }}>
+            <h2 style={{ margin: '0 0 1.1rem' }}>
               {evModal.mode === 'create' ? 'Novo evento' : 'Editar evento'}
-              {focusType && (
-                <span style={{ fontSize: '0.8rem', fontFamily: 'inherit', marginLeft: 10, color: focusType.color }}>● {focusType.label}</span>
-              )}
+              {focusType && <span style={{ fontSize: '0.78rem', marginLeft: 10, color: focusType.color, fontFamily: 'inherit' }}>● {focusType.label}</span>}
             </h2>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.8rem' }}>
-              <label className="adm-field" style={{ gridColumn: '1 / -1' }}>
-                <span>Título *</span>
+              <label style={{ gridColumn: '1 / -1' }}><span>Título *</span>
                 <input type="text" value={evModal.form.title} onChange={evField('title')} disabled={busy} />
               </label>
-              <label className="adm-field">
-                <span>Tipo de data *</span>
+              <label><span>Tipo de data *</span>
                 <select value={evModal.form.type_id} onChange={evField('type_id')} disabled={busy}>
                   {types.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
                 </select>
               </label>
-              <label className="adm-field" style={{ display: 'flex', alignItems: 'flex-end', gap: '0.5rem' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', paddingBottom: '0.55rem' }}>
-                  <input type="checkbox" checked={!!evModal.form.is_all_day} onChange={evField('is_all_day')} disabled={busy} style={{ width: 'auto' }} />
+              <label style={{ display: 'flex', alignItems: 'flex-end' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', textTransform: 'none', fontSize: '0.85rem', color: '#f4efe6', marginBottom: '0.5rem' }}>
+                  <input type="checkbox" checked={!!evModal.form.is_all_day} onChange={evField('is_all_day')} disabled={busy} />
                   Dia inteiro
                 </span>
               </label>
-              <label className="adm-field">
-                <span>Data inicial *</span>
+              <label><span>Data inicial *</span>
                 <input type="date" value={evModal.form.start_date} onChange={evField('start_date')} disabled={busy} />
               </label>
-              <label className="adm-field">
-                <span>Data final (opcional)</span>
+              <label><span>Data final (opcional)</span>
                 <input type="date" value={evModal.form.end_date} onChange={evField('end_date')} disabled={busy} />
               </label>
-              <label className="adm-field" style={{ gridColumn: '1 / -1' }}>
-                <span>Descrição</span>
+              <label style={{ gridColumn: '1 / -1' }}><span>Descrição</span>
                 <textarea rows={3} value={evModal.form.description} onChange={evField('description')} disabled={busy} />
               </label>
-              <label className="adm-field" style={isCli ? { gridColumn: '1 / -1' } : {}}>
-                <span>Cliente {isCli ? '(recomendado)' : '(opcional)'}</span>
+              <label style={isCli ? { gridColumn: '1 / -1' } : {}}><span>Cliente {isCli ? '(recomendado)' : '(opcional)'}</span>
                 <input type="text" value={evModal.form.client_name} onChange={evField('client_name')} disabled={busy} style={isCli ? { borderColor: focusType?.color } : {}} />
               </label>
-              <label className="adm-field" style={isProc ? { gridColumn: '1 / -1' } : {}}>
-                <span>Referência do processo {isProc ? '(recomendado)' : '(opcional)'}</span>
+              <label style={isProc ? { gridColumn: '1 / -1' } : {}}><span>Referência do processo {isProc ? '(recomendado)' : '(opcional)'}</span>
                 <input type="text" value={evModal.form.case_reference} onChange={evField('case_reference')} disabled={busy} placeholder="Ex.: 1289/26 · ABACO 202699378" style={isProc ? { borderColor: focusType?.color } : {}} />
               </label>
               {(isFin || Number(evModal.form.amount) > 0 || evModal.form.status !== 'none') && (
                 <>
-                  <label className="adm-field">
-                    <span>Valor</span>
+                  <label><span>Valor</span>
                     <input type="text" value={evModal.form.amount} onChange={evField('amount')} placeholder="0" disabled={busy} style={isFin ? { borderColor: focusType?.color } : {}} />
                   </label>
-                  <label className="adm-field">
-                    <span>Moeda</span>
+                  <label><span>Moeda</span>
                     <select value={evModal.form.currency} onChange={evField('currency')} disabled={busy}>
                       <option value="EUR">€ EUR</option>
                       <option value="BRL">R$ BRL</option>
@@ -616,8 +735,7 @@ export default function Calendar() {
                   </label>
                 </>
               )}
-              <label className="adm-field" style={{ gridColumn: isFin ? '1 / -1' : 'auto' }}>
-                <span>Estado financeiro</span>
+              <label style={{ gridColumn: isFin ? '1 / -1' : 'auto' }}><span>Estado financeiro</span>
                 <select value={evModal.form.status} onChange={evField('status')} disabled={busy}>
                   <option value="none">Nenhum</option>
                   <option value="paid">Pago</option>
@@ -626,87 +744,88 @@ export default function Calendar() {
                 </select>
               </label>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.7rem', marginTop: '1.4rem' }}>
-              <button className="adm-btn" onClick={() => setEvModal(null)} disabled={busy}>Cancelar</button>
-              <button className="adm-btn adm-btn-gold" onClick={saveEvent} disabled={busy}>
-                {busy ? 'A guardar…' : (evModal.mode === 'create' ? 'Criar evento' : 'Guardar alterações')}
-              </button>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.7rem', marginTop: '1.4rem' }}>
+              <div>
+                {evModal.mode === 'edit' && evModal.source === 'manual' && (
+                  <button className="gcal-btn" style={{ borderColor: 'rgba(217,123,123,0.5)', color: '#f0a0a0' }} onClick={() => { const ev = events.find((x) => x.id === evModal.id); if (ev) deleteEvent(ev); setEvModal(null); }} disabled={busy}>Apagar</button>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: '0.7rem' }}>
+                <button className="gcal-btn" onClick={() => setEvModal(null)} disabled={busy}>Cancelar</button>
+                <button className="gcal-btn gcal-btn-gold" onClick={saveEvent} disabled={busy}>
+                  {busy ? 'A guardar…' : (evModal.mode === 'create' ? 'Criar evento' : 'Guardar')}
+                </button>
+              </div>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Modal: gestão de tipos de data ── */}
+      {/* ── Modal: tipos de data ── */}
       {typeMgrOpen && (
-        <div
-          onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) { setTypeMgrOpen(false); setTypeForm(null); setTypeDeleting(null); } }}
-          style={{ position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '3rem 1rem', zIndex: 1000, overflowY: 'auto' }}
-        >
-          <div style={{ background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 640, padding: '1.6rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-            <h2 style={{ margin: '0 0 0.4rem', fontFamily: 'var(--serif)' }}>Tipos de data</h2>
-            <p style={{ margin: '0 0 1rem', fontSize: '0.85rem', color: 'var(--muted)' }}>
+        <div className="gcal-modal-bg" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) { setTypeMgrOpen(false); setTypeForm(null); setTypeDeleting(null); } }}>
+          <div className="gcal-modal" style={{ maxWidth: 640 }}>
+            <h2 style={{ margin: '0 0 0.4rem' }}>Tipos de data</h2>
+            <p className="gcal-sub" style={{ margin: '0 0 1rem' }}>
               Ative/desative os tipos visíveis no calendário. Os tipos nativos não podem ser apagados; pode criar tipos personalizados.
             </p>
 
             {types.map((t) => (
-              <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', padding: '0.45rem 0', borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+              <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: '0.7rem', padding: '0.45rem 0', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>
                 <input type="checkbox" checked={isVisible(t)} onChange={() => toggleType(t.id)} style={{ width: 'auto' }} />
                 <span style={{ width: 12, height: 12, borderRadius: 3, background: t.color, flexShrink: 0 }} />
                 <div style={{ flex: 1 }}>
-                  <strong style={{ fontSize: '0.9rem' }}>{t.label}</strong>
-                  {!t.is_default && <span style={{ fontSize: '0.7rem', color: 'var(--muted)', marginLeft: 6 }}>personalizado</span>}
-                  {t.description && <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>{t.description}</div>}
+                  <strong style={{ fontSize: '0.9rem', color: '#fff' }}>{t.label}</strong>
+                  {!t.is_default && <span className="gcal-sub" style={{ marginLeft: 6, fontSize: '0.7rem' }}>personalizado</span>}
+                  {t.description && <div className="gcal-sub" style={{ fontSize: '0.74rem' }}>{t.description}</div>}
                 </div>
                 {!t.is_default && (
                   <div style={{ fontSize: '0.75rem', flexShrink: 0 }}>
-                    <a href="#" onClick={(e) => { e.preventDefault(); setTypeForm({ mode: 'edit', id: t.id, label: t.label, color: t.color, description: t.description || '' }); setTypeDeleting(null); }} style={{ marginRight: 8 }}>Editar</a>
-                    <a href="#" onClick={(e) => { e.preventDefault(); setTypeDeleting(t); setTypeForm(null); }} style={{ color: '#b00' }}>Apagar</a>
+                    <a href="#" className="gcal-a" onClick={(e) => { e.preventDefault(); setTypeForm({ mode: 'edit', id: t.id, label: t.label, color: t.color, description: t.description || '' }); setTypeDeleting(null); }} style={{ marginRight: 8 }}>Editar</a>
+                    <a href="#" onClick={(e) => { e.preventDefault(); setTypeDeleting(t); setTypeForm(null); }} style={{ color: '#f0a0a0', textDecoration: 'none' }}>Apagar</a>
                   </div>
                 )}
               </div>
             ))}
 
             {typeDeleting && (
-              <div style={{ background: 'rgba(176,0,0,0.06)', border: '1px solid rgba(176,0,0,0.25)', borderRadius: 8, padding: '0.9rem 1rem', marginTop: '1rem' }}>
-                <div style={{ fontWeight: 600, marginBottom: '0.5rem' }}>Apagar o tipo "{typeDeleting.label}" — o que fazer aos eventos deste tipo?</div>
+              <div style={{ background: 'rgba(217,123,123,0.12)', border: '1px solid rgba(217,123,123,0.4)', borderRadius: 12, padding: '0.9rem 1rem', marginTop: '1rem' }}>
+                <div style={{ fontWeight: 600, marginBottom: '0.5rem', color: '#fff' }}>Apagar o tipo "{typeDeleting.label}" — o que fazer aos eventos deste tipo?</div>
                 <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
-                  <button className="adm-btn" onClick={() => confirmDeleteType('delete')} disabled={busy} style={{ color: '#b00' }}>Apagar eventos também</button>
-                  <button className="adm-btn" onClick={() => confirmDeleteType('move')} disabled={busy}>Mover para "Eventos pessoais"</button>
-                  <button className="adm-btn" onClick={() => setTypeDeleting(null)} disabled={busy}>Cancelar</button>
+                  <button className="gcal-btn" style={{ color: '#f0a0a0' }} onClick={() => confirmDeleteType('delete')} disabled={busy}>Apagar eventos também</button>
+                  <button className="gcal-btn" onClick={() => confirmDeleteType('move')} disabled={busy}>Mover para "Eventos pessoais"</button>
+                  <button className="gcal-btn" onClick={() => setTypeDeleting(null)} disabled={busy}>Cancelar</button>
                 </div>
               </div>
             )}
 
             {typeForm ? (
-              <div style={{ background: 'var(--cream, #f5f0e8)', borderRadius: 8, padding: '0.9rem 1rem', marginTop: '1rem' }}>
-                <div style={{ fontWeight: 600, marginBottom: '0.6rem' }}>{typeForm.mode === 'create' ? 'Novo tipo de data' : `Editar "${typeForm.label}"`}</div>
+              <div className="gcal-glass" style={{ padding: '0.9rem 1rem', marginTop: '1rem' }}>
+                <div style={{ fontWeight: 600, marginBottom: '0.6rem', color: '#fff' }}>{typeForm.mode === 'create' ? 'Novo tipo de data' : `Editar "${typeForm.label}"`}</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.7rem' }}>
-                  <label className="adm-field">
-                    <span>Label *</span>
+                  <label><span>Label *</span>
                     <input type="text" value={typeForm.label} onChange={(e) => setTypeForm((f) => ({ ...f, label: e.target.value }))} disabled={busy} placeholder="Ex.: Conservatória, Notário…" />
                   </label>
-                  <label className="adm-field">
-                    <span>Cor</span>
-                    <input type="color" value={typeForm.color} onChange={(e) => setTypeForm((f) => ({ ...f, color: e.target.value }))} disabled={busy} style={{ width: 60, height: 38, padding: 2 }} />
+                  <label><span>Cor</span>
+                    <input type="color" value={typeForm.color} onChange={(e) => setTypeForm((f) => ({ ...f, color: e.target.value }))} disabled={busy} style={{ width: 60 }} />
                   </label>
-                  <label className="adm-field" style={{ gridColumn: '1 / -1' }}>
-                    <span>Descrição</span>
+                  <label style={{ gridColumn: '1 / -1' }}><span>Descrição</span>
                     <input type="text" value={typeForm.description} onChange={(e) => setTypeForm((f) => ({ ...f, description: e.target.value }))} disabled={busy} />
                   </label>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem', marginTop: '0.7rem' }}>
-                  <button className="adm-btn" onClick={() => setTypeForm(null)} disabled={busy}>Cancelar</button>
-                  <button className="adm-btn adm-btn-gold" onClick={saveType} disabled={busy}>{busy ? 'A guardar…' : 'Guardar tipo'}</button>
+                  <button className="gcal-btn" onClick={() => setTypeForm(null)} disabled={busy}>Cancelar</button>
+                  <button className="gcal-btn gcal-btn-gold" onClick={saveType} disabled={busy}>{busy ? 'A guardar…' : 'Guardar tipo'}</button>
                 </div>
               </div>
             ) : (
               <div style={{ marginTop: '1rem' }}>
-                <button className="adm-btn" onClick={() => { setTypeForm({ mode: 'create', label: '', color: '#59788E', description: '' }); setTypeDeleting(null); }}>＋ Criar tipo personalizado</button>
+                <button className="gcal-btn" onClick={() => { setTypeForm({ mode: 'create', label: '', color: '#59788E', description: '' }); setTypeDeleting(null); }}>＋ Criar tipo personalizado</button>
               </div>
             )}
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.2rem' }}>
-              <button className="adm-btn" onClick={() => { setTypeMgrOpen(false); setTypeForm(null); setTypeDeleting(null); }}>Fechar</button>
+              <button className="gcal-btn" onClick={() => { setTypeMgrOpen(false); setTypeForm(null); setTypeDeleting(null); }}>Fechar</button>
             </div>
           </div>
         </div>

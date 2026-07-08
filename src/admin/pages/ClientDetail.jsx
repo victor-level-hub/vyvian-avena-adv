@@ -682,11 +682,20 @@ export default function ClientDetail() {
           className="adm-client-avatar"
           onClick={() => !logoBusy && logoInputRef.current && logoInputRef.current.click()}
           title={logoUrl ? 'Clique para substituir a logo' : 'Clique para adicionar a logo do cliente'}
-          style={{ cursor: 'pointer', position: 'relative', overflow: 'hidden', ...(logoUrl ? { background: '#fff', padding: 0 } : {}) }}
+          style={{
+            cursor: 'pointer', position: 'relative', overflow: 'hidden',
+            ...(logoUrl ? {
+              // verde mais claro que o cabeçalho + efeito 3D (relevo côncavo com brilho superior)
+              background: 'radial-gradient(circle at 32% 26%, #3a7a63 0%, #26594a 55%, #1b453a 100%)',
+              padding: 0,
+              boxShadow: 'inset 0 3px 7px rgba(255,255,255,0.28), inset 0 -4px 9px rgba(0,0,0,0.4), 0 6px 16px rgba(0,0,0,0.35)',
+              border: '1px solid rgba(213,177,124,0.35)',
+            } : {}),
+          }}
         >
           {logoUrl ? (
-            // object-fit: contain — a logo (mesmo retangular) aparece INTEIRA dentro do círculo, sem corte
-            <img src={logoUrl} alt="logo" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '12%', boxSizing: 'border-box', background: '#fff', borderRadius: '50%' }} />
+            // object-fit: contain — a logo (mesmo retangular) aparece INTEIRA, com respiro reduzido
+            <img src={logoUrl} alt="logo" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '7%', boxSizing: 'border-box', borderRadius: '50%', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.35))' }} />
           ) : (
             initials || 'C'
           )}

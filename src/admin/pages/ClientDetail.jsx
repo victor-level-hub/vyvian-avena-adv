@@ -74,6 +74,7 @@ export default function ClientDetail() {
   const [procBusy, setProcBusy] = useState(false);
   const [procRefs, setProcRefs] = useState([]);          // processos conhecidos do cliente
   const [procSelectedRef, setProcSelectedRef] = useState('');
+  const [procBase, setProcBase] = useState(''); // texto dos poderes com [INDICAR]
 
   // ── Documentos do cliente / link de upload
   const [docs, setDocs] = useState([]);
@@ -338,20 +339,20 @@ export default function ClientDetail() {
     })();
   }, [activeTab, data?.client?.id]);
 
-  // aplicar a referência escolhida ao bloco de poderes (substitui [INDICAR] ou a ref anterior)
+  // aplicar a referência escolhida/digitada: regenera os poderes a partir da base [INDICAR]
   const applyProcessoRef = (ref) => {
-    setProcOverrides((prev) => {
-      let poderes = prev.poderes || '';
-      if (procSelectedRef && poderes.includes(procSelectedRef)) {
-        poderes = poderes.replace(procSelectedRef, ref || '[INDICAR]');
-      } else if (poderes.includes('[INDICAR]')) {
-        poderes = poderes.replace('[INDICAR]', ref || '[INDICAR]');
-      } else if (ref) {
-        poderes = poderes ? `${poderes} (Processo n.º ${ref}.)` : `Processo n.º ${ref}.`;
-      }
-      return { ...prev, poderes };
-    });
     setProcSelectedRef(ref);
+    setProcOverrides((prev) => ({
+      ...prev,
+      poderes: (procBase || prev.poderes || '').split('[INDICAR]').join(ref || '[INDICAR]')
+        // se a base já tinha ref anterior aplicada não acontece: base guarda sempre [INDICAR]
+    }));
+  };
+
+  // edição manual do textarea: atualiza também a base (revertendo a ref atual para [INDICAR])
+  const editPoderes = (text) => {
+    setProcOverrides((prev) => ({ ...prev, poderes: text }));
+    setProcBase(procSelectedRef ? text.split(procSelectedRef).join('[INDICAR]') : text);
   };
 
   // Quando muda o modelo escolhido, fazer preview do texto preenchido
@@ -457,19 +458,31 @@ export default function ClientDetail() {
     setProcTemplateId(templateId);
     setProcOverrides({});
     setProcSelectedRef('');
+    setProcBase('');
     setProcText('');
     setProcEditable([]);
     if (!templateId) return;
     setProcBusy(true);
     try {
       const r = await procApi.preview({ template_id: templateId, client_id: clientId });
-      setProcText(r.texto || '');
       const fields = r.campos_editaveis || [];
       setProcEditable(fields);
-      // pré-preencher cada campo editável com texto sugerido padrão (vazio se o utilizador definir)
-      const defaults = {};
-      if (fields.includes('poderes')) defaults.poderes = 'poderes para o representar no âmbito do processo n.º [INDICAR] e processos conexos, incluindo a junção de documentos, apresentação de requerimentos, resposta a notificações, interposição de recursos e prática de todos os demais atos processuais necessários à defesa dos seus direitos.';
-      setProcOverrides(defaults);
+      if (fields.includes('poderes')) {
+        const base = r.poderes_default || 'poderes para o representar no âmbito do processo n.º [INDICAR] e processos conexos, incluindo a junção de documentos, apresentação de requerimentos, resposta a notificações, interposição de recursos e prática de todos os demais atos processuais necessários à defesa dos seus direitos.';
+        const firstRef = procRefs[0] || '';
+        const poderes = base.split('[INDICAR]').join(firstRef || '[INDICAR]');
+        setProcBase(base);
+        setProcSelectedRef(firstRef);
+        setProcOverrides({ poderes });
+        // preview com os poderes já aplicados para o texto refletir o documento final
+        try {
+          const r2 = await procApi.preview({ template_id: templateId, client_id: clientId, overrides: { poderes } });
+          setProcText(r2.texto || r.texto || '');
+        } catch { setProcText(r.texto || ''); }
+      } else {
+        setProcText(r.texto || '');
+        setProcOverrides({});
+      }
     } catch (e) {
       alert('Erro a carregar modelo: ' + e.message);
     } finally {
@@ -1121,14 +1134,31 @@ export default function ClientDetail() {
           {procTemplateId && (
             <>
               {procEditable.includes('poderes') && (
-                <div className="adm-field" style={{ maxWidth: 520 }}>
+                <div className="adm-field">
                   <label>Processo</label>
-                  <select value={procSelectedRef} onChange={(e) => applyProcessoRef(e.target.value)} disabled={procBusy}>
-                    <option value="">— digitar manualmente no texto —</option>
-                    {procRefs.map((r) => <option key={r} value={r}>{r}</option>)}
-                  </select>
+                  <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                    <select
+                      value={procRefs.includes(procSelectedRef) ? procSelectedRef : ''}
+                      onChange={(e) => applyProcessoRef(e.target.value)}
+                      disabled={procBusy}
+                      style={{ maxWidth: 340 }}
+                    >
+                      <option value="">— digitar manualmente —</option>
+                      {procRefs.map((r) => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                    {!procRefs.includes(procSelectedRef) && (
+                      <input
+                        type="text"
+                        value={procSelectedRef}
+                        onChange={(e) => applyProcessoRef(e.target.value)}
+                        placeholder="n.º do processo (ex.: 1289/26)"
+                        disabled={procBusy}
+                        style={{ flex: 1, minWidth: 220 }}
+                      />
+                    )}
+                  </div>
                   <div className="adm-field-helper">
-                    Referências vindas das notas do cliente e dos eventos do calendário. Ao escolher, substitui o [INDICAR] nos poderes.
+                    O processo escolhido (ou digitado) entra automaticamente nos poderes abaixo, no lugar de [INDICAR].
                   </div>
                 </div>
               )}
@@ -1138,7 +1168,7 @@ export default function ClientDetail() {
                   <textarea
                     rows={5}
                     value={procOverrides.poderes || ''}
-                    onChange={(e) => setProcOverrides({ ...procOverrides, poderes: e.target.value })}
+                    onChange={(e) => editPoderes(e.target.value)}
                     disabled={procBusy}
                     style={{ width: '100%', fontFamily: 'inherit', fontSize: '0.9rem', padding: '0.6rem' }}
                   />

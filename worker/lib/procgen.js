@@ -103,7 +103,7 @@ export async function generateProcuracaoPDF({ texto, local, data, nomeOutorgante
   // local e data
   y -= 18;
   const ld = `${local || "Santa Maria da Feira"}, ${fmtDateLong(data || new Date().toISOString())}.`;
-  page.drawText(ld, { x: M, y, size: size, font: F, color: INK });
+  page.drawText(ld, { x: width - M - F.widthOfTextAtSize(ld, size), y, size: size, font: F, color: INK });
   y -= 60;
 
   // linha de assinatura do outorgante
@@ -176,29 +176,25 @@ export async function generateProcuracaoPDF({ texto, local, data, nomeOutorgante
     }
   }
 
-  // balança da justiça em traço fino, bege claro, centrada (marca d'água do documento real)
+  // coluna do logótipo Vyvian Avena (paths do SVG oficial), clareada como marca d'água
   function drawWatermark() {
-    const path = [
-      "M50 12 L50 74",                 // haste
-      "M44 9 Q50 3 56 9",              // topo
-      "M20 22 L80 22",                 // travessão
-      "M20 22 L11 47 M20 22 L29 47",   // cordas esq.
-      "M9 47 L31 47 M9 47 Q20 60 31 47",   // prato esq.
-      "M80 22 L71 47 M80 22 L89 47",   // cordas dir.
-      "M69 47 L91 47 M69 47 Q80 60 91 47", // prato dir.
-      "M40 76 L60 76 M34 82 L66 82",   // base
-    ].join(" ");
-    const scale = 3.6;               // ~360pt de largura
-    const w = 100 * scale;
+    // viewBox original: 0 0 146 201
+    const PATHS = [
+      "M36.1334 4.8665C35.0667 10.1998 32.2667 12.9998 26 14.5998L21.3334 15.9332L27.4667 18.5998C31.6 20.4665 34 22.4665 34.9334 25.1332C35.7334 27.2665 36.8 30.1998 37.3334 31.6665C38.2667 33.9332 38.5334 33.5332 39.6 29.3998C41.0667 23.9332 47.3334 17.6665 51.4667 17.6665C55.4667 17.6665 54.4 15.3998 50 14.5998C44.9334 13.5332 40.8 9.39983 39.7334 4.33316C38.8 -1.00017 37.2 -0.733505 36.1334 4.8665Z",
+      "M16 40.9999C6.13335 44.4666 -0.666652 56.4666 1.33335 66.8666C2.40001 72.3333 10.4 80.9999 15.7333 82.3332C21.4667 83.7999 27.8667 81.9332 32 77.7999C39.6 69.7999 35.3334 56.3333 25.2 56.3333C20 56.3333 17.6 58.8666 18.2667 63.9332C18.6667 67.1332 19.2 67.6666 23.0667 67.6666C28.1333 67.6666 28.6667 70.0666 24 73.1332C15.6 78.5999 6.66668 66.3333 11.6 55.6666C14.6667 48.9999 18 48.3332 50 48.3332H79.3334V55.6666V62.9999H60.6667H42V67.6666V72.3333H60.6667H79.3334L79.6 125.267C79.7334 154.467 80 179.533 80.1334 181C80.2667 182.467 80.4 187.4 80.5334 192.067L80.6667 200.333L89.3334 193.533L98 186.733V138.333C98 86.5999 98.1334 85.5332 104.667 87.6666C107.333 88.4666 107.333 89.2666 107.333 134.467C107.333 159.667 107.733 180.333 108.133 180.333C108.533 180.333 111.467 178.467 114.8 176.333L120.667 172.2V126.867V81.5332L124.667 79.2666C127.467 77.7999 128.667 76.0666 128.4 74.3332C128 71.7999 126.8 71.6666 104.4 71.2666C81.7334 70.9999 80.6667 70.8666 80.6667 68.3333C80.6667 65.7999 81.6 65.6666 100.8 65.6666C111.733 65.6666 123.467 64.9999 126.533 64.1999C134.4 62.1999 141.333 56.1999 144 48.9999C148.133 38.3332 152.4 38.9999 83.0667 38.9999C33.4667 39.1332 20.2667 39.5332 16 40.9999Z",
+      "M38.2667 85.1332C35.3334 87.1332 35.3334 87.5332 35.3334 122.2V157.267L42.1334 161.533C45.8667 163.8 49.0667 165.667 49.4667 165.667C49.7334 165.667 50 148.2 50 127C50 90.0665 49.8667 88.1998 47.3334 85.6665C44.1334 82.4665 42.2667 82.3332 38.2667 85.1332Z",
+      "M59.3334 85.6666C56.8001 88.2 56.6667 90.0666 56.6667 129.667V170.867L63.4667 177.267C67.2001 180.733 70.8001 183.933 71.4667 184.067C72.1334 184.333 72.6667 164.733 72.6667 137.267C72.6667 91.5333 72.5334 89.9333 69.8667 86.4666C66.6667 82.3333 62.9334 82.0666 59.3334 85.6666Z",
+    ];
+    const scale = 2.3;                       // 146 x 2.3 ≈ 336pt de largura
+    const w = 146 * scale, h = 201 * scale;
     const x = (width - w) / 2;
-    const yTop = (height / 2) + (86 * scale) / 2 - 40; // centrado verticalmente
+    const yTop = height / 2 + h / 2 - 24;    // centrada verticalmente
+    const LIGHT = rgb(0.845, 0.895, 0.878);  // tom do logótipo, clareado (efeito marca d'água)
     try {
-      page.drawSvgPath(path, {
-        x, y: yTop, scale,
-        borderColor: rgb(0.878, 0.845, 0.775), // bege claro
-        borderWidth: 2.4,
-        borderOpacity: 0.55,
-      });
-    } catch (e) { /* marca d'água é decorativa — nunca bloquear a geração */ }
+      for (const d of PATHS) {
+        page.drawSvgPath(d, { x, y: yTop, scale, color: LIGHT, opacity: 0.55 });
+      }
+    } catch (e) { /* decorativa — nunca bloquear a geração */ }
   }
+
 }

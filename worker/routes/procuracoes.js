@@ -43,7 +43,7 @@ async function montarTexto(request, env, comoPDF) {
   const texto = preencherTemplate(tpl.corpo, valores);
 
   if (!comoPDF) {
-    return jsonResponse({ texto, campos_editaveis: JSON.parse(tpl.campos_editaveis || "[]"), nome_outorgante: client.name });
+    return jsonResponse({ texto, campos_editaveis: JSON.parse(tpl.campos_editaveis || "[]"), poderes_default: tpl.poderes_default || null, nome_outorgante: client.name });
   }
 
   const bytes = await generateProcuracaoPDF({

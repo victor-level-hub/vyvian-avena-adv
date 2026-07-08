@@ -21,14 +21,21 @@ function RowAvatar({ client }) {
 
   const initials = (client.name || '').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase();
   const base = {
-    width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+    width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
     display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-    fontSize: '0.66rem', fontWeight: 700,
+    fontSize: '0.78rem', fontWeight: 700,
   };
   if (url) {
     return (
-      <span style={{ ...base, background: '#fff', border: '1px solid rgba(0,0,0,0.1)', overflow: 'hidden' }}>
-        <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: 3, boxSizing: 'border-box' }} />
+      // 3D em tom creme (a cor do fundo da página), com relevo e aro dourado subtil
+      <span style={{
+        ...base,
+        background: 'radial-gradient(circle at 32% 26%, #ffffff 0%, #f4ecdf 55%, #e4d5bd 100%)',
+        boxShadow: 'inset 0 2px 5px rgba(255,255,255,0.9), inset 0 -3px 6px rgba(0,0,0,0.14), 0 3px 9px rgba(0,0,0,0.16)',
+        border: '1px solid rgba(184,147,90,0.35)',
+        overflow: 'hidden',
+      }}>
+        <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '9%', boxSizing: 'border-box', filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.25))' }} />
       </span>
     );
   }

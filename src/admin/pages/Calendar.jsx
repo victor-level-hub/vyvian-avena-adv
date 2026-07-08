@@ -109,7 +109,7 @@ const GLASS_CSS = `
 .gcal-pill.on { background: rgba(255,255,255,0.92); color: #12302a; font-weight: 700; box-shadow: 0 3px 10px rgba(0,0,0,0.25); }
 .gcal-input {
   background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16); border-radius: 10px;
-  color: #f4efe6; padding: 0.5rem 0.8rem 0.5rem 2.1rem; font-size: 0.85rem; width: 100%;
+  color: #f4efe6; padding: 0.5rem 0.8rem 0.5rem 2.1rem; font-size: 0.85rem; line-height: 1.5; width: 100%;
 }
 .gcal-input::placeholder { color: rgba(244,239,230,0.45); }
 .gcal-input:focus { outline: none; border-color: rgba(213,177,124,0.6); }
@@ -165,7 +165,7 @@ const GLASS_CSS = `
 .gcal-modal label span { display: block; font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(244,239,230,0.6); margin-bottom: 0.3rem; }
 .gcal-modal input, .gcal-modal select, .gcal-modal textarea {
   width: 100%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16);
-  border-radius: 9px; color: #f4efe6; padding: 0.5rem 0.7rem; font-size: 0.88rem; font-family: 'Arial Unicode MS', Arial, 'Helvetica Neue', sans-serif;
+  border-radius: 9px; color: #f4efe6; padding: 0.5rem 0.7rem; font-size: 0.88rem; line-height: 1.5; font-family: 'Arial Unicode MS', Arial, 'Helvetica Neue', sans-serif;
 }
 .gcal-modal input:focus, .gcal-modal select:focus, .gcal-modal textarea:focus { outline: none; border-color: rgba(213,177,124,0.6); }
 .gcal-modal select option { background: #12302a; color: #f4efe6; }

@@ -514,8 +514,10 @@
   background: white;
   font-size: 0.88rem;
   color: var(--ink);
-  font-family: var(--sans);
+  font-family: 'Arial Unicode MS', Arial, 'Helvetica Neue', sans-serif;
+  line-height: 1.5;
 }
+.adm-field label { line-height: 1.5; }
 .adm-field input:focus,
 .adm-field select:focus,
 .adm-field textarea:focus {

@@ -4,6 +4,7 @@ import ContactsEditor, { parseContacts, cleanContacts } from '../ContactsEditor'
 import AddressEditor, { EMPTY_ADDRESS, composeAddress, hasAddress, parseAddressParts } from '../AddressEditor';
 import { useParams, Link } from 'react-router-dom';
 import { clients as clientsApi, installments as installmentsApi, recibos as recibosApi, procuracoes as procApi, planos as planosApi, uploadTokens as utApi, clientDocs as docsApi, clientLogo } from '../apiClient';
+import { IconPhone, IconBuilding, IconCamera, IconDoc, IconUpload } from '../icons';
 
 function fmtMoney(amount, currency = 'EUR') {
   const symbol = currency === 'BRL' ? 'R$' : '€';
@@ -699,13 +700,13 @@ export default function ClientDetail() {
           ) : (
             initials || 'C'
           )}
-          <span style={{ position: 'absolute', bottom: 0, right: 0, background: 'rgba(18,48,42,0.85)', color: '#fff', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem' }}>📷</span>
+          <span style={{ position: 'absolute', bottom: 0, right: 0, background: 'rgba(18,48,42,0.85)', color: '#fff', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem' }}><IconCamera size={12} /></span>
         </div>
         <div>
           <h1>{client.name}</h1>
           <div className="adm-client-meta">
             {parseContacts(client.phones, client.phone).filter((c) => c.value).map((c, i) => (
-              <span key={'p' + i}>📞 {c.value}{c.label && c.label !== 'Pessoal' ? ` (${c.label})` : ''}</span>
+              <span key={'p' + i}><IconPhone /> {c.value}{c.label && c.label !== 'Pessoal' ? ` (${c.label})` : ''}</span>
             ))}
             {parseContacts(client.emails, client.email).filter((c) => c.value).map((c, i) => (
               <span key={'e' + i}>✉ {c.value}{c.label && c.label !== 'Pessoal' ? ` (${c.label})` : ''}</span>
@@ -718,7 +719,7 @@ export default function ClientDetail() {
           <div className="adm-client-meta" style={{ marginTop: '0.4rem' }}>
             <span>{client.practice_area || '—'} · {client.country}</span>
             {client.person_type === 'coletiva' && (
-              <span>🏢 Pessoa coletiva{client.rep_name ? ` · Rep.: ${client.rep_name}${client.rep_role ? ` (${client.rep_role})` : ''}` : ''}</span>
+              <span><IconBuilding /> Pessoa coletiva{client.rep_name ? ` · Rep.: ${client.rep_name}${client.rep_role ? ` (${client.rep_role})` : ''}` : ''}</span>
             )}
           </div>
         </div>
@@ -748,7 +749,7 @@ export default function ClientDetail() {
           transition: 'background 0.15s, border-color 0.15s',
         }}
       >
-        <span style={{ fontWeight: 600, color: 'var(--forest, #12302a)' }}>📄 Ler mais documentos com IA</span>
+        <span style={{ fontWeight: 600, color: 'var(--forest, #12302a)' }}><IconDoc /> Ler mais documentos com IA</span>
         {' — arraste (ou clique) para completar campos vazios, acrescentar contactos e atualizar o resumo do processo.'}
         {aiMsg && (
           <div style={{
@@ -788,7 +789,7 @@ export default function ClientDetail() {
               onClick={handleGeneratePlanPdf}
               disabled={planPdfBusy || installments.length === 0}
             >
-              {planPdfBusy ? 'A gerar…' : '📄 Gerar PDF'}
+              {planPdfBusy ? 'A gerar…' : <><IconDoc /> Gerar PDF</>}
             </button>
             <button
               className="adm-btn adm-btn-gold"
@@ -947,7 +948,7 @@ export default function ClientDetail() {
           {/* Gerar link para o cliente enviar */}
           <div style={{ background: 'var(--cream, #f5f0e8)', padding: '1rem', borderRadius: 6, marginBottom: '1.5rem' }}>
             <div style={{ fontWeight: 600, color: 'var(--forest, #12302a)', marginBottom: '0.5rem' }}>
-              📤 Pedir documentos ao cliente
+              <IconUpload /> Pedir documentos ao cliente
             </div>
             <p style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: 0 }}>
               Gere um link único e envie por WhatsApp ou e-mail. O cliente arrasta os ficheiros sem precisar de login.

@@ -6,6 +6,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { installments as installmentsApi, calendar as calendarApi } from '../apiClient';
+import { IconUser, IconFolder, IconFilter, IconSearch } from '../icons';
 
 const MONTHS_PT = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -440,8 +441,8 @@ export default function Calendar() {
           {ev.description && <span style={{ display: 'block', fontSize: '0.72rem', color: 'rgba(244,239,230,0.62)', marginTop: 5 }}>{ev.description.slice(0, 140)}{ev.description.length > 140 ? '…' : ''}</span>}
           {(ev.client_name || ev.case_reference || Number(ev.amount) > 0) && (
             <span style={{ display: 'block', fontSize: '0.72rem', marginTop: 5, color: 'rgba(244,239,230,0.85)' }}>
-              {ev.client_name && <>👤 {ev.client_name}  </>}
-              {ev.case_reference && <>📁 {ev.case_reference}  </>}
+              {ev.client_name && <><IconUser size={11} /> {ev.client_name}  </>}
+              {ev.case_reference && <><IconFolder size={11} /> {ev.case_reference}  </>}
               {Number(ev.amount) > 0 && <strong style={{ color: '#d5b17c' }}>{fmtMoney(ev.amount, ev.currency)}</strong>}
             </span>
           )}
@@ -470,8 +471,8 @@ export default function Calendar() {
               <span className="gcal-sub"> · {typeById[item.ev.type_id]?.label}</span>
               <div className="gcal-sub" style={{ marginTop: 2 }}>
                 {fmtDate(item.ev.start_date)}{item.ev.end_date ? ` → ${fmtDate(item.ev.end_date)}` : ''}
-                {item.ev.client_name ? ` · 👤 ${item.ev.client_name}` : ''}
-                {item.ev.case_reference ? ` · 📁 ${item.ev.case_reference}` : ''}
+                {item.ev.client_name ? <> · <IconUser size={11} /> {item.ev.client_name}</> : ''}
+                {item.ev.case_reference ? <> · <IconFolder size={11} /> {item.ev.case_reference}</> : ''}
               </div>
               {item.ev.description && <div className="gcal-sub" style={{ marginTop: 2, fontSize: '0.76rem' }}>{item.ev.description.slice(0, 160)}{item.ev.description.length > 160 ? '…' : ''}</div>}
             </div>
@@ -535,7 +536,7 @@ export default function Calendar() {
               ))}
             </div>
             <button className="gcal-btn" onClick={() => setShowFilters((v) => !v)}>
-              ⚙ Filtros{hiddenTypes.length > 0 ? ` (${activeTypes.length}/${types.length})` : ''}
+              <IconFilter size={12} /> Filtros{hiddenTypes.length > 0 ? ` (${activeTypes.length}/${types.length})` : ''}
             </button>
             <button className="gcal-btn" onClick={() => setTypeMgrOpen(true)}>Tipos de data</button>
             <button className="gcal-btn gcal-btn-gold" onClick={() => openCreateEvent(selectedKey)}>＋ Evento</button>
@@ -544,7 +545,7 @@ export default function Calendar() {
 
         {/* pesquisa */}
         <div style={{ position: 'relative', marginTop: '1rem' }}>
-          <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.5, fontSize: '0.9rem' }}>🔍</span>
+          <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.5, fontSize: '0.9rem', display: 'flex' }}><IconSearch /></span>
           <input
             className="gcal-input"
             placeholder="Pesquisar eventos, clientes, processos…"

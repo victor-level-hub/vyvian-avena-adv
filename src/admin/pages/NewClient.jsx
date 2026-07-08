@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clients as clientsApi, installments as installmentsApi, notifications as notifApi } from '../apiClient';
+import { IconDoc } from '../icons';
 import ContactsEditor, { cleanContacts } from '../ContactsEditor';
 import AddressEditor, { EMPTY_ADDRESS, composeAddress, hasAddress } from '../AddressEditor';
 
@@ -395,7 +396,7 @@ export default function NewClient() {
           }}
         >
           <div style={{ fontWeight: 600, color: 'var(--forest, #12302a)' }}>
-            📄 Cadastro rápido com IA
+            <IconDoc /> Cadastro rápido com IA
           </div>
           <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: '0.35rem' }}>
             Arraste aqui (ou clique para escolher) o documento do cliente — Título de Residência, Cartão de Cidadão, Passaporte, RG, ou uma procuração/certidão da empresa.

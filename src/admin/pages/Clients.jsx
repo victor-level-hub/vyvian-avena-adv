@@ -216,7 +216,7 @@ export default function Clients() {
       <div className="adm-filter-bar">
         <input
           type="search"
-          placeholder="🔍 Pesquisar por nome, NIF/CPF ou e-mail…"
+          placeholder="Pesquisar por nome, NIF/CPF ou e-mail…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />

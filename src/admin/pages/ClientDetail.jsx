@@ -551,6 +551,43 @@ export default function ClientDetail() {
         >
           <div style={{ background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 640, padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
             <h2 style={{ margin: '0 0 1.25rem', fontFamily: 'var(--serif)' }}>Editar cliente</h2>
+
+            {/* Logo do cliente — badge da câmara fora do círculo (não é cortado) */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
+              <div
+                onClick={() => !logoBusy && logoInputRef.current && logoInputRef.current.click()}
+                title={logoUrl ? 'Clique para substituir a logo' : 'Clique para adicionar a logo do cliente'}
+                style={{ position: 'relative', cursor: 'pointer', width: 72, height: 72, flexShrink: 0 }}
+              >
+                <div style={{
+                  width: 64, height: 64, borderRadius: '50%', overflow: 'hidden',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontWeight: 700, color: '#fff', fontSize: '1.1rem',
+                  background: logoUrl
+                    ? 'radial-gradient(circle at 32% 26%, #3a7a63 0%, #26594a 55%, #1b453a 100%)'
+                    : 'var(--gold, #b8935a)',
+                  boxShadow: logoUrl ? 'inset 0 2px 5px rgba(255,255,255,0.28), inset 0 -3px 7px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.25)' : '0 4px 12px rgba(0,0,0,0.15)',
+                  border: logoUrl ? '1px solid rgba(184,147,90,0.4)' : 'none',
+                }}>
+                  {logoUrl
+                    ? <img src={logoUrl} alt="logo" style={{ width: '100%', height: '100%', objectFit: 'contain', padding: '7%', boxSizing: 'border-box' }} />
+                    : (initials || 'C')}
+                </div>
+                <span style={{
+                  position: 'absolute', bottom: 2, right: 2,
+                  background: 'var(--forest, #12302a)', color: '#fff', borderRadius: '50%',
+                  width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  border: '2px solid var(--bg, #faf8f4)', boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                }}><IconCamera size={12} /></span>
+              </div>
+              <div style={{ fontSize: '0.82rem', color: 'var(--muted)' }}>
+                <div style={{ fontWeight: 600, color: 'var(--forest, #12302a)' }}>Logo / fotografia do cliente</div>
+                {logoBusy ? 'A carregar…' : 'Clique no círculo para carregar ou substituir (PNG, JPEG, WEBP, SVG · máx. 2 MB).'}
+                {client.logo_key && !logoBusy && (
+                  <> <a href="#" onClick={(e) => { e.preventDefault(); handleLogoRemove(); }} style={{ color: '#b00' }}>Remover logo</a></>
+                )}
+              </div>
+            </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.9rem' }}>
               <label className="adm-field">
                 <span>Tipo de cliente</span>
@@ -657,11 +694,6 @@ export default function ClientDetail() {
                 <span>Resumo do processo</span>
                 <textarea rows={6} value={editForm.process_summary} onChange={editField('process_summary')} disabled={editBusy} placeholder="Resumo gerado pela IA no cadastro — editável" />
               </label>
-              {client.logo_key && (
-                <div style={{ gridColumn: '1 / -1', fontSize: '0.8rem' }}>
-                  <a href="#" onClick={(e) => { e.preventDefault(); handleLogoRemove(); }} style={{ color: '#b00' }}>Remover logo do cliente</a>
-                </div>
-              )}
               <label className="adm-field" style={{ gridColumn: '1 / -1' }}>
                 <span>Notas</span>
                 <textarea rows={3} value={editForm.notes} onChange={editField('notes')} disabled={editBusy} />
@@ -681,10 +713,8 @@ export default function ClientDetail() {
       <div className="adm-client-head">
         <div
           className="adm-client-avatar"
-          onClick={() => !logoBusy && logoInputRef.current && logoInputRef.current.click()}
-          title={logoUrl ? 'Clique para substituir a logo' : 'Clique para adicionar a logo do cliente'}
           style={{
-            cursor: 'pointer', position: 'relative', overflow: 'hidden',
+            overflow: 'hidden',
             ...(logoUrl ? {
               // verde mais claro que o cabeçalho + efeito 3D (relevo côncavo com brilho superior)
               background: 'radial-gradient(circle at 32% 26%, #3a7a63 0%, #26594a 55%, #1b453a 100%)',
@@ -700,7 +730,6 @@ export default function ClientDetail() {
           ) : (
             initials || 'C'
           )}
-          <span style={{ position: 'absolute', bottom: 0, right: 0, background: 'rgba(18,48,42,0.85)', color: '#fff', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.65rem' }}><IconCamera size={12} /></span>
         </div>
         <div>
           <h1>{client.name}</h1>

@@ -60,7 +60,7 @@ INSERT OR IGNORE INTO calendar_events (id, title, description, type_id, start_da
   ('2026-ano-judicial-fim', 'Fim do ano judicial', 'Em Portugal, o ano judicial corresponde ao ano civil.', 'ano_judicial', '2026-12-31', NULL, 'system'),
   ('2026-ferias-judiciais-natal-ano-novo', 'Férias judiciais — Natal/Ano Novo', 'Período de férias judiciais de 22 de dezembro a 3 de janeiro; no calendário de 2026 entra de 1 a 3 de janeiro.', 'ferias_judiciais', '2026-01-01', '2026-01-03', 'system'),
   ('2026-ferias-judiciais-pascoa', 'Férias judiciais — Páscoa', 'Férias judiciais do domingo de Ramos à segunda-feira de Páscoa.', 'ferias_judiciais', '2026-03-29', '2026-04-06', 'system'),
-  ('2026-ferias-judiciais-verao', 'Férias judiciais — Verão', 'Férias judiciais de verão.', 'ferias_judiciais', '2026-07-16', '2026-08-31', 'system'),
+  ('2026-ferias-judiciais-verao', 'Férias judiciais — Verão', 'Férias judiciais de verão.', 'ferias_judiciais', '2026-07-15', '2026-08-31', 'system'),
   ('2026-ferias-judiciais-natal', 'Férias judiciais — Natal', 'Férias judiciais de Natal.', 'ferias_judiciais', '2026-12-22', '2026-12-31', 'system'),
   ('2026-feriado-ano-novo', 'Ano Novo', 'Feriado nacional.', 'feriado_nacional', '2026-01-01', NULL, 'system'),
   ('2026-feriado-sexta-feira-santa', 'Sexta-Feira Santa', 'Feriado nacional.', 'feriado_nacional', '2026-04-03', NULL, 'system'),

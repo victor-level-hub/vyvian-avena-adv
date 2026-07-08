@@ -165,7 +165,7 @@ const GLASS_CSS = `
 .gcal-modal label span { display: block; font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(244,239,230,0.6); margin-bottom: 0.3rem; }
 .gcal-modal input, .gcal-modal select, .gcal-modal textarea {
   width: 100%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16);
-  border-radius: 9px; color: #f4efe6; padding: 0.5rem 0.7rem; font-size: 0.88rem; font-family: inherit;
+  border-radius: 9px; color: #f4efe6; padding: 0.5rem 0.7rem; font-size: 0.88rem; font-family: 'Arial Unicode MS', Arial, 'Helvetica Neue', sans-serif;
 }
 .gcal-modal input:focus, .gcal-modal select:focus, .gcal-modal textarea:focus { outline: none; border-color: rgba(213,177,124,0.6); }
 .gcal-modal select option { background: #12302a; color: #f4efe6; }

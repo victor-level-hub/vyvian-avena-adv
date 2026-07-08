@@ -674,7 +674,7 @@ export default function NewClient() {
               onChange={update('processSummary')}
               placeholder="Arraste documentos do caso (e-mails, participações de sinistro, contratos…) na caixa de IA acima — o resumo é criado automaticamente e melhorado a cada documento novo. Também pode escrever ou editar à mão."
               disabled={submitting}
-              style={{ resize: 'vertical', width: '100%', fontFamily: 'inherit', fontSize: '0.9rem', lineHeight: 1.55, padding: '0.6rem 0.75rem' }}
+              style={{ resize: 'vertical', width: '100%', fontFamily: "'Arial Unicode MS', Arial, 'Helvetica Neue', sans-serif", fontSize: '0.9rem', lineHeight: 1.55, padding: '0.6rem 0.75rem' }}
             />
             <div className="adm-field-helper">Gerado pela IA a partir dos documentos · sempre editável · reveja antes de guardar</div>
           </div>

@@ -1043,7 +1043,7 @@ export default function ClientDetail() {
                 onChange={(e) => setInstructions(e.target.value)}
                 placeholder="Ex.: Enviar passaporte, comprovativo de morada e declaração da Segurança Social."
                 disabled={tokenBusy}
-                style={{ width: '100%', fontFamily: 'inherit', fontSize: '0.9rem', padding: '0.5rem' }}
+                style={{ width: '100%', fontFamily: "'Arial Unicode MS', Arial, 'Helvetica Neue', sans-serif", fontSize: '0.9rem', padding: '0.5rem' }}
               />
             </div>
             <button className="adm-btn adm-btn-gold" onClick={handleCreateToken} disabled={tokenBusy}>
@@ -1170,7 +1170,7 @@ export default function ClientDetail() {
                     value={procOverrides.poderes || ''}
                     onChange={(e) => editPoderes(e.target.value)}
                     disabled={procBusy}
-                    style={{ width: '100%', fontFamily: 'inherit', fontSize: '0.9rem', padding: '0.6rem' }}
+                    style={{ width: '100%', fontFamily: "'Arial Unicode MS', Arial, 'Helvetica Neue', sans-serif", fontSize: '0.9rem', padding: '0.6rem' }}
                   />
                 </div>
               )}

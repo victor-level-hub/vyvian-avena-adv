@@ -785,3 +785,9 @@
   font-size: 0.85rem;
 }
 
+
+
+/* Fonte dos formulários — Arial Unicode MS (pedido do Victor, 2026-07-08) */
+input, select, textarea, button {
+  font-family: 'Arial Unicode MS', Arial, 'Helvetica Neue', sans-serif;
+}

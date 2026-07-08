@@ -1,6 +1,7 @@
 // src/admin/pages/ClientDetail.jsx
 import React, { useState, useEffect } from 'react';
 import ContactsEditor, { parseContacts, cleanContacts } from '../ContactsEditor';
+import AddressEditor, { EMPTY_ADDRESS, composeAddress, hasAddress, parseAddressParts } from '../AddressEditor';
 import { useParams, Link } from 'react-router-dom';
 import { clients as clientsApi, installments as installmentsApi, recibos as recibosApi, procuracoes as procApi, planos as planosApi, uploadTokens as utApi, clientDocs as docsApi } from '../apiClient';
 
@@ -82,7 +83,7 @@ export default function ClientDetail() {
     identification: 'NIF/NIPC', address: 'morada/sede', nationality: 'nacionalidade',
     marital_status: 'estado civil', birth_date: 'nascimento', birth_place: 'naturalidade',
     doc_type: 'tipo de documento', doc_number: 'nº documento', doc_validity: 'validade',
-    niss: 'NISS', filiation: 'filiação', duns: 'DUNS', rep_name: 'representante',
+    niss: 'NISS', filiation: 'filiação', father_name: 'pai', mother_name: 'mãe', duns: 'DUNS', rep_name: 'responsável', rep_nif: 'NIF do responsável', rep_nationality: 'nacionalidade do responsável', address_parts: 'morada', rep_address_parts: 'morada do responsável', rep_address: 'morada do responsável',
     rep_role: 'cargo', person_type: 'tipo de cliente', emails: 'e-mail', phones: 'telefone',
     process_summary: 'resumo do processo',
   };
@@ -123,10 +124,24 @@ export default function ClientDetail() {
       fillIfEmpty('doc_number', f.doc_number);
       fillIfEmpty('doc_validity', f.doc_validity);
       fillIfEmpty('niss', f.niss);
-      fillIfEmpty('filiation', f.filiation);
+      fillIfEmpty('father_name', f.father_name);
+      fillIfEmpty('mother_name', f.mother_name);
+      if ((f.father_name || f.mother_name) && !client.filiation) upd.filiation = [f.father_name, f.mother_name].filter(Boolean).join(' e ');
       fillIfEmpty('duns', f.duns);
       fillIfEmpty('rep_name', f.rep_name);
       fillIfEmpty('rep_role', f.rep_role);
+      fillIfEmpty('rep_nif', f.rep_nif);
+      fillIfEmpty('rep_nationality', f.rep_nationality);
+      if (f.address_parts && !client.address_parts) {
+        const partsClean = Object.fromEntries(Object.entries(f.address_parts).filter(([, v]) => v != null && v !== ''));
+        upd.address_parts = JSON.stringify({ ...EMPTY_ADDRESS, country: client.country || 'PT', ...partsClean });
+        if (!client.address) upd.address = composeAddress({ ...EMPTY_ADDRESS, ...partsClean });
+      }
+      if (f.rep_address_parts && !client.rep_address_parts) {
+        const rpClean = Object.fromEntries(Object.entries(f.rep_address_parts).filter(([, v]) => v != null && v !== ''));
+        upd.rep_address_parts = JSON.stringify({ ...EMPTY_ADDRESS, country: client.country || 'PT', ...rpClean });
+        upd.rep_address = composeAddress({ ...EMPTY_ADDRESS, ...rpClean });
+      }
       if (f.person_type === 'coletiva' && client.person_type !== 'coletiva') upd.person_type = 'coletiva';
 
       // contactos: acrescentar se ainda não existirem
@@ -305,7 +320,13 @@ export default function ClientDetail() {
       person_type: client.person_type || 'singular',
       rep_name: client.rep_name || '',
       rep_role: client.rep_role || '',
+      rep_nif: client.rep_nif || '',
+      rep_nationality: client.rep_nationality || '',
       duns: client.duns || '',
+      addrParts: parseAddressParts(client.address_parts, client.address, client.country),
+      repAddrParts: parseAddressParts(client.rep_address_parts, client.rep_address, client.country),
+      father_name: client.father_name || '',
+      mother_name: client.mother_name || '',
       process_summary: client.process_summary || '',
       practice_area: client.practice_area || '',
       address: client.address || '',
@@ -334,7 +355,18 @@ export default function ClientDetail() {
     setEditBusy(true);
     setEditError(null);
     try {
-      const payload = { ...editForm, emails: JSON.stringify(emailList), phones: JSON.stringify(phoneList), email: emailList[0]?.value || '', phone: phoneList[0]?.value || '' };
+      const payload = {
+        ...editForm,
+        emails: JSON.stringify(emailList), phones: JSON.stringify(phoneList),
+        email: emailList[0]?.value || '', phone: phoneList[0]?.value || '',
+        address: hasAddress(editForm.addrParts) ? composeAddress(editForm.addrParts) : (editForm.address || null),
+        address_parts: hasAddress(editForm.addrParts) ? JSON.stringify(editForm.addrParts) : null,
+        rep_address: editForm.person_type === 'coletiva' && hasAddress(editForm.repAddrParts) ? composeAddress(editForm.repAddrParts) : null,
+        rep_address_parts: editForm.person_type === 'coletiva' && hasAddress(editForm.repAddrParts) ? JSON.stringify(editForm.repAddrParts) : null,
+        filiation: [editForm.father_name, editForm.mother_name].filter(Boolean).join(' e ') || editForm.filiation || null,
+      };
+      delete payload.addrParts;
+      delete payload.repAddrParts;
       await clientsApi.update(client.id, payload);
       setEditing(false);
       await loadData();
@@ -483,17 +515,6 @@ export default function ClientDetail() {
           <div style={{ background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 640, padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
             <h2 style={{ margin: '0 0 1.25rem', fontFamily: 'var(--serif)' }}>Editar cliente</h2>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.9rem' }}>
-              <label className="adm-field" style={{ gridColumn: '1 / -1' }}>
-                <span>Nome *</span>
-                <input type="text" value={editForm.name} onChange={editField('name')} disabled={editBusy} />
-              </label>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <ContactsEditor kind="email" items={editForm.emails} onChange={(v) => setEditForm((f) => ({ ...f, emails: v }))} disabled={editBusy} />
-              </div>
-              <div style={{ gridColumn: '1 / -1' }}>
-                <ContactsEditor kind="phone" items={editForm.phones} onChange={(v) => setEditForm((f) => ({ ...f, phones: v }))} disabled={editBusy} />
-              </div>
-              <label className="adm-field"><span>{editForm.person_type === 'coletiva' ? (client.country === 'BR' ? 'CNPJ' : 'NIPC') : (client.country === 'BR' ? 'CPF' : 'NIF')}</span><input type="text" value={editForm.identification} onChange={editField('identification')} disabled={editBusy} /></label>
               <label className="adm-field">
                 <span>Tipo de cliente</span>
                 <select value={editForm.person_type} onChange={editField('person_type')} disabled={editBusy}>
@@ -501,13 +522,6 @@ export default function ClientDetail() {
                   <option value="coletiva">Pessoa coletiva (empresa)</option>
                 </select>
               </label>
-              {editForm.person_type === 'coletiva' && (
-                <>
-                  <label className="adm-field"><span>DUNS</span><input type="text" value={editForm.duns} onChange={editField('duns')} disabled={editBusy} /></label>
-                  <label className="adm-field"><span>Representante legal</span><input type="text" value={editForm.rep_name} onChange={editField('rep_name')} disabled={editBusy} /></label>
-                  <label className="adm-field"><span>Cargo do representante</span><input type="text" value={editForm.rep_role} onChange={editField('rep_role')} disabled={editBusy} /></label>
-                </>
-              )}
               <label className="adm-field">
                 <span>Área de atuação</span>
                 <select value={editForm.practice_area} onChange={editField('practice_area')} disabled={editBusy}>
@@ -519,9 +533,61 @@ export default function ClientDetail() {
                   <option value="Nacionalidade">Nacionalidade</option>
                 </select>
               </label>
-              <label className="adm-field" style={{ gridColumn: '1 / -1' }}><span>Morada</span><input type="text" value={editForm.address} onChange={editField('address')} disabled={editBusy} /></label>
-              <label className="adm-field"><span>Nacionalidade</span><input type="text" value={editForm.nationality} onChange={editField('nationality')} disabled={editBusy} /></label>
-              <label className="adm-field"><span>Estado civil</span><input type="text" value={editForm.marital_status} onChange={editField('marital_status')} disabled={editBusy} /></label>
+
+              <div style={{ gridColumn: '1 / -1', fontWeight: 600, color: 'var(--forest, #12302a)', borderBottom: '1px solid rgba(0,0,0,0.1)', paddingBottom: '0.3rem', marginTop: '0.3rem' }}>
+                {editForm.person_type === 'coletiva' ? 'Dados da empresa' : 'Dados pessoais'}
+              </div>
+              <label className="adm-field" style={{ gridColumn: '1 / -1' }}>
+                <span>{editForm.person_type === 'coletiva' ? 'Denominação da empresa *' : 'Nome *'}</span>
+                <input type="text" value={editForm.name} onChange={editField('name')} disabled={editBusy} />
+              </label>
+              <label className="adm-field"><span>{editForm.person_type === 'coletiva' ? (client.country === 'BR' ? 'CNPJ' : 'NIFC') : (client.country === 'BR' ? 'CPF' : 'NIF')}</span><input type="text" value={editForm.identification} onChange={editField('identification')} disabled={editBusy} /></label>
+              {editForm.person_type === 'coletiva' ? (
+                <label className="adm-field"><span>DUNS</span><input type="text" value={editForm.duns} onChange={editField('duns')} disabled={editBusy} /></label>
+              ) : (
+                <label className="adm-field"><span>Nacionalidade</span><input type="text" value={editForm.nationality} onChange={editField('nationality')} disabled={editBusy} /></label>
+              )}
+              {editForm.person_type === 'coletiva' && (
+                <label className="adm-field"><span>Nacionalidade da empresa</span><input type="text" value={editForm.nationality} onChange={editField('nationality')} disabled={editBusy} /></label>
+              )}
+              <div style={{ gridColumn: '1 / -1' }}>
+                <ContactsEditor kind="email" items={editForm.emails} onChange={(v) => setEditForm((f) => ({ ...f, emails: v }))} disabled={editBusy} />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <ContactsEditor kind="phone" items={editForm.phones} onChange={(v) => setEditForm((f) => ({ ...f, phones: v }))} disabled={editBusy} />
+              </div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <AddressEditor
+                  label={editForm.person_type === 'coletiva' ? 'Sede da empresa' : 'Morada'}
+                  value={editForm.addrParts}
+                  onChange={(v) => setEditForm((f) => ({ ...f, addrParts: v }))}
+                  disabled={editBusy}
+                />
+              </div>
+
+              {editForm.person_type === 'coletiva' && (
+                <div style={{ gridColumn: '1 / -1', fontWeight: 600, color: 'var(--forest, #12302a)', borderBottom: '1px solid rgba(0,0,0,0.1)', paddingBottom: '0.3rem', marginTop: '0.3rem' }}>
+                  Dados do responsável
+                </div>
+              )}
+              {editForm.person_type === 'coletiva' && (
+                <>
+                  <label className="adm-field"><span>Nome do responsável</span><input type="text" value={editForm.rep_name} onChange={editField('rep_name')} disabled={editBusy} /></label>
+                  <label className="adm-field"><span>Cargo</span><input type="text" value={editForm.rep_role} onChange={editField('rep_role')} disabled={editBusy} /></label>
+                  <label className="adm-field"><span>{client.country === 'BR' ? 'CPF do responsável' : 'NIF do responsável'}</span><input type="text" value={editForm.rep_nif} onChange={editField('rep_nif')} disabled={editBusy} /></label>
+                  <label className="adm-field"><span>Nacionalidade do responsável</span><input type="text" value={editForm.rep_nationality} onChange={editField('rep_nationality')} disabled={editBusy} /></label>
+                </>
+              )}
+              <label className="adm-field"><span>Estado civil</span>
+                <select value={editForm.marital_status} onChange={editField('marital_status')} disabled={editBusy}>
+                  <option value="">—</option>
+                  <option value="solteiro(a)">Solteiro(a)</option>
+                  <option value="casado(a)">Casado(a)</option>
+                  <option value="divorciado(a)">Divorciado(a)</option>
+                  <option value="viúvo(a)">Viúvo(a)</option>
+                  <option value="união estável">União estável / convivente</option>
+                </select>
+              </label>
               <label className="adm-field"><span>Data de nascimento</span><input type="date" value={editForm.birth_date} onChange={editField('birth_date')} disabled={editBusy} /></label>
               <label className="adm-field"><span>Naturalidade</span><input type="text" value={editForm.birth_place} onChange={editField('birth_place')} disabled={editBusy} /></label>
               <label className="adm-field"><span>Tipo de documento</span><input type="text" value={editForm.doc_type} onChange={editField('doc_type')} disabled={editBusy} /></label>
@@ -530,7 +596,19 @@ export default function ClientDetail() {
               {client.country === 'BR'
                 ? <label className="adm-field"><span>RG</span><input type="text" value={editForm.rg} onChange={editField('rg')} disabled={editBusy} /></label>
                 : <label className="adm-field"><span>NISS</span><input type="text" value={editForm.niss} onChange={editField('niss')} disabled={editBusy} /></label>}
-              <label className="adm-field" style={{ gridColumn: '1 / -1' }}><span>Filiação</span><input type="text" value={editForm.filiation} onChange={editField('filiation')} disabled={editBusy} /></label>
+              <label className="adm-field"><span>Pai</span><input type="text" value={editForm.father_name} onChange={editField('father_name')} disabled={editBusy} placeholder="Nome do pai" /></label>
+              <label className="adm-field"><span>Mãe</span><input type="text" value={editForm.mother_name} onChange={editField('mother_name')} disabled={editBusy} placeholder="Nome da mãe" /></label>
+              {editForm.person_type === 'coletiva' && (
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <AddressEditor
+                    label="Morada do responsável"
+                    value={editForm.repAddrParts}
+                    onChange={(v) => setEditForm((f) => ({ ...f, repAddrParts: v }))}
+                    disabled={editBusy}
+                  />
+                </div>
+              )}
+
               <label className="adm-field" style={{ gridColumn: '1 / -1' }}>
                 <span>Estado</span>
                 <select value={editForm.status} onChange={editField('status')} disabled={editBusy}>
@@ -543,7 +621,7 @@ export default function ClientDetail() {
                 <textarea rows={6} value={editForm.process_summary} onChange={editField('process_summary')} disabled={editBusy} placeholder="Resumo gerado pela IA no cadastro — editável" />
               </label>
               <label className="adm-field" style={{ gridColumn: '1 / -1' }}>
-                <span>Notas privadas</span>
+                <span>Notas</span>
                 <textarea rows={3} value={editForm.notes} onChange={editField('notes')} disabled={editBusy} />
               </label>
             </div>
@@ -626,7 +704,7 @@ export default function ClientDetail() {
           { id: 'comms', label: 'Comunicações' },
           { id: 'docs', label: 'Documentos' },
           { id: 'procuracoes', label: 'Procurações' },
-          { id: 'notes', label: 'Notas privadas' },
+          { id: 'notes', label: 'Notas' },
         ].map((t) => (
           <button
             key={t.id}
@@ -958,7 +1036,7 @@ export default function ClientDetail() {
 
       {activeTab === 'notes' && (
         <div className="adm-card">
-          <div className="adm-card-title">Notas privadas</div>
+          <div className="adm-card-title">Notas</div>
           <p style={{ fontStyle: client.notes ? 'normal' : 'italic', color: client.notes ? 'var(--ink)' : 'var(--muted)' }}>
             {client.notes || 'Sem notas registadas para este cliente.'}
           </p>

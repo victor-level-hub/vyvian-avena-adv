@@ -3,7 +3,7 @@
 // Labels: predefinidas + personalizadas (persistidas em localStorage) + "+ Nova label…".
 import React, { useState } from 'react';
 
-const DEFAULT_LABELS = ['Pessoal', 'Empresa', 'Sócio-gerente', 'Financeiro', 'Trabalho', 'Outro'];
+const DEFAULT_LABELS = ['Pessoal', 'Empresa', 'Responsável', 'Sócio-gerente', 'Financeiro', 'Trabalho', 'Outro'];
 const LS_KEY = 'vyvian_contact_labels';
 
 function loadCustomLabels() {

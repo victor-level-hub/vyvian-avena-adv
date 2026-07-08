@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clients as clientsApi, installments as installmentsApi, notifications as notifApi } from '../apiClient';
 import ContactsEditor, { cleanContacts } from '../ContactsEditor';
+import AddressEditor, { EMPTY_ADDRESS, composeAddress, hasAddress } from '../AddressEditor';
 
 function makeId(name) {
   return name
@@ -38,9 +39,15 @@ export default function NewClient() {
     phones: [{ label: 'Pessoal', value: '' }],
     country: 'PT',
     address: '',
+    addrParts: { ...EMPTY_ADDRESS },
     duns: '',
     repName: '',
     repRole: '',
+    repNif: '',
+    repNationality: '',
+    repAddrParts: { ...EMPTY_ADDRESS },
+    father: '',
+    mother: '',
     nationality: '',
     maritalStatus: '',
     rg: '',
@@ -66,6 +73,18 @@ export default function NewClient() {
   const update = (key) => (e) => {
     setForm({ ...form, [key]: e.target.value });
     if (invalid[key]) setInvalid((inv) => ({ ...inv, [key]: false }));
+  };
+
+  // mudar o tipo de cliente ajusta as labels default dos contactos ainda vazios
+  const updatePersonType = (e) => {
+    const pt = e.target.value;
+    const relabel = (list, lbl) => list.every((c) => !c.value) ? list.map((c, i) => ({ ...c, label: i === 0 ? lbl : c.label })) : list;
+    setForm((f) => ({
+      ...f,
+      personType: pt,
+      emails: relabel(f.emails, pt === 'coletiva' ? 'Empresa' : 'Pessoal'),
+      phones: relabel(f.phones, pt === 'coletiva' ? 'Empresa' : 'Pessoal'),
+    }));
   };
 
   // estilo de campo obrigatório em falta
@@ -127,8 +146,20 @@ export default function NewClient() {
       set('duns', f.duns);
       set('repName', f.rep_name);
       set('repRole', f.rep_role);
-      set('address', f.birth_place && !f.address ? '' : f.address); // não mexer se não veio
-      if (f.address) merge.address = String(f.address);
+      set('repNif', f.rep_nif);
+      set('repNationality', f.rep_nationality);
+      set('father', f.father_name);
+      set('mother', f.mother_name);
+      // moradas estruturadas (só preenche se ainda vazia)
+      const cleanParts = (o) => Object.fromEntries(Object.entries(o || {}).filter(([, v]) => v != null && v !== ''));
+      if (f.address_parts && !hasAddress(merge.addrParts)) {
+        merge.addrParts = { ...EMPTY_ADDRESS, country: merge.country || 'PT', ...cleanParts(f.address_parts) };
+      } else if (f.address && !hasAddress(merge.addrParts)) {
+        merge.addrParts = { ...EMPTY_ADDRESS, country: merge.country || 'PT', via_type: 'Outro', via_name: String(f.address) };
+      }
+      if (f.rep_address_parts && !hasAddress(merge.repAddrParts)) {
+        merge.repAddrParts = { ...EMPTY_ADDRESS, country: merge.country || 'PT', ...cleanParts(f.rep_address_parts) };
+      }
       set('nationality', f.nationality);
       set('maritalStatus', f.marital_status);
       set('birthDate', f.birth_date);
@@ -137,7 +168,6 @@ export default function NewClient() {
       set('docNumber', f.doc_number);
       set('docValidity', f.doc_validity);
       set('niss', f.niss);
-      set('filiation', f.filiation);
       if (f.country && (f.country === 'PT' || f.country === 'BR')) merge.country = f.country;
       // resumo do processo: a IA já devolve a versão fundida com o resumo anterior
       const summaryUpdated = !!(f.process_summary && f.process_summary !== form.processSummary);
@@ -227,7 +257,14 @@ export default function NewClient() {
         duns: isColetiva ? (form.duns || null) : null,
         rep_name: isColetiva ? (form.repName || null) : null,
         rep_role: isColetiva ? (form.repRole || null) : null,
-        address: form.address || null,
+        rep_nif: isColetiva ? (form.repNif || null) : null,
+        rep_nationality: isColetiva ? (form.repNationality || null) : null,
+        rep_address: isColetiva && hasAddress(form.repAddrParts) ? composeAddress(form.repAddrParts) : null,
+        rep_address_parts: isColetiva && hasAddress(form.repAddrParts) ? JSON.stringify(form.repAddrParts) : null,
+        address: hasAddress(form.addrParts) ? composeAddress(form.addrParts) : (form.address || null),
+        address_parts: hasAddress(form.addrParts) ? JSON.stringify(form.addrParts) : null,
+        father_name: form.father || null,
+        mother_name: form.mother || null,
         nationality: form.nationality || null,
         marital_status: form.maritalStatus || null,
         rg: form.country === 'BR' ? (form.rg || null) : null,
@@ -237,7 +274,7 @@ export default function NewClient() {
         doc_number: form.docNumber || null,
         doc_validity: form.docValidity || null,
         niss: form.niss || null,
-        filiation: form.filiation || null,
+        filiation: [form.father, form.mother].filter(Boolean).join(' e ') || form.filiation || null,
         practice_area: form.area,
         process_summary: form.processSummary || null,
         notes: form.process ? `Processo: ${form.process}` : '',
@@ -406,41 +443,14 @@ export default function NewClient() {
         </div>
 
         {tab === 'cliente' && (<>
-        <div className="adm-form-section-title">{form.personType === 'coletiva' ? 'Dados da empresa' : 'Dados pessoais'}</div>
         <div className="adm-form-grid">
           <div className="adm-field">
             <label>Tipo de cliente *</label>
-            <select value={form.personType} onChange={update('personType')} disabled={submitting}>
+            <select value={form.personType} onChange={updatePersonType} disabled={submitting}>
               <option value="singular">Pessoa singular</option>
               <option value="coletiva">Pessoa coletiva (empresa)</option>
             </select>
           </div>
-          <div className="adm-field">
-            <label style={invLabel('name')}>{form.personType === 'coletiva' ? 'Denominação da empresa *' : 'Nome completo *'}</label>
-            <input id="f-name" type="text" value={form.name} onChange={update('name')} disabled={submitting} style={invStyle('name')} />
-          </div>
-          <div className="adm-field">
-            <label>{form.personType === 'coletiva' ? (form.country === 'BR' ? 'CNPJ' : 'NIPC') : (form.country === 'BR' ? 'CPF' : 'NIF')}</label>
-            <input type="text" value={form.taxId} onChange={update('taxId')} placeholder={form.country === 'BR' ? '12.345.678/0001-00' : '123 456 789'} disabled={submitting} />
-          </div>
-          {form.personType === 'coletiva' && (
-            <>
-              <div className="adm-field">
-                <label>DUNS (opcional)</label>
-                <input type="text" value={form.duns} onChange={update('duns')} placeholder="449683786" disabled={submitting} />
-              </div>
-              <div className="adm-field">
-                <label>Representante legal</label>
-                <input type="text" value={form.repName} onChange={update('repName')} placeholder="Nome completo do representante" disabled={submitting} />
-              </div>
-              <div className="adm-field">
-                <label>Cargo do representante</label>
-                <input type="text" value={form.repRole} onChange={update('repRole')} placeholder="sócio-gerente, administrador…" disabled={submitting} />
-              </div>
-            </>
-          )}
-          <ContactsEditor kind="email" items={form.emails} onChange={(v) => { setForm({ ...form, emails: v }); if (invalid.email) setInvalid((i) => ({ ...i, email: false })); }} disabled={submitting} requiredFirst invalid={invalid.email} inputId="f-email" />
-          <ContactsEditor kind="phone" items={form.phones} onChange={(v) => { setForm({ ...form, phones: v }); if (invalid.phone) setInvalid((i) => ({ ...i, phone: false })); }} disabled={submitting} requiredFirst invalid={invalid.phone} inputId="f-phone" />
           <div className="adm-field">
             <label>Jurisdição</label>
             <select value={form.country} onChange={update('country')} disabled={submitting}>
@@ -448,16 +458,30 @@ export default function NewClient() {
               <option value="BR">Brasil · R$ BRL</option>
             </select>
           </div>
+        </div>
+
+        <div className="adm-form-section-title">{form.personType === 'coletiva' ? 'Dados da empresa' : 'Dados pessoais'}</div>
+        <div className="adm-form-grid">
           <div className="adm-field">
-            <label>{form.personType === 'coletiva' ? 'Sede' : 'Morada / Endereço'}</label>
-            <input type="text" value={form.address} onChange={update('address')} placeholder={form.country === 'BR' ? 'Rua, nº, bairro, cidade - UF' : 'Rua, nº, código postal, localidade'} disabled={submitting} />
+            <label style={invLabel('name')}>{form.personType === 'coletiva' ? 'Denominação da empresa *' : 'Nome completo *'}</label>
+            <input id="f-name" type="text" value={form.name} onChange={update('name')} disabled={submitting} style={invStyle('name')} />
+          </div>
+          <div className="adm-field">
+            <label>{form.personType === 'coletiva' ? (form.country === 'BR' ? 'CNPJ' : 'NIFC') : (form.country === 'BR' ? 'CPF' : 'NIF')}</label>
+            <input type="text" value={form.taxId} onChange={update('taxId')} placeholder={form.country === 'BR' ? '12.345.678/0001-00' : '123 456 789'} disabled={submitting} />
+          </div>
+          {form.personType === 'coletiva' && (
+            <div className="adm-field">
+              <label>DUNS (opcional)</label>
+              <input type="text" value={form.duns} onChange={update('duns')} placeholder="449683786" disabled={submitting} />
+            </div>
+          )}
+          <div className="adm-field">
+            <label>{form.personType === 'coletiva' ? 'Nacionalidade da empresa' : 'Nacionalidade'}</label>
+            <input type="text" value={form.nationality} onChange={update('nationality')} placeholder={form.country === 'BR' ? 'brasileira' : 'portuguesa'} disabled={submitting} />
           </div>
           {form.personType === 'singular' && (
             <>
-              <div className="adm-field">
-                <label>Nacionalidade</label>
-                <input type="text" value={form.nationality} onChange={update('nationality')} placeholder={form.country === 'BR' ? 'brasileiro(a)' : 'português(a)'} disabled={submitting} />
-              </div>
               <div className="adm-field">
                 <label>Estado civil</label>
                 <select value={form.maritalStatus} onChange={update('maritalStatus')} disabled={submitting}>
@@ -479,45 +503,150 @@ export default function NewClient() {
               </div>
             </>
           )}
+          <ContactsEditor kind="email" items={form.emails} onChange={(v) => { setForm({ ...form, emails: v }); if (invalid.email) setInvalid((i) => ({ ...i, email: false })); }} disabled={submitting} requiredFirst invalid={invalid.email} inputId="f-email" />
+          <ContactsEditor kind="phone" items={form.phones} onChange={(v) => { setForm({ ...form, phones: v }); if (invalid.phone) setInvalid((i) => ({ ...i, phone: false })); }} disabled={submitting} requiredFirst invalid={invalid.phone} inputId="f-phone" />
+          {form.personType === 'coletiva' && (
+            <div className="adm-field adm-full" style={{ marginTop: '-0.5rem' }}>
+              <div className="adm-field-helper">Use as labels para distinguir os contactos da empresa e do responsável.</div>
+            </div>
+          )}
+          <AddressEditor
+            label={form.personType === 'coletiva' ? 'Sede da empresa' : 'Morada / Endereço'}
+            value={form.addrParts}
+            onChange={(v) => setForm({ ...form, addrParts: v })}
+            disabled={submitting}
+          />
 
-          {/* Documento de identificação — necessário para procurações */}
-          <div className="adm-field">
-            <label>{form.personType === 'coletiva' ? 'Tipo de documento (representante)' : 'Tipo de documento'}</label>
-            <select value={form.docType} onChange={update('docType')} disabled={submitting}>
-              <option value="">—</option>
-              <option value="Título de Residência">Título de Residência</option>
-              <option value="Cartão de Cidadão">Cartão de Cidadão</option>
-              <option value="Passaporte">Passaporte</option>
-              <option value="BI/RG">BI / RG</option>
-            </select>
-          </div>
-          <div className="adm-field">
-            <label>{form.personType === 'coletiva' ? 'Nº do documento (representante)' : 'Nº do documento'}</label>
-            <input type="text" value={form.docNumber} onChange={update('docNumber')} placeholder="Ex.: X6D997798" disabled={submitting} />
-          </div>
-          <div className="adm-field">
-            <label>Validade do documento</label>
-            <input type="date" value={form.docValidity} onChange={update('docValidity')} disabled={submitting} />
-          </div>
-          {form.personType === 'singular' && form.country === 'BR' && (
-            <div className="adm-field">
-              <label>RG</label>
-              <input type="text" value={form.rg} onChange={update('rg')} placeholder="12.345.678-9" disabled={submitting} />
-            </div>
-          )}
-          {form.personType === 'singular' && form.country === 'PT' && (
-            <div className="adm-field">
-              <label>NISS (opcional)</label>
-              <input type="text" value={form.niss} onChange={update('niss')} placeholder="120 772 806 32" disabled={submitting} />
-            </div>
-          )}
           {form.personType === 'singular' && (
-            <div className="adm-field">
-              <label>Filiação (opcional)</label>
-              <input type="text" value={form.filiation} onChange={update('filiation')} placeholder="Nome do pai e da mãe" disabled={submitting} />
-            </div>
+            <>
+              {/* Documento de identificação — necessário para procurações */}
+              <div className="adm-field">
+                <label>Tipo de documento</label>
+                <select value={form.docType} onChange={update('docType')} disabled={submitting}>
+                  <option value="">—</option>
+                  <option value="Título de Residência">Título de Residência</option>
+                  <option value="Cartão de Cidadão">Cartão de Cidadão</option>
+                  <option value="Passaporte">Passaporte</option>
+                  <option value="BI/RG">BI / RG</option>
+                </select>
+              </div>
+              <div className="adm-field">
+                <label>Nº do documento</label>
+                <input type="text" value={form.docNumber} onChange={update('docNumber')} placeholder="Ex.: X6D997798" disabled={submitting} />
+              </div>
+              <div className="adm-field">
+                <label>Validade do documento</label>
+                <input type="date" value={form.docValidity} onChange={update('docValidity')} disabled={submitting} />
+              </div>
+              {form.country === 'BR' && (
+                <div className="adm-field">
+                  <label>RG</label>
+                  <input type="text" value={form.rg} onChange={update('rg')} placeholder="12.345.678-9" disabled={submitting} />
+                </div>
+              )}
+              {form.country === 'PT' && (
+                <div className="adm-field">
+                  <label>NISS (opcional)</label>
+                  <input type="text" value={form.niss} onChange={update('niss')} placeholder="120 772 806 32" disabled={submitting} />
+                </div>
+              )}
+              <div className="adm-field">
+                <label>Pai (opcional)</label>
+                <input type="text" value={form.father} onChange={update('father')} placeholder="Nome do pai" disabled={submitting} />
+              </div>
+              <div className="adm-field">
+                <label>Mãe (opcional)</label>
+                <input type="text" value={form.mother} onChange={update('mother')} placeholder="Nome da mãe" disabled={submitting} />
+              </div>
+            </>
           )}
         </div>
+
+        {form.personType === 'coletiva' && (
+          <>
+            <div className="adm-form-section-title" style={{ marginTop: '1.25rem' }}>Dados do responsável</div>
+            <div className="adm-form-grid">
+              <div className="adm-field">
+                <label>Nome do responsável</label>
+                <input type="text" value={form.repName} onChange={update('repName')} placeholder="Nome completo" disabled={submitting} />
+              </div>
+              <div className="adm-field">
+                <label>Cargo</label>
+                <input type="text" value={form.repRole} onChange={update('repRole')} placeholder="sócio-gerente, administrador…" disabled={submitting} />
+              </div>
+              <div className="adm-field">
+                <label>{form.country === 'BR' ? 'CPF do responsável' : 'NIF do responsável'}</label>
+                <input type="text" value={form.repNif} onChange={update('repNif')} placeholder={form.country === 'BR' ? '123.456.789-00' : '123 456 789'} disabled={submitting} />
+              </div>
+              <div className="adm-field">
+                <label>Nacionalidade do responsável</label>
+                <input type="text" value={form.repNationality} onChange={update('repNationality')} placeholder={form.country === 'BR' ? 'brasileiro(a)' : 'português(a)'} disabled={submitting} />
+              </div>
+              <div className="adm-field">
+                <label>Estado civil</label>
+                <select value={form.maritalStatus} onChange={update('maritalStatus')} disabled={submitting}>
+                  <option value="">—</option>
+                  <option value="solteiro(a)">Solteiro(a)</option>
+                  <option value="casado(a)">Casado(a)</option>
+                  <option value="divorciado(a)">Divorciado(a)</option>
+                  <option value="viúvo(a)">Viúvo(a)</option>
+                  <option value="união estável">União estável / convivente</option>
+                </select>
+              </div>
+              <div className="adm-field">
+                <label>Data de nascimento</label>
+                <input type="date" value={form.birthDate} onChange={update('birthDate')} disabled={submitting} />
+              </div>
+              <div className="adm-field">
+                <label>Naturalidade</label>
+                <input type="text" value={form.birthPlace} onChange={update('birthPlace')} placeholder="Cidade, Estado/Distrito, País" disabled={submitting} />
+              </div>
+              <div className="adm-field">
+                <label>Tipo de documento</label>
+                <select value={form.docType} onChange={update('docType')} disabled={submitting}>
+                  <option value="">—</option>
+                  <option value="Título de Residência">Título de Residência</option>
+                  <option value="Cartão de Cidadão">Cartão de Cidadão</option>
+                  <option value="Passaporte">Passaporte</option>
+                  <option value="BI/RG">BI / RG</option>
+                </select>
+              </div>
+              <div className="adm-field">
+                <label>Nº do documento</label>
+                <input type="text" value={form.docNumber} onChange={update('docNumber')} placeholder="Ex.: X6D997798" disabled={submitting} />
+              </div>
+              <div className="adm-field">
+                <label>Validade do documento</label>
+                <input type="date" value={form.docValidity} onChange={update('docValidity')} disabled={submitting} />
+              </div>
+              {form.country === 'PT' ? (
+                <div className="adm-field">
+                  <label>NISS (opcional)</label>
+                  <input type="text" value={form.niss} onChange={update('niss')} placeholder="120 772 806 32" disabled={submitting} />
+                </div>
+              ) : (
+                <div className="adm-field">
+                  <label>RG</label>
+                  <input type="text" value={form.rg} onChange={update('rg')} placeholder="12.345.678-9" disabled={submitting} />
+                </div>
+              )}
+              <div className="adm-field">
+                <label>Pai (opcional)</label>
+                <input type="text" value={form.father} onChange={update('father')} placeholder="Nome do pai" disabled={submitting} />
+              </div>
+              <div className="adm-field">
+                <label>Mãe (opcional)</label>
+                <input type="text" value={form.mother} onChange={update('mother')} placeholder="Nome da mãe" disabled={submitting} />
+              </div>
+              <AddressEditor
+                label="Morada do responsável"
+                value={form.repAddrParts}
+                onChange={(v) => setForm({ ...form, repAddrParts: v })}
+                disabled={submitting}
+              />
+            </div>
+          </>
+        )}
         </>)}
 
         {tab === 'processo' && (<>

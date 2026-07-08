@@ -13,11 +13,15 @@ const MAX_BYTES = 8 * 1024 * 1024; // 8 MB (limite seguro para envio inline ao G
 const SCHEMA = `{
   "person_type": "singular" | "coletiva",
   "name": "string (pessoa singular: nome completo; pessoa coletiva: denominação da EMPRESA)",
-  "identification": "string ou null (singular: NIF/CPF; coletiva: NIPC/CNPJ da empresa)",
-  "address": "string ou null (singular: morada, se visível; coletiva: SEDE da empresa)",
+  "identification": "string ou null (singular: NIF/CPF; coletiva: NIFC/CNPJ da empresa)",
+  "address": "string ou null (morada completa numa linha; coletiva: SEDE da empresa)",
+  "address_parts": "objeto ou null — morada decomposta: { \\"country\\": \\"PT\\"|\\"BR\\", \\"via_type\\": \\"Rua|Avenida|Travessa|…\\", \\"via_name\\": string, \\"number\\": string, \\"complement\\": string ou null, e se PT: \\"freguesia\\", \\"concelho\\", \\"distrito\\", \\"cp\\"; se BR: \\"bairro\\", \\"cidade\\", \\"estado\\", \\"cep\\" }",
   "duns": "string ou null (número DUNS da empresa, se visível)",
-  "rep_name": "string ou null (coletiva: nome completo do representante legal)",
-  "rep_role": "string ou null (coletiva: cargo do representante, ex.: 'sócio-gerente', 'administrador')",
+  "rep_name": "string ou null (coletiva: nome completo do responsável/representante legal)",
+  "rep_role": "string ou null (coletiva: cargo do responsável, ex.: 'sócio-gerente', 'administrador')",
+  "rep_nif": "string ou null (coletiva: NIF/CPF pessoal do responsável, se visível)",
+  "rep_nationality": "string ou null (coletiva: nacionalidade do responsável)",
+  "rep_address_parts": "objeto ou null (coletiva: morada PESSOAL do responsável, mesma estrutura de address_parts — só se distinta da sede)",
   "doc_type": "Título de Residência" | "Cartão de Cidadão" | "Passaporte" | "BI/RG" | null,
   "doc_number": "string ou null (coletiva: documento do REPRESENTANTE)",
   "doc_validity": "YYYY-MM-DD ou null (data de validade)",
@@ -25,7 +29,8 @@ const SCHEMA = `{
   "birth_place": "string ou null (cidade, distrito/estado, país)",
   "nationality": "string ou null (ex.: 'portuguesa', 'brasileira')",
   "niss": "string ou null (Número de Identificação da Segurança Social, se visível)",
-  "filiation": "string ou null (nome do pai e/ou da mãe, se visíveis)",
+  "father_name": "string ou null (nome do pai, se visível)",
+  "mother_name": "string ou null (nome da mãe, se visível)",
   "marital_status": "string ou null",
   "country": "PT" | "BR" | null,
   "email": "string ou null (e-mail do CLIENTE — pessoa ou empresa)",
@@ -45,8 +50,9 @@ ${SCHEMA}
 
 Regras:
 - "person_type": "coletiva" se o cliente/outorgante for uma empresa (Lda, Unipessoal, SA, etc.); caso contrário "singular".
-- Pessoa COLETIVA: "name" = denominação da empresa; "identification" = NIPC/CNPJ; "address" = sede; "duns" se visível; "rep_name"/"rep_role" = representante legal e cargo (ex.: sócio-gerente); "doc_type"/"doc_number"/"doc_validity" e restantes campos pessoais referem-se ao REPRESENTANTE, se visíveis.
-- Pessoa SINGULAR: "rep_name"/"rep_role"/"duns" = null.
+- Pessoa COLETIVA: "name" = denominação da empresa; "identification" = NIFC/CNPJ da empresa; "address"/"address_parts" = SEDE; "duns" se visível; "rep_name"/"rep_role"/"rep_nif"/"rep_nationality" = dados do responsável; "doc_type"/"doc_number"/"doc_validity", "birth_date", "birth_place", "marital_status", "niss", "father_name", "mother_name" referem-se ao RESPONSÁVEL, se visíveis.
+- Pessoa SINGULAR: "rep_name"/"rep_role"/"rep_nif"/"rep_nationality"/"rep_address_parts"/"duns" = null.
+- "address_parts": decompõe a morada nos componentes; via_type é só o tipo (Rua, Avenida, Travessa…), via_name é o nome sem o tipo. Códigos postais PT no formato "9999-999"; CEP BR "99999-999". Componente não visível => null/omitir.
 - Datas SEMPRE em formato ISO YYYY-MM-DD.
 - Se um campo não estiver visível ou não fizer sentido, devolve null (não inventes).
 - Nome em capitalização natural (não em MAIÚSCULAS gritantes), salvo se for assim no documento.

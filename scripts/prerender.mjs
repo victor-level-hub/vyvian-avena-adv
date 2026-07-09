@@ -14,7 +14,15 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, extname, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import puppeteer from 'puppeteer';
+// O puppeteer pode nao estar disponivel (ex.: CI sem Chrome). Nesse caso o
+// prerender e' saltado e o build continua — o site publica sem HTML estatico.
+let puppeteer;
+try {
+  puppeteer = (await import('puppeteer')).default;
+} catch {
+  console.warn('prerender: puppeteer indisponivel — build continua sem prerender.');
+  process.exit(0);
+}
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIST = join(__dirname, '..', 'dist');
@@ -61,10 +69,23 @@ async function main() {
   const server = serveDist();
   await new Promise((r) => server.listen(PORT, r));
 
-  const browser = await puppeteer.launch({
+  const launchOpts = {
     headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  });
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
+  };
+  // Permite apontar para um Chrome ja instalado (CHROME_PATH / PUPPETEER_EXECUTABLE_PATH).
+  const sysChrome = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROME_PATH;
+  if (sysChrome) launchOpts.executablePath = sysChrome;
+
+  let browser;
+  try {
+    browser = await puppeteer.launch(launchOpts);
+  } catch (err) {
+    console.warn(`prerender: nao foi possivel lancar o Chrome (${err.message.split('\n')[0]}).`);
+    console.warn('prerender: saltado. O build continua e o site publica sem HTML estatico.');
+    server.close();
+    process.exit(0);
+  }
 
   let failures = 0;
 
@@ -109,10 +130,15 @@ async function main() {
   server.close();
 
   if (failures) {
-    console.error(`\nprerender: ${failures} rota(s) falharam`);
-    process.exit(1);
+    // Nao rebentar o deploy: e' preferivel publicar sem prerender do que nao publicar.
+    console.warn(`\nprerender: ${failures} rota(s) falharam; as restantes foram geradas.`);
+  } else {
+    console.log(`\nprerender: ${ROUTES.length} rotas geradas`);
   }
-  console.log(`\nprerender: ${ROUTES.length} rotas geradas`);
 }
 
-main();
+main().catch((err) => {
+  console.warn('prerender: erro inesperado —', err.message);
+  console.warn('prerender: saltado. O build continua.');
+  process.exit(0);
+});

@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && node scripts/prerender.mjs",
+    "build": "vite build && (npx --yes puppeteer browsers install chrome || true) && node scripts/prerender.mjs",
     "preview": "vite preview",
-    "build:nossg": "vite build"
+    "build:nossg": "vite build",
+    "prerender": "node scripts/prerender.mjs"
   },
   "dependencies": {
     "@formspree/react": "^2.5.1",

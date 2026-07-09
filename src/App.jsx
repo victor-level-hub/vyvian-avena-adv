@@ -1,6 +1,8 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { HelmetProvider } from 'react-helmet-async';
 import Layout from './components/Layout';
 import ScrollToTop from './components/ScrollToTop';
+import Seo from './components/Seo';
 import Home from './pages/Home';
 import Sobre from './pages/Sobre';
 import Areas from './pages/Areas';
@@ -10,10 +12,19 @@ import PoliticaCookies from './pages/PoliticaCookies';
 import AdminApp from './admin/AdminApp';
 import UploadPage from './upload/UploadPage';
 
+// Injecta as meta tags correspondentes à rota pública activa.
+function RouteSeo() {
+  const { pathname } = useLocation();
+  const path =
+    pathname !== '/' && pathname.endsWith('/') ? pathname.slice(0, -1) : pathname;
+  return <Seo path={path} />;
+}
+
 function PublicSite() {
   return (
     <>
       <ScrollToTop />
+      <RouteSeo />
       <Layout>
         <Routes>
           <Route path="/" element={<Home />} />
@@ -30,12 +41,14 @@ function PublicSite() {
 
 export default function App() {
   return (
-    <Router>
-      <Routes>
-        <Route path="/admin/*" element={<AdminApp />} />
-        <Route path="/upload/:token" element={<UploadPage />} />
-        <Route path="/*" element={<PublicSite />} />
-      </Routes>
-    </Router>
+    <HelmetProvider>
+      <Router>
+        <Routes>
+          <Route path="/admin/*" element={<AdminApp />} />
+          <Route path="/upload/:token" element={<UploadPage />} />
+          <Route path="/*" element={<PublicSite />} />
+        </Routes>
+      </Router>
+    </HelmetProvider>
   );
 }

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowRight, ChevronDown, MessageCircle } from "lucide-react";
 import ScrollReveal from "../components/ScrollReveal";
+import Seo, { FAQ_JSONLD } from "../components/Seo";
 
 const STEPS = [
   { num: "01", title: "Contacto", desc: "Entre em contacto via formulário, telefone ou WhatsApp para agendar a sua consulta." },
@@ -15,7 +16,7 @@ const FAQS = [
   { q: "A consulta pode ser feita por videochamada?", a: "Sim. Atendemos clientes por videochamada (Zoom, Google Meet ou WhatsApp) sempre que a presença física não seja necessária. Esta modalidade é particularmente útil para quem vive fora das zonas dos nossos escritórios ou em mobilidade internacional. A qualidade do acompanhamento é equivalente à do atendimento presencial." },
   { q: "Que documentos devo levar à primeira consulta?", a: "Sugerimos trazer todos os documentos relacionados com a sua situação: identificação pessoal, contratos, notificações, decisões anteriores, certidões e qualquer correspondência relevante. Em caso de dúvida, traga tudo o que tenha — preferimos analisar mais e descartar do que descobrir, mais tarde, que falta uma peça essencial. Em consulta online, pode partilhar os ficheiros digitalmente antes da reunião." },
   { q: "Em quanto tempo respondem ao primeiro contacto?", a: "Procuramos responder a todos os pedidos em 24 a 48 horas úteis. Caso a sua situação seja urgente, indique-o explicitamente no formulário ou na mensagem que nos enviar — anteciparemos a resposta sempre que possível." },
-  { q: "Atendem clientes em Portugal e no Brasil?", a: "Sim. Mantemos escritórios em Cacilhas (Almada), Santa Maria da Feira e Tijuca (Rio de Janeiro), e a Dra. Vyvian Avena exerce regularmente nos dois países. Esta presença permite-nos acompanhar matérias que envolvam as duas jurisdições — como nacionalidade, reagrupamento familiar, heranças com bens em ambos os territórios e divórcios internacionais — sem ter de recorrer a correspondentes externos." },
+  { q: "Atendem clientes em Portugal e no Brasil?", a: "Sim. Mantemos escritórios em Cacilhas (Almada), Santa Maria da Feira e Barra Olímpica (Rio de Janeiro), e a Dra. Vyvian Avena exerce regularmente nos dois países. Esta presença permite-nos acompanhar matérias que envolvam as duas jurisdições — como nacionalidade, reagrupamento familiar, heranças com bens em ambos os territórios e divórcios internacionais — sem ter de recorrer a correspondentes externos." },
   { q: "Sou brasileiro(a) a viver em Portugal — podem ajudar-me?", a: "Este é um dos perfis de clientes que mais acompanhamos. Conhecemos as especificidades de quem se mudou recentemente, as exigências dos serviços de imigração, o processo de obtenção da nacionalidade portuguesa, e as questões patrimoniais e familiares que muitas vezes mantêm uma ligação ao Brasil. Coordenamos diretamente entre as duas equipas, sem fragmentação." },
   { q: "Sou português(a) com bens ou família no Brasil — atendem este perfil?", a: "Sim. Acompanhamos portugueses e luso-descendentes com necessidades jurídicas no Brasil — heranças, regularização de imóveis, cidadania para descendentes, e disputas familiares com elementos de conexão com o Brasil. A articulação entre os escritórios garante continuidade e poupa o cliente da habitual fragmentação dos processos internacionais." },
   { q: "Lido diretamente com a Dra. Vyvian ou com a equipa?", a: "A Dra. Vyvian conduz pessoalmente as decisões estratégicas, as audiências e as reuniões com o cliente. A equipa de apoio trata do acompanhamento administrativo e do contacto operacional do dia-a-dia. O cliente conhece sempre quem é a sua interlocutora principal e mantém canal directo com a advogada para os momentos que o justifiquem." },
@@ -35,6 +36,7 @@ export default function Apoio() {
 
   return (
     <div>
+      <Seo path="/apoio" jsonLd={FAQ_JSONLD(FAQS)} />
       {/* Hero */}
       <section className="bg-forest pt-32 pb-20 px-6 md:px-12">
         <div className="max-w-5xl mx-auto">

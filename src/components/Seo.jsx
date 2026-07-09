@@ -1,0 +1,84 @@
+import { Helmet } from "react-helmet-async";
+
+const SITE = "https://vyavenaadv.com";
+const OG_IMAGE = `${SITE}/og-image.jpg`;
+const SITE_NAME = "Vyvian Avena Advogada";
+
+/**
+ * Metadados por rota.
+ * title  → 50-60 caracteres (o sufixo da marca é acrescentado quando cabe)
+ * desc   → 150-160 caracteres
+ */
+export const ROUTE_META = {
+  "/": {
+    title: "Vyvian Avena Advogada | Direito de Família, Civil e Comercial",
+    desc: "Advocacia em Portugal e Brasil: Direito de Família, Civil e Comercial. Atendimento humanizado em Cacilhas, Santa Maria da Feira e Barra Olímpica.",
+  },
+  "/sobre": {
+    title: "Sobre a Dra. Vyvian Avena | Advogada em Portugal e Brasil",
+    desc: "Conheça a Dra. Vyvian Avena: experiência em dupla jurisdição Portugal-Brasil, especialização em Direito de Família e Civil, com abordagem humanizada.",
+  },
+  "/areas": {
+    title: "Áreas de Atuação | Família, Civil, Comercial e Nacionalidade",
+    desc: "Direito de Família, Civil, Comercial, Nacionalidade e Cobrança de Dívida. Divórcio, responsabilidades parentais, partilhas, contratos e indemnizações.",
+  },
+  "/apoio": {
+    title: "Apoio ao Cliente | Perguntas Frequentes e Como Funciona",
+    desc: "Como decorre a primeira consulta, que documentos levar, consultas por videochamada e apoio a brasileiros em Portugal. Respostas às dúvidas mais comuns.",
+  },
+  "/contacto": {
+    title: "Contacto | Marcação de Consulta em Portugal e Brasil",
+    desc: "Marque a sua consulta com a Dra. Vyvian Avena. Escritórios em Cacilhas, Santa Maria da Feira e Barra Olímpica. Resposta em 24 a 48 horas úteis.",
+  },
+  "/politica-cookies": {
+    title: "Política de Cookies | Vyvian Avena Advogada",
+    desc: "Informação sobre a utilização de cookies no sítio de Vyvian Avena Advogada e como pode gerir as suas preferências de privacidade.",
+  },
+};
+
+/**
+ * Perguntas frequentes de /apoio, para o rich result FAQPage.
+ * Mantém-se sincronizado com o array FAQS em src/pages/Apoio.jsx
+ */
+export const FAQ_JSONLD = (faqs) => ({
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: faqs.map(({ q, a }) => ({
+    "@type": "Question",
+    name: q,
+    acceptedAnswer: { "@type": "Answer", text: a },
+  })),
+});
+
+export default function Seo({ path, jsonLd }) {
+  const meta = ROUTE_META[path] || ROUTE_META["/"];
+  const canonical = path === "/" ? `${SITE}/` : `${SITE}${path}`;
+
+  return (
+    <Helmet>
+      <title>{meta.title}</title>
+      <meta name="description" content={meta.desc} />
+      <link rel="canonical" href={canonical} />
+
+      <meta property="og:type" content="website" />
+      <meta property="og:site_name" content={SITE_NAME} />
+      <meta property="og:locale" content="pt_PT" />
+      <meta property="og:title" content={meta.title} />
+      <meta property="og:description" content={meta.desc} />
+      <meta property="og:url" content={canonical} />
+      <meta property="og:image" content={OG_IMAGE} />
+      <meta property="og:image:width" content="1200" />
+      <meta property="og:image:height" content="630" />
+      <meta property="og:image:alt" content="Vyvian Avena — Advogada" />
+
+      <meta name="twitter:card" content="summary_large_image" />
+      <meta name="twitter:title" content={meta.title} />
+      <meta name="twitter:description" content={meta.desc} />
+      <meta name="twitter:image" content={OG_IMAGE} />
+
+      {jsonLd && (
+        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
+      )}
+    </Helmet>
+  );
+}

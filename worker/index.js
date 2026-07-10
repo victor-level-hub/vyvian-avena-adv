@@ -127,10 +127,18 @@ export default {
     // === PÁGINA INEXISTENTE: 404 REAL ===
     if (ehPaginaInexistente(path)) {
       const pagina404 = new URL('/404.html', url.origin);
-      const resposta = await env.ASSETS.fetch(new Request(pagina404, request));
-      return new Response(resposta.body, {
+      const resposta = await env.ASSETS.fetch(new Request(pagina404, { method: 'GET' }));
+
+      // Ler o corpo e reemitir com cabeçalhos próprios. Copiar os headers do asset
+      // trazia o content-encoding (gzip/br) do original, mas o corpo era servido
+      // sem essa codificação — o browser falhava a descomprimir e mostrava 0 bytes.
+      const html = await resposta.text();
+      return new Response(html, {
         status: 404,
-        headers: resposta.headers,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Cache-Control': 'no-store',
+        },
       });
     }
 

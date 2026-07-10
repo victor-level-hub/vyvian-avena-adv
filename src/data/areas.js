@@ -23,7 +23,7 @@ export const AREAS = [
       "Adoção e tutela",
       "Violência doméstica",
     ],
-    metaTitle: "Advogada de Direito de Família | Divórcio e Responsabilidades Parentais",
+    metaTitle: "Advogada de Direito de Família | Divórcio e Parentalidade",
     metaDesc:
       "Apoio jurídico em divórcio, responsabilidades parentais, pensão de alimentos e partilhas. Atendimento em Portugal e Brasil, com acompanhamento próximo.",
   },
@@ -57,7 +57,7 @@ export const AREAS = [
       "Direito societário",
       "Resolução de litígios comerciais",
     ],
-    metaTitle: "Advogada de Direito Comercial | Sociedades e Contratos Empresariais",
+    metaTitle: "Advogada de Direito Comercial | Sociedades e Contratos",
     metaDesc:
       "Apoio jurídico na constituição de sociedades, contratos comerciais, direito societário e litígios empresariais, em Portugal e no Brasil.",
   },
@@ -108,7 +108,7 @@ export const AREAS = [
       "Procurações",
       "Registos e averbamentos",
     ],
-    metaTitle: "Advogada de Direito Notarial | Escrituras, Testamentos e Procurações",
+    metaTitle: "Advogada de Direito Notarial | Escrituras e Testamentos",
     metaDesc:
       "Apoio em escrituras públicas, testamentos, procurações, habilitação de herdeiros e registos. Atendimento em Portugal e no Brasil.",
   },

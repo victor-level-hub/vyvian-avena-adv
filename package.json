@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && (npm run build:ssr || true) && (node scripts/prerender.mjs || true) && node scripts/sitemap.mjs",
+    "build": "vite build && (npm run build:ssr || true) && (node scripts/prerender.mjs || true) && node scripts/sitemap.mjs && node scripts/seo-check.mjs",
     "preview": "vite preview",
     "build:nossg": "vite build",
-    "build:ssr": "vite build --ssr src/entry-server.jsx --outDir dist-ssr"
+    "build:ssr": "vite build --ssr src/entry-server.jsx --outDir dist-ssr",
+    "seo:check": "node scripts/seo-check.mjs"
   },
   "dependencies": {
     "@formspree/react": "^2.5.1",

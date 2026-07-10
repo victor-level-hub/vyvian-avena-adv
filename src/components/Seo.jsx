@@ -30,6 +30,10 @@ export const ROUTE_META = {
     title: "Contacto | Marcação de Consulta em Portugal e Brasil",
     desc: "Marque a sua consulta com a Dra. Vyvian Avena. Escritórios em Cacilhas, Santa Maria da Feira e Barra Olímpica. Resposta em 24 a 48 horas úteis.",
   },
+  "/404": {
+    title: "Página não encontrada | Vyvian Avena Advogada",
+    desc: "A página que procura não existe ou foi movida.",
+  },
   "/politica-cookies": {
     title: "Política de Cookies | Vyvian Avena Advogada",
     desc: "Informação sobre a utilização de cookies no sítio de Vyvian Avena Advogada e como pode gerir as suas preferências de privacidade.",
@@ -55,6 +59,8 @@ export const FAQ_JSONLD = (faqs) => ({
  * title/desc permitem rotas dinamicas que nao constam do ROUTE_META (ex.: /areas/{slug}).
  */
 export default function Seo({ path, jsonLd, title, desc }) {
+  // A /404 nao deve ser indexada nem declarar canonical: nao e' uma pagina real.
+  const noindex = path === "/404";
   const fallback = ROUTE_META[path] || ROUTE_META["/"];
   const meta = {
     title: title || fallback.title,
@@ -67,7 +73,12 @@ export default function Seo({ path, jsonLd, title, desc }) {
     <Helmet>
       <title>{meta.title}</title>
       <meta name="description" content={meta.desc} />
-      <link rel="canonical" href={canonical} />
+      {noindex ? (
+        <meta name="robots" content="noindex, follow" />
+      ) : (
+        <meta name="robots" content="index, follow" />
+      )}
+      {!noindex && <link rel="canonical" href={canonical} />}
 
       <meta property="og:type" content="website" />
       <meta property="og:site_name" content={SITE_NAME} />

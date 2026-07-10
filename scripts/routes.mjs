@@ -31,7 +31,7 @@ export async function getAreaSlugs() {
   return JSON.parse(raw);
 }
 
-/** Todas as rotas publicas: estaticas + uma por area de atuacao. */
+/** Todas as rotas publicas indexaveis: estaticas + uma por area de atuacao. */
 export async function getAllRoutes() {
   const slugs = await getAreaSlugs();
   return [
@@ -42,4 +42,13 @@ export async function getAllRoutes() {
       changefreq: 'monthly',
     })),
   ];
+}
+
+/**
+ * Rotas a prerenderizar. Inclui a /404, que tem de existir como HTML estatico para
+ * o Worker a poder servir com codigo 404 — mas nunca entra no sitemap.
+ */
+export async function getPrerenderRoutes() {
+  const rotas = await getAllRoutes();
+  return [...rotas.map((r) => r.path), '/404'];
 }

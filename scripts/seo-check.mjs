@@ -69,6 +69,14 @@ function verificarPagina(rota, html) {
   else if (descs.length > 1) erro(rota, `${descs.length} meta descriptions.`);
   else if (!descs[0].trim()) erro(rota, 'meta description vazia.');
 
+  // --- meta robots unica e nao contraditoria ---
+  // Duas tags robots (uma no index.html, outra do Helmet) davam "index" e "noindex"
+  // na mesma pagina. O Google aplica a mais restritiva, mas depender disso e' fragil.
+  const robots = [...html.matchAll(/name="robots"[^>]*content="([^"]*)"/gi)].map((m) => m[1]);
+  if (robots.length === 0) erro(rota, 'sem meta robots.');
+  else if (robots.length > 1) erro(rota, `${robots.length} meta robots: ${robots.join(' | ')}. Deve haver uma.`);
+  else if (rota !== '/404' && /noindex/i.test(robots[0])) erro(rota, 'meta robots com noindex numa pagina que deve ser indexada.');
+
   // --- Open Graph ---
   for (const prop of ['og:title', 'og:description', 'og:url', 'og:image']) {
     const n = [...html.matchAll(new RegExp(`property="${prop}"`, 'gi'))].length;
@@ -130,6 +138,38 @@ async function main() {
       continue;
     }
     verificarPagina(rota, await readFile(f, 'utf-8'));
+  }
+
+  // --- pagina 404: existe, tem noindex, nao tem canonical, nao esta no sitemap ---
+  const p404 = join(DIST, '404.html');
+  if (!existsSync(p404)) {
+    falhas.push('404.html ausente do dist/. O Worker precisa dela para servir 404 real.');
+  } else {
+    const html404 = await readFile(p404, 'utf-8');
+    const robots404 = [...html404.matchAll(/name="robots"[^>]*content="([^"]*)"/gi)].map((m) => m[1]);
+    if (robots404.length !== 1) falhas.push(`404: ${robots404.length} meta robots, esperada uma.`);
+    else if (!/noindex/i.test(robots404[0])) falhas.push('404: sem noindex. Nao deve ser indexada.');
+    if (/rel="canonical"/i.test(html404)) falhas.push('404: tem canonical. Nao e\' uma pagina real.');
+    if (!/<h1[\s>]/i.test(html404)) falhas.push('404: sem <h1>.');
+  }
+
+  // --- a lista de rotas do Worker acompanha as rotas reais ---
+  const rotasWorker = join(__dirname, '..', 'worker', 'rotas-publicas.js');
+  if (!existsSync(rotasWorker)) {
+    falhas.push('worker/rotas-publicas.js ausente. O Worker nao consegue distinguir 404 de rota valida.');
+  } else {
+    const src = await readFile(rotasWorker, 'utf-8');
+    const m = src.match(/ROTAS_PUBLICAS\s*=\s*(\[[^\]]*\])/);
+    if (!m) falhas.push('worker/rotas-publicas.js sem ROTAS_PUBLICAS.');
+    else {
+      const doWorker = JSON.parse(m[1]);
+      for (const r of rotas) {
+        if (!doWorker.includes(r)) falhas.push(`worker/rotas-publicas.js: falta ${r}. O Worker devolveria 404 numa pagina valida.`);
+      }
+      for (const r of doWorker) {
+        if (!rotas.includes(r)) falhas.push(`worker/rotas-publicas.js: ${r} ja' nao existe.`);
+      }
+    }
   }
 
   // --- sitemap coerente com as rotas ---

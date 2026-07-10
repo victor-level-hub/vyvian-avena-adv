@@ -48,6 +48,14 @@ ${urls}
   const out = join(__dirname, '..', 'dist', 'sitemap.xml');
   await writeFile(out, xml, 'utf-8');
   console.log(`  sitemap: ${routes.length} URLs`);
+
+  // O Worker usa esta lista para devolver 404 real em rotas publicas inexistentes,
+  // em vez de cair no fallback da SPA e responder 200 (soft-404 aos olhos do Google).
+  const rotasJs = `// Gerado por scripts/sitemap.mjs. Nao editar a mao.\nexport const ROTAS_PUBLICAS = ${JSON.stringify(
+    routes.map((r) => r.path)
+  )};\n`;
+  await writeFile(join(__dirname, '..', 'worker', 'rotas-publicas.js'), rotasJs, 'utf-8');
+  console.log(`  rotas-publicas.js: ${routes.length} rotas`);
 }
 
 main().catch((err) => {

@@ -10,6 +10,7 @@ import AreaDetalhe from './pages/AreaDetalhe';
 import Apoio from './pages/Apoio';
 import Contacto from './pages/Contacto';
 import PoliticaCookies from './pages/PoliticaCookies';
+import NaoEncontrado from './pages/NaoEncontrado';
 import AdminApp from './admin/AdminApp';
 import UploadPage from './upload/UploadPage';
 
@@ -35,6 +36,7 @@ function PublicSite() {
           <Route path="/apoio" element={<Apoio />} />
           <Route path="/contacto" element={<Contacto />} />
           <Route path="/politica-cookies" element={<PoliticaCookies />} />
+          <Route path="*" element={<NaoEncontrado />} />
         </Routes>
       </Layout>
     </>

@@ -1,9 +1,10 @@
-import { Link, useParams, Navigate } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { ArrowRight, ArrowLeft, Check } from "lucide-react";
 import ScrollReveal from "../components/ScrollReveal";
 import Seo from "../components/Seo";
 import Breadcrumbs, { breadcrumbJsonLd } from "../components/Breadcrumbs";
 import { AREAS, getArea } from "../data/areas";
+import NaoEncontrado from "./NaoEncontrado";
 
 const SITE = "https://vyavenaadv.com";
 
@@ -37,8 +38,9 @@ export default function AreaDetalhe() {
   const { slug } = useParams();
   const area = getArea(slug);
 
-  // Slug desconhecido: devolver ao indice em vez de renderizar uma pagina vazia.
-  if (!area) return <Navigate to="/areas" replace />;
+  // Slug desconhecido: mostrar a pagina 404. Redireccionar para /areas daria 200
+  // numa rota inexistente — um soft-404. O Worker serve esta pagina com 404 real.
+  if (!area) return <NaoEncontrado />;
 
   const crumbs = [
     { name: "Início", path: "/" },

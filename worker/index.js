@@ -15,6 +15,28 @@ import { handleCalendar } from './routes/calendar.js'; // Calendário jurídico
 import { runDailyCron } from './cron.js'; // Fase 2
 import { jsonError, jsonResponse } from './lib/response.js';
 import { requireAuth } from './lib/auth.js';
+import { ROTAS_PUBLICAS } from './rotas-publicas.js';
+
+/**
+ * Rotas do site que nao sao paginas publicas indexaveis e nao devem ser
+ * verificadas contra ROTAS_PUBLICAS: a area privada e os links de upload
+ * tokenizados dependem do fallback da SPA para o routing do lado do cliente.
+ */
+const PREFIXOS_SPA = ['/admin', '/upload/'];
+
+/**
+ * Uma rota publica desconhecida deve responder 404, e nao cair no fallback da SPA
+ * com um 200 — o que o Google trata como soft-404 e penaliza.
+ * Ficheiros (com extensao) e assets ficam de fora: sao servidos pelo ASSETS.
+ */
+function ehPaginaInexistente(path) {
+  if (path.startsWith('/assets/')) return false;
+  if (path.includes('.')) return false; // .css, .js, .jpg, robots.txt, sitemap.xml
+  if (PREFIXOS_SPA.some((p) => path === p.replace(/\/$/, '') || path.startsWith(p))) return false;
+
+  const normalizado = path !== '/' && path.endsWith('/') ? path.slice(0, -1) : path;
+  return !ROTAS_PUBLICAS.includes(normalizado);
+}
 
 export default {
   async fetch(request, env, ctx) {
@@ -100,6 +122,16 @@ export default {
         console.error('API error:', err.message, err.stack);
         return jsonError('Internal server error', 500, { detail: err.message });
       }
+    }
+
+    // === PÁGINA INEXISTENTE: 404 REAL ===
+    if (ehPaginaInexistente(path)) {
+      const pagina404 = new URL('/404.html', url.origin);
+      const resposta = await env.ASSETS.fetch(new Request(pagina404, request));
+      return new Response(resposta.body, {
+        status: 404,
+        headers: resposta.headers,
+      });
     }
 
     // === ASSETS ESTÁTICOS (SPA) ===

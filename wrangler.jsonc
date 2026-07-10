@@ -31,6 +31,13 @@
   "triggers": {
     "crons": ["0 7 * * *"]
   },
+  // Sem isto o Wrangler assume o default (desactivado) e sobrepoe, a cada deploy,
+  // o que for ligado no painel. O ficheiro e' a fonte de verdade, o painel e' so' uma vista.
+  // Volume baixo (dezenas de invocacoes/dia), por isso amostragem a 100%.
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
   "vars": {
     "ENVIRONMENT": "production"
   }

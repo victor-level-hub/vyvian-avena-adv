@@ -56,9 +56,14 @@ async function main() {
         console.warn(`  aviso: ${route} sem <h1> no HTML gerado`);
       }
 
-      const outDir = route === '/' ? DIST : join(DIST, route);
-      await mkdir(outDir, { recursive: true });
-      await writeFile(join(outDir, 'index.html'), page, 'utf-8');
+      // Escrever como ficheiro individual (areas.html), nao como pasta (areas/index.html).
+      // Com html_handling=auto-trailing-slash (o default), o Cloudflare serve um ficheiro
+      // individual em /areas, mas um index de pasta em /areas/ — e redireccionaria /areas
+      // com um 307. O sitemap e os canonicals declaram URLs sem barra final.
+      const outPath =
+        route === '/' ? join(DIST, 'index.html') : join(DIST, `${route.slice(1)}.html`);
+      await mkdir(dirname(outPath), { recursive: true });
+      await writeFile(outPath, page, 'utf-8');
       console.log(`  ok  ${route.padEnd(20)} ${(page.length / 1024).toFixed(1)} KB`);
     } catch (err) {
       failures++;

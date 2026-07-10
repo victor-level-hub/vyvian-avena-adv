@@ -16,15 +16,19 @@ import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { getAllRoutes } from './routes.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
 const DIST = join(ROOT, 'dist');
 const SSR_ENTRY = join(ROOT, 'dist-ssr', 'entry-server.js');
 
-const ROUTES = ['/', '/sobre', '/areas', '/apoio', '/contacto', '/politica-cookies'];
+// Rotas vindas de scripts/routes.mjs — a mesma lista que alimenta o sitemap,
+// para que nunca haja uma rota prerenderizada que falte no sitemap, ou vice-versa.
 
 async function main() {
+  const ROUTES = (await getAllRoutes()).map((r) => r.path);
+
   if (!existsSync(SSR_ENTRY)) {
     console.warn('prerender: bundle SSR ausente — saltado, o build continua.');
     return;

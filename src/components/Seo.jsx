@@ -50,9 +50,18 @@ export const FAQ_JSONLD = (faqs) => ({
   })),
 });
 
-export default function Seo({ path, jsonLd }) {
-  const meta = ROUTE_META[path] || ROUTE_META["/"];
+/**
+ * jsonLd aceita um objecto ou um array de objectos (ex.: Service + BreadcrumbList).
+ * title/desc permitem rotas dinamicas que nao constam do ROUTE_META (ex.: /areas/{slug}).
+ */
+export default function Seo({ path, jsonLd, title, desc }) {
+  const fallback = ROUTE_META[path] || ROUTE_META["/"];
+  const meta = {
+    title: title || fallback.title,
+    desc: desc || fallback.desc,
+  };
   const canonical = path === "/" ? `${SITE}/` : `${SITE}${path}`;
+  const blocks = jsonLd ? (Array.isArray(jsonLd) ? jsonLd : [jsonLd]) : [];
 
   return (
     <Helmet>
@@ -76,9 +85,11 @@ export default function Seo({ path, jsonLd }) {
       <meta name="twitter:description" content={meta.desc} />
       <meta name="twitter:image" content={OG_IMAGE} />
 
-      {jsonLd && (
-        <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
-      )}
+      {blocks.map((block, i) => (
+        <script key={i} type="application/ld+json">
+          {JSON.stringify(block)}
+        </script>
+      ))}
     </Helmet>
   );
 }

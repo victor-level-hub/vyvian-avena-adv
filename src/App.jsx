@@ -6,6 +6,7 @@ import Seo from './components/Seo';
 import Home from './pages/Home';
 import Sobre from './pages/Sobre';
 import Areas from './pages/Areas';
+import AreaDetalhe from './pages/AreaDetalhe';
 import Apoio from './pages/Apoio';
 import Contacto from './pages/Contacto';
 import PoliticaCookies from './pages/PoliticaCookies';
@@ -30,6 +31,7 @@ function PublicSite() {
           <Route path="/" element={<Home />} />
           <Route path="/sobre" element={<Sobre />} />
           <Route path="/areas" element={<Areas />} />
+          <Route path="/areas/:slug" element={<AreaDetalhe />} />
           <Route path="/apoio" element={<Apoio />} />
           <Route path="/contacto" element={<Contacto />} />
           <Route path="/politica-cookies" element={<PoliticaCookies />} />

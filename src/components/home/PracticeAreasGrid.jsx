@@ -28,7 +28,7 @@ export default function PracticeAreasGrid() {
         {AREAS.map((area, i) => (
           <ScrollReveal key={area.title} delay={i * 100}>
             <Link
-              to={`/areas#${area.slug}`}
+              to={`/areas/${area.slug}`}
               className="group flex flex-col h-full p-8 border border-border bg-warmwhite hover:bg-forest transition-all duration-500"
             >
               <area.icon className="w-6 h-6 text-gold mb-4" />

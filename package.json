@@ -5,10 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build && (npx --yes puppeteer browsers install chrome || true) && node scripts/prerender.mjs",
+    "build": "vite build && (npm run build:ssr || true) && node scripts/prerender.mjs",
     "preview": "vite preview",
     "build:nossg": "vite build",
-    "prerender": "node scripts/prerender.mjs"
+    "build:ssr": "vite build --ssr src/entry-server.jsx --outDir dist-ssr"
   },
   "dependencies": {
     "@formspree/react": "^2.5.1",
@@ -25,8 +25,5 @@
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "vite": "^6.4.2"
-  },
-  "optionalDependencies": {
-    "puppeteer": "^25.3.0"
   }
 }

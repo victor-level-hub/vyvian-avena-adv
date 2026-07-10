@@ -1,8 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 
+// Durante o prerender (react-dom/server) nao ha IntersectionObserver e o useEffect
+// nao corre: sem isto o HTML estatico sairia todo com opacity-0, o que esconde o
+// conteudo dos crawlers e degrada a pagina se o JS falhar.
+const IS_SSR = typeof window === "undefined";
+
 export default function ScrollReveal({ children, className = "", delay = 0 }) {
   const ref = useRef(null);
-  const [isVisible, setIsVisible] = useState(false);
+  const [isVisible, setIsVisible] = useState(IS_SSR);
 
   useEffect(() => {
     const observer = new IntersectionObserver(

@@ -39,15 +39,30 @@ function PublicSite() {
   );
 }
 
+/**
+ * Árvore de rotas sem router. Usada tanto pelo BrowserRouter (browser) como pelo
+ * StaticRouter (prerender em scripts/prerender.mjs), que nao pode usar BrowserRouter.
+ */
+export function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/admin/*" element={<AdminApp />} />
+      <Route path="/upload/:token" element={<UploadPage />} />
+      <Route path="/*" element={<PublicSite />} />
+    </Routes>
+  );
+}
+
+/** Apenas as rotas publicas — o prerender nao deve tocar em /admin nem /upload. */
+export function PublicRoutes() {
+  return <PublicSite />;
+}
+
 export default function App() {
   return (
     <HelmetProvider>
       <Router>
-        <Routes>
-          <Route path="/admin/*" element={<AdminApp />} />
-          <Route path="/upload/:token" element={<UploadPage />} />
-          <Route path="/*" element={<PublicSite />} />
-        </Routes>
+        <AppRoutes />
       </Router>
     </HelmetProvider>
   );

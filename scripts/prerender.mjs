@@ -2,135 +2,72 @@
 /**
  * scripts/prerender.mjs
  *
- * Corre depois do `vite build`. Serve a pasta dist/, visita cada rota pública
- * com um Chrome headless, e grava o HTML já renderizado em dist/<rota>/index.html.
+ * Gera HTML estatico das rotas publicas com react-dom/server. Nao usa browser:
+ * o Puppeteer nao arranca no CI do Cloudflare (faltam libs de sistema do GTK,
+ * libatk-1.0.so.0), e depender de um Chrome headless num container de build e' fragil.
  *
- * Porquê: o site é uma SPA. Sem isto, os crawlers (Bing, bots de IA, pré-visualizações
- * de partilha) recebem um index.html vazio, sem <h1> nem conteúdo. As rotas /admin e
- * /upload ficam de fora — não devem ser indexadas.
+ * Corre depois de:
+ *   1) vite build            -> dist/ (cliente)
+ *   2) vite build --ssr      -> dist-ssr/entry-server.js
+ *
+ * As rotas /admin e /upload ficam de fora — nao devem ser indexadas.
  */
-import { createServer } from 'node:http';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { join, extname, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-// O puppeteer pode nao estar disponivel (ex.: CI sem Chrome). Nesse caso o
-// prerender e' saltado e o build continua — o site publica sem HTML estatico.
-let puppeteer;
-try {
-  puppeteer = (await import('puppeteer')).default;
-} catch {
-  console.warn('prerender: puppeteer indisponivel — build continua sem prerender.');
-  process.exit(0);
-}
+import { join, dirname } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const DIST = join(__dirname, '..', 'dist');
-const PORT = 4178;
+const ROOT = join(__dirname, '..');
+const DIST = join(ROOT, 'dist');
+const SSR_ENTRY = join(ROOT, 'dist-ssr', 'entry-server.js');
 
 const ROUTES = ['/', '/sobre', '/areas', '/apoio', '/contacto', '/politica-cookies'];
 
-const MIME = {
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript',
-  '.mjs': 'text/javascript',
-  '.css': 'text/css',
-  '.svg': 'image/svg+xml',
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
-  '.webp': 'image/webp',
-  '.woff2': 'font/woff2',
-  '.json': 'application/json',
-  '.xml': 'application/xml',
-  '.txt': 'text/plain; charset=utf-8',
-};
-
-// Servidor estático mínimo com fallback SPA.
-function serveDist() {
-  return createServer(async (req, res) => {
-    const urlPath = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
-    let filePath = join(DIST, urlPath);
-
-    if (!extname(filePath) || !existsSync(filePath)) {
-      filePath = join(DIST, 'index.html'); // fallback SPA
-    }
-    try {
-      const body = await readFile(filePath);
-      res.writeHead(200, { 'Content-Type': MIME[extname(filePath)] || 'application/octet-stream' });
-      res.end(body);
-    } catch {
-      res.writeHead(404).end('Not found');
-    }
-  });
-}
-
 async function main() {
-  const server = serveDist();
-  await new Promise((r) => server.listen(PORT, r));
-
-  const launchOpts = {
-    headless: 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'],
-  };
-  // Permite apontar para um Chrome ja instalado (CHROME_PATH / PUPPETEER_EXECUTABLE_PATH).
-  const sysChrome = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROME_PATH;
-  if (sysChrome) launchOpts.executablePath = sysChrome;
-
-  let browser;
-  try {
-    browser = await puppeteer.launch(launchOpts);
-  } catch (err) {
-    console.warn(`prerender: nao foi possivel lancar o Chrome (${err.message.split('\n')[0]}).`);
-    console.warn('prerender: saltado. O build continua e o site publica sem HTML estatico.');
-    server.close();
-    process.exit(0);
+  if (!existsSync(SSR_ENTRY)) {
+    console.warn('prerender: bundle SSR ausente — saltado, o build continua.');
+    return;
   }
+
+  const { render } = await import(pathToFileURL(SSR_ENTRY).href);
+  const template = await readFile(join(DIST, 'index.html'), 'utf-8');
 
   let failures = 0;
 
   for (const route of ROUTES) {
-    const page = await browser.newPage();
     try {
-      await page.goto(`http://localhost:${PORT}${route}`, {
-        waitUntil: 'networkidle0',
-        timeout: 30000,
-      });
-      // Garantir que o React montou e o Helmet já escreveu o <title>.
-      await page.waitForSelector('#root > *', { timeout: 15000 });
+      const { html, head } = render(route);
 
-      // ScrollReveal usa IntersectionObserver: forçar visibilidade de tudo,
-      // caso contrário o HTML gravado fica com o conteúdo em opacity:0.
-      await page.evaluate(() => {
-        document.querySelectorAll('[style*="opacity"]').forEach((el) => {
-          el.style.opacity = '1';
-          el.style.transform = 'none';
-        });
-      });
+      let page = template.replace(
+        '<div id="root"></div>',
+        `<div id="root">${html}</div>`
+      );
 
-      const html = await page.content();
+      // Injectar as meta tags do Helmet imediatamente antes de </head>.
+      page = page.replace('</head>', `    ${head}\n  </head>`);
 
-      if (!/<h1[\s>]/i.test(html)) {
-        console.warn(`  aviso: ${route} não tem <h1> no HTML gerado`);
+      // O <title> de fallback do template ficaria duplicado com o do Helmet.
+      if (/<title[^>]*data-rh/i.test(head)) {
+        page = page.replace(/<title>(?!.*data-rh)[^<]*<\/title>\s*/i, '');
+      }
+
+      if (!/<h1[\s>]/i.test(page)) {
+        console.warn(`  aviso: ${route} sem <h1> no HTML gerado`);
       }
 
       const outDir = route === '/' ? DIST : join(DIST, route);
       await mkdir(outDir, { recursive: true });
-      await writeFile(join(outDir, 'index.html'), html, 'utf-8');
-      console.log(`  ok  ${route.padEnd(20)} ${(html.length / 1024).toFixed(1)} KB`);
+      await writeFile(join(outDir, 'index.html'), page, 'utf-8');
+      console.log(`  ok  ${route.padEnd(20)} ${(page.length / 1024).toFixed(1)} KB`);
     } catch (err) {
       failures++;
       console.error(`  ERRO ${route}: ${err.message}`);
-    } finally {
-      await page.close();
     }
   }
 
-  await browser.close();
-  server.close();
-
   if (failures) {
-    // Nao rebentar o deploy: e' preferivel publicar sem prerender do que nao publicar.
+    // Publicar sem prerender e' preferivel a nao publicar.
     console.warn(`\nprerender: ${failures} rota(s) falharam; as restantes foram geradas.`);
   } else {
     console.log(`\nprerender: ${ROUTES.length} rotas geradas`);
@@ -140,5 +77,4 @@ async function main() {
 main().catch((err) => {
   console.warn('prerender: erro inesperado —', err.message);
   console.warn('prerender: saltado. O build continua.');
-  process.exit(0);
 });

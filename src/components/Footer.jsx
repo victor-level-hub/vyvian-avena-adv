@@ -15,11 +15,11 @@ export default function Footer() {
       <div className="max-w-7xl mx-auto px-6 py-16">
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
           {/* Brand */}
-          <div>
+          <div className="flex flex-col items-center text-center">
             <img
-              src="/logo-vyvian-vertical-gold.svg"
+              src="/logo-horizontal-dourado.webp"
               alt="Vyvian Avena — Advogada"
-              className="h-28 w-auto mb-5"
+              className="h-10 w-auto mb-5"
             />
             <p className="text-sm leading-relaxed">
               Atendimento humanizado e próximo nas áreas de Direito da Família, Civil e Comercial.

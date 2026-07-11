@@ -1,2 +1,2 @@
 // Gerado por scripts/sitemap.mjs. Nao editar a mao.
-export const ROTAS_PUBLICAS = ["/","/sobre","/areas","/apoio","/contacto","/politica-cookies","/areas/familia","/areas/civil","/areas/comercial","/areas/cobranca","/areas/nacionalidade","/areas/notarial"];
+export const ROTAS_PUBLICAS = ["/","/sobre","/areas","/apoio","/contacto","/politica-cookies","/areas/familia","/areas/civil","/areas/comercial","/areas/cobranca","/areas/nacionalidade","/areas/notarial","/blog","/blog/direito-portugues-e-brasileiro-numa-partilha","/blog/divorcio-portugal-brasil-porque-se-complica","/blog/heranca-portugal-brasil-mapa-das-decisoes","/blog/o-que-perguntar-a-um-advogado-antes-de-contratar","/blog/responsabilidades-parentais-pais-em-paises-diferentes"];

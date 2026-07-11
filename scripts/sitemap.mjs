@@ -13,7 +13,7 @@
 import { writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getAllRoutes } from './routes.mjs';
+import { getAllRoutes, getValidRoutes } from './routes.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SITE = 'https://vyavenaadv.com';
@@ -49,13 +49,13 @@ ${urls}
   await writeFile(out, xml, 'utf-8');
   console.log(`  sitemap: ${routes.length} URLs`);
 
-  // O Worker usa esta lista para devolver 404 real em rotas publicas inexistentes,
-  // em vez de cair no fallback da SPA e responder 200 (soft-404 aos olhos do Google).
-  const rotasJs = `// Gerado por scripts/sitemap.mjs. Nao editar a mao.\nexport const ROTAS_PUBLICAS = ${JSON.stringify(
-    routes.map((r) => r.path)
-  )};\n`;
+  // O Worker usa esta lista para devolver 404 real em rotas publicas inexistentes.
+  // Nota: e' a lista de rotas VALIDAS, nao a de indexaveis — o blogue em revisao
+  // (fora do sitemap) tem de servir 200 na mesma, senao ninguem o consegue rever.
+  const validas = await getValidRoutes();
+  const rotasJs = `// Gerado por scripts/sitemap.mjs. Nao editar a mao.\nexport const ROTAS_PUBLICAS = ${JSON.stringify(validas)};\n`;
   await writeFile(join(__dirname, '..', 'worker', 'rotas-publicas.js'), rotasJs, 'utf-8');
-  console.log(`  rotas-publicas.js: ${routes.length} rotas`);
+  console.log(`  rotas-publicas.js: ${validas.length} rotas validas`);
 }
 
 main().catch((err) => {

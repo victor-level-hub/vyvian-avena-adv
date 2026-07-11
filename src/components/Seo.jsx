@@ -30,6 +30,10 @@ export const ROUTE_META = {
     title: "Contacto | Marcação de Consulta em Portugal e Brasil",
     desc: "Marque a sua consulta com a Dra. Vyvian Avena. Escritórios em Cacilhas, Santa Maria da Feira e Barra Olímpica. Resposta em 24 a 48 horas úteis.",
   },
+  "/blog": {
+    title: "Blogue | Vyvian Avena Advogada",
+    desc: "Artigos sobre os problemas jurídicos de quem vive entre Portugal e o Brasil: divórcio, herança, responsabilidades parentais e mais.",
+  },
   "/404": {
     title: "Página não encontrada | Vyvian Avena Advogada",
     desc: "A página que procura não existe ou foi movida.",
@@ -58,9 +62,11 @@ export const FAQ_JSONLD = (faqs) => ({
  * jsonLd aceita um objecto ou um array de objectos (ex.: Service + BreadcrumbList).
  * title/desc permitem rotas dinamicas que nao constam do ROUTE_META (ex.: /areas/{slug}).
  */
-export default function Seo({ path, jsonLd, title, desc }) {
-  // A /404 nao deve ser indexada nem declarar canonical: nao e' uma pagina real.
-  const noindex = path === "/404";
+export default function Seo({ path, jsonLd, title, desc, noindex: noindexProp = false }) {
+  // A /404 nunca e' indexada. O prop noindex serve para conteudo em revisao
+  // (ex.: blogue com blog.json publicado=false): existe no URL real mas fora
+  // do indice e do sitemap ate' ser aprovado.
+  const noindex = path === "/404" || noindexProp;
   const fallback = ROUTE_META[path] || ROUTE_META["/"];
   const meta = {
     title: title || fallback.title,

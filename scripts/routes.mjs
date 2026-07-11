@@ -10,7 +10,7 @@
  * do lucide-react, que nao resolvem num script Node puro. areas.js exporta AREA_SLUGS
  * e o build valida que as duas listas coincidem.
  */
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -31,10 +31,33 @@ export async function getAreaSlugs() {
   return JSON.parse(raw);
 }
 
-/** Todas as rotas publicas indexaveis: estaticas + uma por area de atuacao. */
+/** Slugs do blogue = nomes dos ficheiros em src/content/blog. */
+export async function getBlogSlugs() {
+  try {
+    const files = await readdir(join(__dirname, '..', 'src', 'content', 'blog'));
+    return files.filter((f) => f.endsWith('.md')).map((f) => f.replace(/\.md$/, ''));
+  } catch {
+    return [];
+  }
+}
+
+async function blogPublicado() {
+  try {
+    const raw = await readFile(join(__dirname, '..', 'src', 'config', 'blog.json'), 'utf-8');
+    return JSON.parse(raw).publicado === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Rotas publicas INDEXAVEIS — e' isto que vai para o sitemap.
+ * O blogue so' entra quando src/config/blog.json tiver publicado=true
+ * (conteudo juridico so' e' indexavel depois de validado pela Dra. Vyvian).
+ */
 export async function getAllRoutes() {
   const slugs = await getAreaSlugs();
-  return [
+  const rotas = [
     ...STATIC_ROUTES,
     ...slugs.map((slug) => ({
       path: `/areas/${slug}`,
@@ -42,13 +65,33 @@ export async function getAllRoutes() {
       changefreq: 'monthly',
     })),
   ];
+  if (await blogPublicado()) {
+    const posts = await getBlogSlugs();
+    rotas.push({ path: '/blog', priority: '0.7', changefreq: 'weekly' });
+    rotas.push(...posts.map((slug) => ({ path: `/blog/${slug}`, priority: '0.6', changefreq: 'monthly' })));
+  }
+  return rotas;
 }
 
 /**
- * Rotas a prerenderizar. Inclui a /404, que tem de existir como HTML estatico para
- * o Worker a poder servir com codigo 404 — mas nunca entra no sitemap.
+ * Rotas VALIDAS — e' isto que o Worker usa para distinguir 404 de pagina real.
+ * Inclui o blogue SEMPRE (mesmo em revisao, os URLs tem de servir 200 para a
+ * Dra. Vyvian rever), independentemente de estarem ou nao no sitemap.
+ */
+export async function getValidRoutes() {
+  const base = (await getAllRoutes()).map((r) => r.path);
+  const extras = [];
+  if (!base.includes('/blog')) {
+    extras.push('/blog');
+    extras.push(...(await getBlogSlugs()).map((s) => `/blog/${s}`));
+  }
+  return [...base, ...extras];
+}
+
+/**
+ * Rotas a prerenderizar: as validas + /404, que tem de existir como HTML
+ * estatico para o Worker a poder servir com codigo 404 — mas nunca no sitemap.
  */
 export async function getPrerenderRoutes() {
-  const rotas = await getAllRoutes();
-  return [...rotas.map((r) => r.path), '/404'];
+  return [...(await getValidRoutes()), '/404'];
 }

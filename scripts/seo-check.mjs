@@ -22,7 +22,7 @@ import { readFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { getAllRoutes } from './routes.mjs';
+import { getAllRoutes, getValidRoutes, getBlogSlugs } from './routes.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DIST = join(__dirname, '..', 'dist');
@@ -163,12 +163,45 @@ async function main() {
     if (!m) falhas.push('worker/rotas-publicas.js sem ROTAS_PUBLICAS.');
     else {
       const doWorker = JSON.parse(m[1]);
-      for (const r of rotas) {
+      const validas = await getValidRoutes();
+      for (const r of validas) {
         if (!doWorker.includes(r)) falhas.push(`worker/rotas-publicas.js: falta ${r}. O Worker devolveria 404 numa pagina valida.`);
       }
       for (const r of doWorker) {
-        if (!rotas.includes(r)) falhas.push(`worker/rotas-publicas.js: ${r} ja' nao existe.`);
+        if (!validas.includes(r)) falhas.push(`worker/rotas-publicas.js: ${r} ja' nao existe.`);
+        else if (!existsSync(ficheiroDaRota(r))) falhas.push(`worker/rotas-publicas.js: ${r} e' valida mas nao tem HTML no dist.`);
       }
+    }
+  }
+
+  // --- blogue: existe, e o estado de indexacao respeita a flag publicado ---
+  // Enquanto publicado=false: paginas servem mas com noindex e SEM canonical,
+  // e nao podem aparecer no sitemap (conteudo juridico em revisao pela Dra.).
+  // Quando publicado=true: exige-se o inverso — index, canonical e sitemap.
+  {
+    const blogSlugs = await getBlogSlugs();
+    let publicado = false;
+    try {
+      publicado = JSON.parse(await readFile(join(__dirname, '..', 'src', 'config', 'blog.json'), 'utf-8')).publicado === true;
+    } catch { /* sem config = nao publicado */ }
+
+    const rotasBlog = blogSlugs.length ? ['/blog', ...blogSlugs.map((s) => `/blog/${s}`)] : [];
+    for (const rota of rotasBlog) {
+      const f = ficheiroDaRota(rota);
+      if (!existsSync(f)) { falhas.push(`${rota}: HTML estatico ausente.`); continue; }
+      const html = await readFile(f, 'utf-8');
+      const robotsB = [...html.matchAll(/name="robots"[^>]*content="([^"]*)"/gi)].map((x) => x[1]);
+      const temCanonical = /rel="canonical"/i.test(html);
+      const temNoindex = robotsB.some((r) => /noindex/i.test(r));
+      if (robotsB.length !== 1) falhas.push(`${rota}: ${robotsB.length} meta robots, esperada uma.`);
+      if (!publicado) {
+        if (!temNoindex) falhas.push(`${rota}: blogue em revisao (publicado=false) mas sem noindex.`);
+        if (temCanonical) falhas.push(`${rota}: blogue em revisao mas com canonical.`);
+      } else {
+        if (temNoindex) falhas.push(`${rota}: blogue publicado mas com noindex.`);
+        if (!temCanonical) falhas.push(`${rota}: blogue publicado mas sem canonical.`);
+      }
+      if (!/<h1[\s>]/i.test(html)) falhas.push(`${rota}: sem <h1>.`);
     }
   }
 
@@ -186,6 +219,10 @@ async function main() {
     for (const loc of locs) {
       if (loc !== `${SITE}/` && loc.endsWith('/')) {
         falhas.push(`sitemap: ${loc} tem barra final; o Cloudflare responde 307 e desperdica rastreio.`);
+      }
+      const pathLoc = loc.replace(SITE, '') || '/';
+      if (!rotas.some((r) => r === pathLoc)) {
+        falhas.push(`sitemap: ${pathLoc} nao e' uma rota indexavel (blogue em revisao?).`);
       }
     }
   }

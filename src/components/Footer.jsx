@@ -17,7 +17,7 @@ export default function Footer() {
           {/* Brand */}
           <div className="flex flex-col items-center text-center">
             <img
-              src="/logo-horizontal-dourado.webp"
+              src="/logo-horizontal-dourado.svg"
               alt="Vyvian Avena — Advogada"
               className="h-10 w-auto mb-5"
             />

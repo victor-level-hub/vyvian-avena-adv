@@ -13,8 +13,14 @@ const NAV_LINKS = [
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
+  // Paginas SEM hero forest: o estado transparente (logo/links brancos) seria
+  // invisivel sobre fundo claro — força-se o aspecto "scrolled" desde o topo.
+  // O prerender tambem beneficia: o HTML estatico ja sai com o navbar certo.
+  const LIGHT_TOP = ["/blog"];
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
+
+  const claro = scrolled || LIGHT_TOP.includes(location.pathname);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 60);
@@ -32,16 +38,16 @@ export default function Navbar() {
         className="fixed top-0 left-0 right-0 z-40"
         style={{
           transition: 'all 0.35s ease',
-          backgroundColor: scrolled ? '#faf8f4' : 'transparent',
-          boxShadow: scrolled ? '0 1px 12px rgba(0,0,0,0.08)' : 'none',
-          paddingTop: scrolled ? '12px' : '20px',
-          paddingBottom: scrolled ? '12px' : '20px',
+          backgroundColor: claro ? '#faf8f4' : 'transparent',
+          boxShadow: claro ? '0 1px 12px rgba(0,0,0,0.08)' : 'none',
+          paddingTop: claro ? '12px' : '20px',
+          paddingBottom: claro ? '12px' : '20px',
         }}
       >
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
           <Link to="/" className="flex items-center">
             <img
-              src={scrolled ? "/logo-horizontal-verde.png" : "/logo-horizontal-branco.webp"}
+              src={claro ? "/logo-horizontal-verde.png" : "/logo-horizontal-branco.webp"}
               alt="Vyvian Avena Advogada"
               width="512" height="161"
               style={{ height: '44px', width: 'auto', objectFit: 'contain' }}
@@ -56,7 +62,7 @@ export default function Navbar() {
                 className={`text-sm font-body tracking-wide transition-all duration-300 hover:text-gold ${
                   location.pathname === link.path
                     ? "text-gold"
-                    : scrolled
+                    : claro
                     ? "text-forest"
                     : "text-warmwhite/90"
                 }`}
@@ -67,7 +73,7 @@ export default function Navbar() {
             <Link
               to="/admin/login"
               className={`flex items-center gap-1 text-xs font-body tracking-wide transition-colors duration-300 hover:text-gold ${
-                scrolled ? "text-forest/60" : "text-warmwhite/60"
+                claro ? "text-forest/60" : "text-warmwhite/60"
               }`}
               title="Acesso restrito"
             >
@@ -84,7 +90,7 @@ export default function Navbar() {
 
           <button
             onClick={() => setMenuOpen(true)}
-            className={`lg:hidden transition-colors ${scrolled ? "text-forest" : "text-warmwhite"}`}
+            className={`lg:hidden transition-colors ${claro ? "text-forest" : "text-warmwhite"}`}
             aria-label="Abrir menu"
           >
             <Menu className="w-6 h-6" />

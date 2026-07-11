@@ -40,10 +40,7 @@ export default function Navbar() {
         <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
           <Link to="/" className="flex items-center">
             <img
-              src={scrolled
-                ? "https://media.base44.com/images/public/69d8fac37a82caf2f57459fa/a7ac084f0_logo_vyvian_avena_verde-medio.png"
-                : "https://media.base44.com/images/public/69d8fac37a82caf2f57459fa/77a16034a_logo-horizontal-branco.png"
-              }
+              src={scrolled ? "/logo-horizontal-verde.png" : "/logo-horizontal-branco.webp"}
               alt="Vyvian Avena Advogada"
               style={{ height: '44px', width: 'auto', objectFit: 'contain' }}
             />

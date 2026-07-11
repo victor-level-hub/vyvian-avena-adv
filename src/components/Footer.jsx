@@ -16,8 +16,11 @@ export default function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-12">
           {/* Brand */}
           <div>
-            <h3 className="font-heading text-2xl text-warmwhite mb-2">Vyvian Avena</h3>
-            <p className="text-gold text-xs font-body tracking-widest uppercase mb-4">Advogada</p>
+            <img
+              src="/logo-vyvian-vertical-gold.svg"
+              alt="Vyvian Avena — Advogada"
+              className="h-28 w-auto mb-5"
+            />
             <p className="text-sm leading-relaxed">
               Atendimento humanizado e próximo nas áreas de Direito da Família, Civil e Comercial.
             </p>
@@ -84,7 +87,7 @@ export default function Footer() {
 
         <div className="mt-12 pt-8 border-t border-warmwhite/10 flex items-center justify-center">
           <p className="text-xs text-warmwhite/50">
-            © 2025 Vyvian Avena — Advogada. Todos os direitos reservados.
+            © {new Date().getFullYear()} Vyvian Avena — Advogada. Todos os direitos reservados.
           </p>
         </div>
       </div>

@@ -7,6 +7,7 @@ const NAV_LINKS = [
   { label: "Sobre", path: "/sobre" },
   { label: "Áreas de Atuação", path: "/areas" },
   { label: "Apoio", path: "/apoio" },
+  { label: "Blogue", path: "/blog" },
   { label: "Contacto", path: "/contacto" },
 ];
 

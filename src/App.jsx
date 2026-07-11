@@ -21,7 +21,7 @@ import UploadPage from './upload/UploadPage';
 // e o Helmet não permite "remover" tags de uma instância anterior — apenas
 // sobrepor. Por isso o RouteSeo abstém-se nessas rotas, para não deixar um
 // canonical ou robots global a sobreviver ao da página.
-const ROTAS_COM_SEO_PROPRIO = [/^\/areas(\/|$)/, /^\/blog(\/|$)/];
+const ROTAS_COM_SEO_PROPRIO = [/^\/areas(\/|$)/, /^\/blog(\/|$)/, /^\/sobre$/];
 
 function RouteSeo() {
   const { pathname } = useLocation();

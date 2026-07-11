@@ -51,6 +51,14 @@ async function main() {
       // Injectar as meta tags do Helmet imediatamente antes de </head>.
       page = page.replace('</head>', `    ${head}\n  </head>`);
 
+      // Preload do LCP: o hero so' existe na Home — inutil (e nocivo) nas outras.
+      if (route === '/') {
+        page = page.replace(
+          '</head>',
+          `    <link rel="preload" as="image" href="/hero-escritorio.webp" fetchpriority="high" />\n  </head>`
+        );
+      }
+
       // O <title> de fallback do template ficaria duplicado com o do Helmet.
       if (/<title[^>]*data-rh/i.test(head)) {
         page = page.replace(/<title>(?!.*data-rh)[^<]*<\/title>\s*/i, '');

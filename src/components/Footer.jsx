@@ -19,6 +19,7 @@ export default function Footer() {
             <img
               src="/logo-horizontal-dourado.svg"
               alt="Vyvian Avena — Advogada"
+              width="1200" height="383"
               className="h-10 w-auto mb-5"
             />
             <p className="text-sm leading-relaxed">

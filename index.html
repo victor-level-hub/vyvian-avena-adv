@@ -15,9 +15,11 @@
     -->
     <title>Vyvian Avena Advogada | Direito de Família, Civil e Comercial</title>
 
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400;1,9..144,500&family=Mulish:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <!-- Fontes auto-hospedadas (antes: Google Fonts, CSS de terceiros a bloquear o render).
+         Ganho: 1 round-trip a menos no caminho critico, zero dependencia externa, RGPD limpo. -->
+    <link rel="preload" href="/fonts/mulish-normal-400-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/fraunces-normal-600-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/fonts/fonts.css" />
 
     <!-- Dados estruturados: LegalService -->
     <script type="application/ld+json">

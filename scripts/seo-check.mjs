@@ -205,6 +205,29 @@ async function main() {
     }
   }
 
+  // --- higiene de performance e presença (guardas de regressão 2026-07) ---
+  {
+    const home = await readFile(ficheiroDaRota('/'), 'utf-8');
+    if (/fonts\.googleapis\.com|fonts\.gstatic\.com/.test(home))
+      falhas.push('home: fontes do Google detectadas — devem ser auto-hospedadas (/fonts/).');
+    if (!home.includes('rel="preload" as="image" href="/hero-escritorio'))
+      falhas.push('home: falta o preload do hero (LCP).');
+    const sobre = await readFile(ficheiroDaRota('/sobre'), 'utf-8');
+    if (!/"@type":\s*"Person"/.test(sobre))
+      falhas.push('/sobre: falta o JSON-LD Person (E-E-A-T).');
+    for (const f of ['robots.txt', 'llms.txt', 'fonts/fonts.css']) {
+      if (!existsSync(join(__dirname, '..', 'dist', f))) falhas.push(`dist/${f} ausente.`);
+    }
+    // nenhuma pagina prerenderizada deve ter <img> sem atributo alt
+    for (const rota of rotas) {
+      const html = await readFile(ficheiroDaRota(rota), 'utf-8');
+      const imgs = html.match(/<img[^>]*>/g) || [];
+      for (const img of imgs) {
+        if (!/\salt=/.test(img)) falhas.push(`${rota}: <img> sem alt: ${img.slice(0, 60)}…`);
+      }
+    }
+  }
+
   // --- sitemap coerente com as rotas ---
   const sitemapPath = join(DIST, 'sitemap.xml');
   if (!existsSync(sitemapPath)) {

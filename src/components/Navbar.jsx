@@ -42,6 +42,7 @@ export default function Navbar() {
             <img
               src={scrolled ? "/logo-horizontal-verde.png" : "/logo-horizontal-branco.webp"}
               alt="Vyvian Avena Advogada"
+              width="512" height="161"
               style={{ height: '44px', width: 'auto', objectFit: 'contain' }}
             />
           </Link>

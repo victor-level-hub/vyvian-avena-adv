@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import Seo from "../components/Seo";
 import { Heart, Users, Eye, Award, ArrowRight } from "lucide-react";
 import ScrollReveal from "../components/ScrollReveal";
 
@@ -18,9 +19,39 @@ const DIFFERENTIALS = [
   "Rede de 3 escritórios para maior conveniência dos clientes",
 ];
 
+
+const PERSON_JSONLD = {
+  "@context": "https://schema.org",
+  "@type": "Person",
+  "name": "Vyvian Avena",
+  "jobTitle": "Advogada",
+  "url": "https://vyavenaadv.com/sobre",
+  "image": "https://vyavenaadv.com/og-image.jpg",
+  "worksFor": {
+    "@type": "LegalService",
+    "name": "Vyvian Avena Advogada",
+    "url": "https://vyavenaadv.com/"
+  },
+  "memberOf": [
+    { "@type": "Organization", "name": "Ordem dos Advogados (Portugal)" },
+    { "@type": "Organization", "name": "Ordem dos Advogados do Brasil" }
+  ],
+  "knowsLanguage": ["pt-PT", "pt-BR"],
+  "knowsAbout": [
+    "Direito de Família",
+    "Direito Civil",
+    "Direito Comercial",
+    "Nacionalidade Portuguesa",
+    "Direito luso-brasileiro"
+  ],
+  "email": "vyavena@gmail.com",
+  "sameAs": ["https://www.instagram.com/vyvianavenaadv/"]
+};
+
 export default function Sobre() {
   return (
     <div>
+      <Seo path="/sobre" jsonLd={PERSON_JSONLD} />
       {/* Hero */}
       <section className="relative bg-forest pt-32 pb-24 overflow-hidden">
         <div className="max-w-7xl mx-auto px-6 md:px-12 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">

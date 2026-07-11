@@ -36,6 +36,17 @@ function readingTime(text) {
   return Math.max(1, Math.round(words / 200));
 }
 
+// Desempate quando as datas coincidem — ordem editorial do handoff v2
+// (o destaque do indice e' o primeiro desta lista).
+const ORDEM = [
+  "heranca-portugal-brasil-mapa-das-decisoes",
+  "divorcio-portugal-brasil-porque-se-complica",
+  "direito-portugues-e-brasileiro-numa-partilha",
+  "responsabilidades-parentais-pais-em-paises-diferentes",
+  "o-que-perguntar-a-um-advogado-antes-de-contratar",
+];
+const pos = (slug) => { const i = ORDEM.indexOf(slug); return i === -1 ? 99 : i; };
+
 export const POSTS = Object.entries(RAW)
   .map(([path, raw]) => {
     const slug = path.split("/").pop().replace(/\.md$/, "");
@@ -55,6 +66,6 @@ export const POSTS = Object.entries(RAW)
       texto: body,
     };
   })
-  .sort((a, b) => (a.data < b.data ? 1 : -1));
+  .sort((a, b) => (a.data !== b.data ? (a.data < b.data ? 1 : -1) : pos(a.slug) - pos(b.slug)));
 
 export const getPost = (slug) => POSTS.find((p) => p.slug === slug);

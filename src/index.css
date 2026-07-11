@@ -65,26 +65,38 @@
 }
 
 
-/* ============ BLOG PROSE ============
-   Tipografia do corpo dos artigos. Deliberadamente simples — o Claude Design
-   refina depois. A convenção: blockquote no markdown = caixa de aviso
-   "confirme connosco" (matéria perecível remetida para consulta). */
+/* ============ BLOG PROSE (v2 — handoff Claude Design "editorial moderno") ============
+   Convenções mantidas: blockquote no markdown = caixa de aviso "confirme
+   connosco"; hr + itálico final = disclaimer deontológico. Novidades v2:
+   drop cap no 1.º parágrafo, cada h2 abre secção com régua superior. */
 .blog-prose {
   font-family: 'Mulish', sans-serif;
   color: rgba(18, 48, 42, 0.85);
-  font-size: 1.0625rem;
-  line-height: 1.85;
+  font-size: 1.125rem;
+  line-height: 1.9;
 }
-.blog-prose p { margin: 0 0 1.35rem; }
+.blog-prose p { margin: 0 0 1.5rem; }
+.blog-prose > p:first-child::first-letter {
+  font-family: 'Fraunces', serif;
+  font-size: 4.4em;
+  line-height: 0.82;
+  float: left;
+  padding: 6px 14px 0 0;
+  color: #12302a;
+}
 .blog-prose h2 {
   font-family: 'Fraunces', serif;
+  font-weight: 400;
   color: #12302a;
-  font-size: 1.6rem;
+  font-size: 1.75rem;
   line-height: 1.3;
-  margin: 2.4rem 0 1rem;
+  margin: 3rem 0 1.1rem;
+  padding-top: 1.4rem;
+  border-top: 1px solid rgba(18, 48, 42, 0.12);
 }
 .blog-prose h3 {
   font-family: 'Fraunces', serif;
+  font-weight: 400;
   color: #12302a;
   font-size: 1.25rem;
   margin: 1.9rem 0 0.8rem;
@@ -92,23 +104,24 @@
 .blog-prose strong { color: #12302a; font-weight: 700; }
 .blog-prose a { color: #b8935a; text-decoration: underline; text-underline-offset: 3px; }
 .blog-prose a:hover { color: #12302a; }
-.blog-prose ul, .blog-prose ol { margin: 0 0 1.35rem; padding-left: 1.4rem; }
+.blog-prose ul, .blog-prose ol { margin: 0 0 1.5rem; padding-left: 1.4rem; }
 .blog-prose li { margin-bottom: 0.5rem; }
 .blog-prose blockquote {
-  margin: 1.8rem 0;
-  padding: 1.1rem 1.4rem;
+  margin: 2.2rem 0;
+  padding: 1.3rem 1.6rem;
   background: #f7f2e9;
   border-left: 3px solid #b8935a;
-  font-size: 0.95rem;
+  font-size: 1rem;
+  line-height: 1.75;
   color: rgba(18, 48, 42, 0.8);
 }
 .blog-prose blockquote p { margin: 0; }
 .blog-prose hr {
   border: none;
   border-top: 1px solid rgba(18, 48, 42, 0.12);
-  margin: 2.4rem 0 1.6rem;
+  margin: 2.6rem 0 1.6rem;
 }
-.blog-prose hr + p em, .blog-prose hr ~ p:last-child {
+.blog-prose hr ~ p {
   font-size: 0.85rem;
   color: rgba(18, 48, 42, 0.55);
 }

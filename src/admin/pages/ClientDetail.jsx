@@ -92,6 +92,12 @@ export default function ClientDetail() {
 
   // ── Comunicações: log real de notificações enviadas
   const [commsLog, setCommsLog] = useState(null); // null = ainda não carregado
+  // Regras de lembrete deste cliente (movidas da secção Notificações, 2026-07)
+  const [cliRules, setCliRules] = useState(null);
+  const [cliRulesErr, setCliRulesErr] = useState('');
+  const [ruleTemplates, setRuleTemplates] = useState([]);
+  const [newRule, setNewRule] = useState({ channel: 'email', days_before: 3, template_id: '' });
+  const [ruleBusy, setRuleBusy] = useState(false);
   const [commsErr, setCommsErr] = useState('');
 
   // ── Eliminar cliente (dentro do modal Editar, zona de perigo)
@@ -274,6 +280,47 @@ export default function ClientDetail() {
       .then((r) => setCommsLog(r.log || []))
       .catch((err) => { setCommsErr(err.message); setCommsLog([]); });
   }, [activeTab, clientId]);
+
+  useEffect(() => {
+    if (activeTab !== 'notifs' || cliRules !== null) return;
+    setCliRulesErr('');
+    Promise.all([notifApi.listRules(clientId), notifApi.listTemplates()])
+      .then(([r, t]) => { setCliRules(r.rules || []); setRuleTemplates(t.templates || []); })
+      .catch((err) => { setCliRulesErr(err.message); setCliRules([]); });
+  }, [activeTab, clientId, cliRules]);
+
+  const toggleCliRule = async (rule) => {
+    try {
+      await notifApi.updateRule(rule.id, { enabled: rule.enabled ? 0 : 1 });
+      setCliRules(cliRules.map((r) => (r.id === rule.id ? { ...r, enabled: rule.enabled ? 0 : 1 } : r)));
+    } catch (err) { alert('Erro: ' + err.message); }
+  };
+
+  const deleteCliRule = async (rule) => {
+    if (!window.confirm('Remover este lembrete?')) return;
+    try {
+      await notifApi.removeRule(rule.id);
+      setCliRules(cliRules.filter((r) => r.id !== rule.id));
+    } catch (err) { alert('Erro: ' + err.message); }
+  };
+
+  const createCliRule = async () => {
+    setRuleBusy(true);
+    try {
+      const payload = {
+        id: `nr_${clientId}_${Date.now()}`,
+        client_id: clientId,
+        channel: newRule.channel,
+        days_before: Number(newRule.days_before) || 0,
+        enabled: 1,
+      };
+      if (newRule.template_id) payload.template_id = newRule.template_id;
+      await notifApi.createRule(payload);
+      setCliRules(null); // força reload
+      setNewRule({ channel: 'email', days_before: 3, template_id: '' });
+    } catch (err) { alert('Erro: ' + err.message); }
+    finally { setRuleBusy(false); }
+  };
 
   // ── Eliminar cliente: exige escrever o nome exacto. O ON DELETE CASCADE do D1
   // apaga parcelas, regras, log e documentos — nao ha volta a dar.
@@ -1070,6 +1117,7 @@ export default function ClientDetail() {
           { id: 'plan', label: 'Plano de pagamento' },
           { id: 'summary', label: 'Resumo' },
           { id: 'comms', label: 'Comunicações' },
+          { id: 'notifs', label: 'Notificações' },
           { id: 'docs', label: 'Documentos' },
           { id: 'procuracoes', label: 'Procurações' },
           { id: 'notes', label: 'Notas' },
@@ -1286,6 +1334,83 @@ export default function ClientDetail() {
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {activeTab === 'notifs' && (
+        <div>
+          <p style={{ fontSize: '0.85rem', color: 'var(--muted)', margin: '0 0 1rem' }}>
+            Lembretes automáticos enviados <strong>a este cliente</strong> antes de cada vencimento.
+            Os alertas para a Dra. configuram-se na secção Notificações.
+          </p>
+          {cliRulesErr && <div className="adm-empty" style={{ color: '#b00' }}>Erro: {cliRulesErr}</div>}
+          {cliRules === null && !cliRulesErr && <div className="adm-empty">A carregar…</div>}
+          {cliRules !== null && cliRules.length === 0 && !cliRulesErr && (
+            <div className="adm-empty">Sem lembretes configurados para este cliente.</div>
+          )}
+          {cliRules !== null && cliRules.length > 0 && (
+            <table className="adm-table" style={{ marginBottom: '1.25rem' }}>
+              <thead>
+                <tr>
+                  <th>Antecedência</th>
+                  <th>Canal</th>
+                  <th>Modelo</th>
+                  <th style={{ width: 80, textAlign: 'center' }}>Ativo</th>
+                  <th style={{ width: 60 }}></th>
+                </tr>
+              </thead>
+              <tbody>
+                {cliRules.map((rule) => (
+                  <tr key={rule.id}>
+                    <td>{rule.days_before === 0 ? 'No próprio dia' : `${rule.days_before} ${rule.days_before === 1 ? 'dia' : 'dias'} antes`}</td>
+                    <td style={{ textTransform: 'capitalize' }}>{rule.channel}</td>
+                    <td>{(ruleTemplates.find((t) => t.id === rule.template_id) || {}).name || '—'}</td>
+                    <td style={{ textAlign: 'center' }}>
+                      <button
+                        type="button"
+                        className={'adm-switch' + (rule.enabled ? '' : ' off')}
+                        onClick={() => toggleCliRule(rule)}
+                        aria-label={rule.enabled ? 'Desativar' : 'Ativar'}
+                      />
+                    </td>
+                    <td>
+                      <button type="button" className="adm-btn-ghost" onClick={() => deleteCliRule(rule)}>Remover</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+
+          <div className="adm-card" style={{ background: 'var(--paper)' }}>
+            <div className="adm-card-title">Novo lembrete</div>
+            <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+              <label className="adm-field">
+                <span className="adm-label">Canal</span>
+                <select className="adm-input" value={newRule.channel} onChange={(e) => setNewRule({ ...newRule, channel: e.target.value })}>
+                  <option value="email">Email</option>
+                  <option value="whatsapp">WhatsApp</option>
+                </select>
+              </label>
+              <label className="adm-field">
+                <span className="adm-label">Dias antes do vencimento</span>
+                <input className="adm-input" type="number" min="0" max="30" value={newRule.days_before}
+                  onChange={(e) => setNewRule({ ...newRule, days_before: e.target.value })} style={{ width: 90 }} />
+              </label>
+              <label className="adm-field" style={{ minWidth: 220 }}>
+                <span className="adm-label">Modelo</span>
+                <select className="adm-input" value={newRule.template_id} onChange={(e) => setNewRule({ ...newRule, template_id: e.target.value })}>
+                  <option value="">Automático (por canal)</option>
+                  {ruleTemplates.filter((t) => t.channel === newRule.channel).map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </label>
+              <button type="button" className="adm-btn" onClick={createCliRule} disabled={ruleBusy}>
+                {ruleBusy ? 'A criar…' : 'Adicionar lembrete'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

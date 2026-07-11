@@ -107,6 +107,8 @@ export const notifications = {
   updateRule: (id, data) => request(`/api/notifications/rules/${id}`, { method: 'PATCH', body: data }),
   removeRule: (id) => request(`/api/notifications/rules/${id}`, { method: 'DELETE' }),
   listTemplates: () => request('/api/notifications/templates'),
+  getOwnerPrefs: () => request('/api/notifications/owner-prefs'),
+  updateOwnerPrefs: (data) => request('/api/notifications/owner-prefs', { method: 'PUT', body: data }),
   getTemplate: (id) => request(`/api/notifications/templates/${id}`),
   updateTemplate: (id, data) => request(`/api/notifications/templates/${id}`, { method: 'PUT', body: data }),
   // listLog(50) ou listLog({ limit, client_id })

@@ -28,6 +28,11 @@ export async function handleNotifications(request, env, path, session) {
   if (subRoute === 'log') {
     if (method === 'GET') return listLog(request, env);
   }
+  // Preferências de alertas da Dra. Vyvian (reestruturação 2026-07)
+  if (subRoute === 'owner-prefs') {
+    if (method === 'GET') return getOwnerPrefs(env);
+    if (method === 'PUT') return updateOwnerPrefs(request, env);
+  }
 
   return jsonError('Not found', 404);
 }
@@ -143,4 +148,40 @@ async function listLog(request, env) {
 
   const result = await env.DB.prepare(sql).bind(...params).all();
   return jsonResponse({ log: result.results });
+}
+
+// ============ ALERTAS PARA A DRA. (owner) ============
+
+async function getOwnerPrefs(env) {
+  const [prefs, contacts, log] = await Promise.all([
+    env.DB.prepare('SELECT alert_type, email_enabled, whatsapp_enabled FROM owner_alert_prefs').all(),
+    env.DB.prepare('SELECT email, whatsapp FROM owner_alert_contacts WHERE id = 1').first(),
+    env.DB.prepare('SELECT alert_type, channel, status, sent_at, message_preview, error_message FROM owner_alert_log ORDER BY sent_at DESC LIMIT 20').all(),
+  ]);
+  return jsonResponse({
+    prefs: prefs.results || [],
+    contacts: contacts || { email: null, whatsapp: null },
+    log: log.results || [],
+  });
+}
+
+async function updateOwnerPrefs(request, env) {
+  let body;
+  try { body = await request.json(); } catch { return jsonError('Invalid JSON', 400); }
+
+  const VALID = ['vence_hoje', 'em_atraso', 'resumo_diario', 'pagamento_recebido'];
+  if (Array.isArray(body.prefs)) {
+    for (const p of body.prefs) {
+      if (!VALID.includes(p.alert_type)) return jsonError(`alert_type inválido: ${p.alert_type}`, 400);
+      await env.DB.prepare(
+        "UPDATE owner_alert_prefs SET email_enabled = ?, whatsapp_enabled = ?, updated_at = datetime('now') WHERE alert_type = ?"
+      ).bind(p.email_enabled ? 1 : 0, p.whatsapp_enabled ? 1 : 0, p.alert_type).run();
+    }
+  }
+  if (body.contacts) {
+    await env.DB.prepare(
+      "UPDATE owner_alert_contacts SET email = ?, whatsapp = ?, updated_at = datetime('now') WHERE id = 1"
+    ).bind(body.contacts.email || null, body.contacts.whatsapp || null).run();
+  }
+  return getOwnerPrefs(env);
 }

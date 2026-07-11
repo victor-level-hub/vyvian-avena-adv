@@ -3,6 +3,7 @@
 // 2) Despacha notificações conforme notification_rules (+ templates), com log e dedupe.
 // Idempotente no dia: não reenvia o mesmo canal/parcela duas vezes na mesma data.
 import { sendEmail, sendWhatsApp, renderTemplate } from "./lib/senders.js";
+import { runOwnerDailyAlerts } from "./lib/owner_alerts.js";
 
 function fmtMoney(amount, currency) {
   const n = Math.round(Number(amount || 0) * 100) / 100;
@@ -101,6 +102,14 @@ export async function runDailyCron(env, ctx) {
       summary.errors++;
       summary.details.push({ rule: rule.id, error: e.message });
     }
+  }
+
+  // Alertas para a Dra. Vyvian (preferências em owner_alert_prefs)
+  try {
+    summary.owner_alerts = await runOwnerDailyAlerts(env);
+  } catch (e) {
+    console.error("owner alerts:", e);
+    summary.owner_alerts = { error: String(e).slice(0, 200) };
   }
 
   return summary;

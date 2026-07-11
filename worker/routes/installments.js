@@ -1,4 +1,5 @@
 // worker/routes/installments.js
+import { ownerPaymentReceivedAlert } from '../lib/owner_alerts.js';
 import { jsonResponse, jsonError } from '../lib/response.js';
 
 export async function handleInstallments(request, env, path, session) {
@@ -131,6 +132,12 @@ async function updateInstallment(request, env, id) {
   ).bind(...params).run();
 
   if (result.meta.changes === 0) return jsonError('Parcela não encontrada', 404);
+
+  // Alerta à Dra. quando um pagamento é registado (nunca bloqueia a resposta)
+  if (body.action === 'mark_paid') {
+    try { await ownerPaymentReceivedAlert(env, id); } catch { /* já logado dentro */ }
+  }
+
   return jsonResponse({ ok: true });
 }
 

@@ -88,6 +88,7 @@ export const installments = {
     const qs = new URLSearchParams(filters).toString();
     return request(`/api/installments${qs ? '?' + qs : ''}`);
   },
+  create: (data) => request('/api/installments', { method: 'POST', body: data }),
   upcoming: (days = 30) => request(`/api/installments/upcoming?days=${days}`),
   get: (id) => request(`/api/installments/${id}`),
   markPaid: (id, paidDate, paymentMethod) =>
@@ -108,7 +109,14 @@ export const notifications = {
   listTemplates: () => request('/api/notifications/templates'),
   getTemplate: (id) => request(`/api/notifications/templates/${id}`),
   updateTemplate: (id, data) => request(`/api/notifications/templates/${id}`, { method: 'PUT', body: data }),
-  listLog: (limit = 50) => request(`/api/notifications/log?limit=${limit}`),
+  // listLog(50) ou listLog({ limit, client_id })
+  listLog: (opts = 50) => {
+    const o = typeof opts === 'number' ? { limit: opts } : opts;
+    const qs = new URLSearchParams();
+    qs.set('limit', o.limit || 50);
+    if (o.client_id) qs.set('client_id', o.client_id);
+    return request(`/api/notifications/log?${qs.toString()}`);
+  },
 };
 
 // ============ DASHBOARD ============

@@ -2,8 +2,8 @@
 import React, { useState, useEffect } from 'react';
 import ContactsEditor, { parseContacts, cleanContacts } from '../ContactsEditor';
 import AddressEditor, { EMPTY_ADDRESS, composeAddress, hasAddress, parseAddressParts } from '../AddressEditor';
-import { useParams, Link } from 'react-router-dom';
-import { clients as clientsApi, installments as installmentsApi, recibos as recibosApi, procuracoes as procApi, planos as planosApi, uploadTokens as utApi, clientDocs as docsApi, clientLogo, calendar as calendarApi } from '../apiClient';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { clients as clientsApi, installments as installmentsApi, recibos as recibosApi, procuracoes as procApi, planos as planosApi, uploadTokens as utApi, clientDocs as docsApi, clientLogo, calendar as calendarApi, notifications as notifApi } from '../apiClient';
 import { IconPhone, IconBuilding, IconCamera, IconDoc, IconUpload } from '../icons';
 
 function fmtMoney(amount, currency = 'EUR') {
@@ -83,6 +83,22 @@ export default function ClientDetail() {
   const [instructions, setInstructions] = useState('');
   const [tokenBusy, setTokenBusy] = useState(false);
   const [copied, setCopied] = useState(null);
+
+  // ── Pagamento avulso (fora do plano de parcelas)
+  const [payOpen, setPayOpen] = useState(false);
+  const [payBusy, setPayBusy] = useState(false);
+  const [payErr, setPayErr] = useState('');
+  const [payForm, setPayForm] = useState(null);
+
+  // ── Comunicações: log real de notificações enviadas
+  const [commsLog, setCommsLog] = useState(null); // null = ainda não carregado
+  const [commsErr, setCommsErr] = useState('');
+
+  // ── Eliminar cliente (dentro do modal Editar, zona de perigo)
+  const [delOpen, setDelOpen] = useState(false);
+  const [delName, setDelName] = useState('');
+  const [delBusy, setDelBusy] = useState(false);
+  const [delErr, setDelErr] = useState('');
 
   // ── IA: ler mais documentos e completar a ficha (só preenche campos VAZIOS; funde o resumo)
   const AI_ACCEPT = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'application/pdf'];
@@ -204,6 +220,73 @@ export default function ClientDetail() {
   };
 
   useEffect(() => { loadData(); }, [clientId]);
+
+  const navigate = useNavigate();
+  const todayISO = () => new Date().toISOString().slice(0, 10);
+
+  // ── Pagamento avulso: um registo 1/1 fora do plano. Cobre honorarios pontuais,
+  // consultas soltas e acertos. Se "ja foi pago", cria e marca logo como pago
+  // (mesmo fluxo mark_paid do resto do sistema, para o recibo funcionar igual).
+  const openPay = () => {
+    const c = data?.client;
+    setPayErr('');
+    setPayForm({
+      amount: '',
+      currency: c?.country === 'BR' ? 'BRL' : 'EUR',
+      due_date: todayISO(),
+      notes: '',
+      paid: true,
+      paid_date: todayISO(),
+    });
+    setPayOpen(true);
+  };
+
+  const handleSavePay = async () => {
+    const f = payForm;
+    const amount = parseFloat(String(f.amount).replace(',', '.'));
+    if (!amount || amount <= 0) { setPayErr('Indique um valor válido.'); return; }
+    if (!f.due_date) { setPayErr('Indique a data.'); return; }
+    if (f.paid && !f.paid_date) { setPayErr('Indique a data de pagamento.'); return; }
+    setPayBusy(true); setPayErr('');
+    try {
+      const id = `${clientId}-a${Date.now()}`; // convenção: -p parcelas, -m avenças, -a avulsos
+      await installmentsApi.create({
+        id, client_id: clientId,
+        installment_number: 1, total_installments: 1,
+        amount, currency: f.currency, due_date: f.due_date,
+        notes: f.notes ? `Avulso: ${f.notes}` : 'Pagamento avulso',
+      });
+      if (f.paid) await installmentsApi.markPaid(id, f.paid_date);
+      setPayOpen(false);
+      await loadData();
+    } catch (err) {
+      setPayErr(err.message || 'Falhou o registo do pagamento.');
+    } finally {
+      setPayBusy(false);
+    }
+  };
+
+  // ── Comunicações: carrega o log quando se entra no tab
+  useEffect(() => {
+    if (activeTab !== 'comms') return;
+    setCommsErr(''); setCommsLog(null);
+    notifApi.listLog({ client_id: clientId, limit: 100 })
+      .then((r) => setCommsLog(r.log || []))
+      .catch((err) => { setCommsErr(err.message); setCommsLog([]); });
+  }, [activeTab, clientId]);
+
+  // ── Eliminar cliente: exige escrever o nome exacto. O ON DELETE CASCADE do D1
+  // apaga parcelas, regras, log e documentos — nao ha volta a dar.
+  const handleDeleteClient = async () => {
+    setDelBusy(true); setDelErr('');
+    try {
+      await clientsApi.remove(clientId);
+      navigate('/admin/clientes');
+    } catch (err) {
+      setDelErr(err.message || 'Falhou a eliminação.');
+      setDelBusy(false);
+    }
+  };
 
   // logo do cliente (fetch autenticado -> objectURL)
   useEffect(() => {
@@ -754,9 +837,147 @@ export default function ClientDetail() {
             </div>
             {editError && <div className="adm-login-error" style={{ marginTop: '1rem' }}>{editError}</div>}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
+              <button
+                className="adm-btn"
+                style={{ marginRight: 'auto', color: '#b00', borderColor: 'rgba(176,0,0,0.35)' }}
+                onClick={() => { setDelName(''); setDelErr(''); setDelOpen(true); }}
+                disabled={editBusy}
+              >
+                Eliminar cliente…
+              </button>
               <button className="adm-btn" onClick={() => setEditing(false)} disabled={editBusy}>Cancelar</button>
               <button className="adm-btn adm-btn-gold" onClick={handleSaveEdit} disabled={editBusy}>
                 {editBusy ? 'A guardar…' : 'Guardar alterações'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: pagamento avulso ─────────────────────────────────────── */}
+      {payOpen && payForm && (
+        <div
+          onMouseDown={(e) => { if (e.target === e.currentTarget && !payBusy) setPayOpen(false); }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '3rem 1rem', zIndex: 1000, overflowY: 'auto' }}
+        >
+          <div style={{ background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 440, padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <h2 style={{ margin: '0 0 0.4rem', fontFamily: 'var(--serif)' }}>Pagamento avulso</h2>
+            <p style={{ margin: '0 0 1.25rem', fontSize: '0.85rem', color: 'var(--muted, #666)' }}>
+              Registo único, fora do plano de parcelas — consultas soltas, honorários pontuais, acertos.
+            </p>
+
+            <div style={{ display: 'flex', gap: '0.75rem' }}>
+              <label className="adm-field" style={{ flex: 1 }}>
+                <span>Valor *</span>
+                <input
+                  type="text" inputMode="decimal" placeholder="0,00" autoFocus
+                  value={payForm.amount}
+                  onChange={(e) => setPayForm({ ...payForm, amount: e.target.value })}
+                  disabled={payBusy}
+                />
+              </label>
+              <label className="adm-field" style={{ width: 100 }}>
+                <span>Moeda</span>
+                <select
+                  value={payForm.currency}
+                  onChange={(e) => setPayForm({ ...payForm, currency: e.target.value })}
+                  disabled={payBusy}
+                >
+                  <option value="EUR">EUR</option>
+                  <option value="BRL">BRL</option>
+                </select>
+              </label>
+            </div>
+
+            <label className="adm-field" style={{ display: 'block', marginTop: '0.9rem' }}>
+              <span>Data *</span>
+              <input
+                type="date"
+                value={payForm.due_date}
+                onChange={(e) => setPayForm({ ...payForm, due_date: e.target.value })}
+                disabled={payBusy}
+              />
+            </label>
+
+            <label className="adm-field" style={{ display: 'block', marginTop: '0.9rem' }}>
+              <span>Descrição (opcional)</span>
+              <input
+                type="text" placeholder="Ex.: consulta de 11/07"
+                value={payForm.notes}
+                onChange={(e) => setPayForm({ ...payForm, notes: e.target.value })}
+                disabled={payBusy}
+              />
+            </label>
+
+            <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1rem', fontSize: '0.9rem', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={payForm.paid}
+                onChange={(e) => setPayForm({ ...payForm, paid: e.target.checked })}
+              />
+              Já foi pago
+            </label>
+            {payForm.paid && (
+              <>
+                <label className="adm-field" style={{ display: 'block', marginTop: '0.6rem' }}>
+                  <span>Data de pagamento</span>
+                  <input
+                    type="date"
+                    value={payForm.paid_date}
+                    onChange={(e) => setPayForm({ ...payForm, paid_date: e.target.value })}
+                    disabled={payBusy}
+                  />
+                </label>
+              </>
+            )}
+
+            {payErr && <div style={{ color: '#b00', fontSize: '0.85rem', marginTop: '0.9rem' }}>{payErr}</div>}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
+              <button className="adm-btn" onClick={() => setPayOpen(false)} disabled={payBusy}>Cancelar</button>
+              <button className="adm-btn adm-btn-gold" onClick={handleSavePay} disabled={payBusy}>
+                {payBusy ? 'A registar…' : 'Registar pagamento'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Modal: eliminar cliente (confirmação pelo nome) ────────────── */}
+      {delOpen && (
+        <div
+          onMouseDown={(e) => { if (e.target === e.currentTarget && !delBusy) setDelOpen(false); }}
+          style={{ position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.65)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '4rem 1rem', zIndex: 1100, overflowY: 'auto' }}
+        >
+          <div style={{ background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 460, padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.4)', borderTop: '3px solid #b00' }}>
+            <h2 style={{ margin: '0 0 0.75rem', fontFamily: 'var(--serif)', color: '#b00' }}>Eliminar cliente</h2>
+            <p style={{ margin: '0 0 0.5rem', fontSize: '0.9rem' }}>
+              Isto elimina <strong>{data?.client?.name}</strong> e <strong>tudo o que lhe está associado</strong>:
+              parcelas e pagamentos, histórico de comunicações, regras de notificação e documentos.
+            </p>
+            <p style={{ margin: '0 0 1rem', fontSize: '0.9rem', color: '#b00' }}>
+              Não há forma de recuperar. Se o objetivo é apenas arquivar, use antes o botão Editar.
+            </p>
+            <label className="adm-field" style={{ display: 'block' }}>
+              <span>Para confirmar, escreva o nome exato do cliente</span>
+              <input
+                type="text" autoFocus
+                placeholder={data?.client?.name}
+                value={delName}
+                onChange={(e) => setDelName(e.target.value)}
+                disabled={delBusy}
+              />
+            </label>
+            {delErr && <div style={{ color: '#b00', fontSize: '0.85rem', marginTop: '0.9rem' }}>{delErr}</div>}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1.5rem' }}>
+              <button className="adm-btn" onClick={() => setDelOpen(false)} disabled={delBusy}>Cancelar</button>
+              <button
+                className="adm-btn"
+                style={{ background: '#b00', borderColor: '#b00', color: '#fff', opacity: delName.trim() === (data?.client?.name || '') ? 1 : 0.45 }}
+                onClick={handleDeleteClient}
+                disabled={delBusy || delName.trim() !== (data?.client?.name || '')}
+              >
+                {delBusy ? 'A eliminar…' : 'Eliminar definitivamente'}
               </button>
             </div>
           </div>
@@ -807,7 +1028,7 @@ export default function ClientDetail() {
         </div>
         <div className="adm-client-actions">
           <button onClick={openEdit}>Editar</button>
-          <button className="primary" onClick={() => alert('Registo de pagamento avulso — em desenvolvimento')}>+ Pagamento</button>
+          <button className="primary" onClick={openPay}>+ Pagamento</button>
         </div>
       </div>
 
@@ -1020,7 +1241,52 @@ export default function ClientDetail() {
       )}
 
       {activeTab === 'comms' && (
-        <div className="adm-empty">Histórico de comunicações — em desenvolvimento.</div>
+        <div>
+          {commsLog === null && <div className="adm-empty">A carregar…</div>}
+          {commsErr && <div className="adm-empty" style={{ color: '#b00' }}>Erro a carregar o histórico: {commsErr}</div>}
+          {commsLog !== null && !commsErr && commsLog.length === 0 && (
+            <div className="adm-empty">Ainda não foram enviadas comunicações a este cliente.</div>
+          )}
+          {commsLog !== null && commsLog.length > 0 && (
+            <table className="adm-table">
+              <thead>
+                <tr>
+                  <th>Enviado em</th>
+                  <th>Canal</th>
+                  <th>Estado</th>
+                  <th>Mensagem</th>
+                </tr>
+              </thead>
+              <tbody>
+                {commsLog.map((n) => (
+                  <tr key={n.id}>
+                    <td style={{ whiteSpace: 'nowrap' }}>
+                      <strong>{fmtDate(n.sent_at)}</strong>
+                      <span style={{ color: 'var(--muted, #888)', marginLeft: '0.4rem', fontSize: '0.8rem' }}>
+                        {String(n.sent_at || '').slice(11, 16)}
+                      </span>
+                    </td>
+                    <td>{n.channel === 'whatsapp' ? 'WhatsApp' : n.channel === 'email' ? 'E-mail' : n.channel}</td>
+                    <td>
+                      {n.status === 'sent' && <span style={{ color: 'var(--paid, #1a7a4a)' }}>Enviada</span>}
+                      {n.status === 'skipped' && <span style={{ color: 'var(--muted, #888)' }}>Ignorada</span>}
+                      {n.status === 'error' && (
+                        <span style={{ color: '#b00' }} title={n.error_message || ''}>Falhou</span>
+                      )}
+                      {!['sent', 'skipped', 'error'].includes(n.status) && <span>{n.status}</span>}
+                    </td>
+                    <td style={{ fontSize: '0.85rem', color: 'var(--muted, #666)' }}>
+                      {n.message_preview || '—'}
+                      {n.status === 'error' && n.error_message && (
+                        <div style={{ color: '#b00', fontSize: '0.78rem', marginTop: '0.15rem' }}>{n.error_message}</div>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
       )}
 
       {activeTab === 'docs' && (

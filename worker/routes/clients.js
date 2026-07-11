@@ -134,9 +134,28 @@ async function updateClient(request, env, clientId) {
 }
 
 async function deleteClient(env, clientId) {
-  // Cascata vai apagar parcelas e regras
+  // D1 primeiro: a cascata apaga parcelas, regras, log e registos de documentos.
   const result = await env.DB.prepare('DELETE FROM clients WHERE id = ?').bind(clientId).run();
   if (result.meta.changes === 0) return jsonError('Cliente não encontrado', 404);
+
+  // R2 depois, em best-effort: se falhar ficam ficheiros orfaos (inofensivo);
+  // o inverso — apagar ficheiros e o D1 falhar — deixaria um cliente com
+  // documentos partidos. Chaves: recibos/{id}/*, documentos/{id}/*, logos/{id}.
+  try {
+    const keys = [`logos/${clientId}`];
+    for (const prefix of [`recibos/${clientId}/`, `documentos/${clientId}/`]) {
+      let cursor;
+      do {
+        const page = await env.RECIBOS.list({ prefix, cursor });
+        keys.push(...page.objects.map((o) => o.key));
+        cursor = page.truncated ? page.cursor : undefined;
+      } while (cursor);
+    }
+    if (keys.length) await env.RECIBOS.delete(keys);
+  } catch (err) {
+    console.error('deleteClient: limpeza R2 falhou (ficheiros orfaos):', err.message);
+  }
+
   return jsonResponse({ ok: true });
 }
 

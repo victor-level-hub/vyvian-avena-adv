@@ -129,12 +129,18 @@ async function updateTemplate(request, env, id) {
 async function listLog(request, env) {
   const url = new URL(request.url);
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 200);
-  const result = await env.DB.prepare(`
+  const clientId = url.searchParams.get('client_id');
+
+  let sql = `
     SELECT n.*, c.name as client_name
     FROM notification_log n
     LEFT JOIN clients c ON c.id = n.client_id
-    ORDER BY n.sent_at DESC
-    LIMIT ?
-  `).bind(limit).all();
+  `;
+  const params = [];
+  if (clientId) { sql += ' WHERE n.client_id = ?'; params.push(clientId); }
+  sql += ' ORDER BY n.sent_at DESC LIMIT ?';
+  params.push(limit);
+
+  const result = await env.DB.prepare(sql).bind(...params).all();
   return jsonResponse({ log: result.results });
 }

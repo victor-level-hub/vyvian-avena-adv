@@ -5,7 +5,7 @@ data: 2026-07-11
 revisto_em: 2026-07-11
 validade: estavel
 imagem: /blog/divorcio-portugal-brasil-porque-se-complica.jpg
-imagem_alt: Dois anéis entrelaçados divididos por uma linha, sobre fundo verde-escuro
+imagem_alt: Advogada em reunião com um casal, a rever documentos num escritório com vista para a cidade
 area: familia
 ---
 

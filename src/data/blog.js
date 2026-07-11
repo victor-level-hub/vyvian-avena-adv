@@ -48,6 +48,8 @@ export const POSTS = Object.entries(RAW)
       revisto_em: meta.revisto_em || meta.data || "",
       validade: meta.validade || "estavel",
       area: meta.area || "",
+      imagem: meta.imagem || "",
+      imagem_alt: meta.imagem_alt || "",
       minutos: readingTime(body),
       html: marked.parse(body),
       texto: body,

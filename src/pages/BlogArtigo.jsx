@@ -20,6 +20,7 @@ const articleJsonLd = (post) => ({
   datePublished: post.data,
   dateModified: post.revisto_em || post.data,
   inLanguage: "pt-PT",
+  image: post.imagem ? `${SITE}${post.imagem}` : undefined,
   url: `${SITE}/blog/${post.slug}`,
   author: {
     "@type": "Person",
@@ -55,6 +56,7 @@ export default function BlogArtigo() {
         title={post.titulo}
         desc={post.descricao}
         noindex={!blogConfig.publicado}
+        image={post.imagem || undefined}
         jsonLd={[articleJsonLd(post), breadcrumbJsonLd(crumbs)]}
       />
 
@@ -74,6 +76,17 @@ export default function BlogArtigo() {
           </div>
         </div>
       </section>
+
+      {/* Imagem do artigo — a mesma do card e da og:image */}
+      {post.imagem && (
+        <div className="px-6 md:px-12 -mt-2">
+          <img
+            src={post.imagem}
+            alt={post.imagem_alt || ""}
+            className="max-w-3xl mx-auto w-full aspect-[1200/630] object-cover"
+          />
+        </div>
+      )}
 
       {/* Corpo */}
       <article className="py-16 px-6 md:px-12">

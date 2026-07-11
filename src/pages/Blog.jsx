@@ -47,8 +47,17 @@ export default function Blog() {
             <ScrollReveal key={post.slug} delay={i * 60}>
               <Link
                 to={`/blog/${post.slug}`}
-                className="group flex h-full flex-col p-8 bg-cream border border-border hover:border-gold transition-colors duration-300"
+                className="group flex h-full flex-col bg-cream border border-border hover:border-gold transition-colors duration-300 overflow-hidden"
               >
+                {post.imagem && (
+                  <img
+                    src={post.imagem}
+                    alt={post.imagem_alt || ""}
+                    loading="lazy"
+                    className="w-full aspect-[1200/630] object-cover"
+                  />
+                )}
+                <div className="flex flex-1 flex-col p-8">
                 <div className="font-body text-xs tracking-widest uppercase text-gold mb-4">
                   {fmtData(post.data)} · {post.minutos} min de leitura
                 </div>
@@ -58,6 +67,7 @@ export default function Blog() {
                   Ler artigo
                   <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform duration-300" />
                 </span>
+                </div>
               </Link>
             </ScrollReveal>
           ))}

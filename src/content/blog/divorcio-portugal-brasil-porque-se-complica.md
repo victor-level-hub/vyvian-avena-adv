@@ -4,6 +4,8 @@ descricao: Dois regimes de bens, dois tribunais possíveis, sentenças que preci
 data: 2026-07-11
 revisto_em: 2026-07-11
 validade: estavel
+imagem: /blog/divorcio-portugal-brasil-porque-se-complica.jpg
+imagem_alt: Dois anéis entrelaçados divididos por uma linha, sobre fundo verde-escuro
 area: familia
 ---
 

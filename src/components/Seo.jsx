@@ -62,7 +62,7 @@ export const FAQ_JSONLD = (faqs) => ({
  * jsonLd aceita um objecto ou um array de objectos (ex.: Service + BreadcrumbList).
  * title/desc permitem rotas dinamicas que nao constam do ROUTE_META (ex.: /areas/{slug}).
  */
-export default function Seo({ path, jsonLd, title, desc, noindex: noindexProp = false }) {
+export default function Seo({ path, jsonLd, title, desc, image, noindex: noindexProp = false }) {
   // A /404 nunca e' indexada. O prop noindex serve para conteudo em revisao
   // (ex.: blogue com blog.json publicado=false): existe no URL real mas fora
   // do indice e do sitemap ate' ser aprovado.
@@ -73,6 +73,9 @@ export default function Seo({ path, jsonLd, title, desc, noindex: noindexProp = 
     desc: desc || fallback.desc,
   };
   const canonical = path === "/" ? `${SITE}/` : `${SITE}${path}`;
+  // og:image por pagina (ex.: artigos do blogue). Caminho relativo vira absoluto —
+  // o WhatsApp e o Facebook exigem URL absoluto na og:image.
+  const ogImage = image ? (image.startsWith("http") ? image : `${SITE}${image}`) : OG_IMAGE;
   const blocks = jsonLd ? (Array.isArray(jsonLd) ? jsonLd : [jsonLd]) : [];
 
   return (
@@ -92,7 +95,7 @@ export default function Seo({ path, jsonLd, title, desc, noindex: noindexProp = 
       <meta property="og:title" content={meta.title} />
       <meta property="og:description" content={meta.desc} />
       <meta property="og:url" content={canonical} />
-      <meta property="og:image" content={OG_IMAGE} />
+      <meta property="og:image" content={ogImage} />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
       <meta property="og:image:alt" content="Vyvian Avena — Advogada" />
@@ -100,7 +103,7 @@ export default function Seo({ path, jsonLd, title, desc, noindex: noindexProp = 
       <meta name="twitter:card" content="summary_large_image" />
       <meta name="twitter:title" content={meta.title} />
       <meta name="twitter:description" content={meta.desc} />
-      <meta name="twitter:image" content={OG_IMAGE} />
+      <meta name="twitter:image" content={ogImage} />
 
       {blocks.map((block, i) => (
         <script key={i} type="application/ld+json">

@@ -4,6 +4,8 @@ descricao: Divórcio ou herança, o desafio é o mesmo, fazer dois sistemas jur�
 data: 2026-07-11
 revisto_em: 2026-07-11
 validade: estavel
+imagem: /blog/direito-portugues-e-brasileiro-numa-partilha.jpg
+imagem_alt: Dois quadrados dourados entrelaçados sobre fundo verde-escuro
 area: civil
 ---
 

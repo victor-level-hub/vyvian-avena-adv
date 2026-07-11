@@ -4,6 +4,8 @@ descricao: Um progenitor em Portugal, outro no Brasil, e uma criança no meio. A
 data: 2026-07-11
 revisto_em: 2026-07-11
 validade: estavel
+imagem: /blog/responsabilidades-parentais-pais-em-paises-diferentes.jpg
+imagem_alt: Dois pontos ligados por um arco dourado sobre uma linha horizontal
 area: familia
 ---
 

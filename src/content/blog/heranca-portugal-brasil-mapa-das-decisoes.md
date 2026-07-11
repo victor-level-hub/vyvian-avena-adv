@@ -4,6 +4,8 @@ descricao: Quando a família e o património estão repartidos pelos dois paíse
 data: 2026-07-11
 revisto_em: 2026-07-11
 validade: estavel
+imagem: /blog/heranca-portugal-brasil-mapa-das-decisoes.jpg
+imagem_alt: Diagrama de nós dourados que ramificam, como um mapa de decisões
 area: civil
 ---
 

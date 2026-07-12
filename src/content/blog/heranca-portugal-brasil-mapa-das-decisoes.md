@@ -5,7 +5,7 @@ data: 2026-07-11
 revisto_em: 2026-07-11
 validade: estavel
 imagem: /blog/heranca-portugal-brasil-mapa-das-decisoes.jpg
-imagem_alt: Diagrama de nós dourados que ramificam, como um mapa de decisões
+imagem_alt: Advogada em reunião com uma família de três gerações, a explicar documentos numa mesa de reuniões
 area: civil
 ---
 

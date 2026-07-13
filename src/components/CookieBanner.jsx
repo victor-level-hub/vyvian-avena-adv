@@ -58,7 +58,7 @@ export default function CookieBanner() {
               </button>
               <button
                 onClick={() => accept('accepted')}
-                style={{ padding: '9px 22px', border: 'none', background: '#b8935a', color: '#faf8f4', fontSize: '12px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'Mulish, sans-serif', fontWeight: 500 }}
+                style={{ padding: '9px 22px', border: 'none', background: '#b8935a', color: '#12302a', fontSize: '12px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'Mulish, sans-serif', fontWeight: 500 }}
               >
                 Aceitar Todos
               </button>
@@ -105,7 +105,7 @@ export default function CookieBanner() {
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
               <button
                 onClick={() => accept('custom')}
-                style={{ padding: '9px 22px', border: 'none', background: '#b8935a', color: '#faf8f4', fontSize: '12px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'Mulish, sans-serif', fontWeight: 500 }}
+                style={{ padding: '9px 22px', border: 'none', background: '#b8935a', color: '#12302a', fontSize: '12px', letterSpacing: '0.12em', textTransform: 'uppercase', cursor: 'pointer', fontFamily: 'Mulish, sans-serif', fontWeight: 500 }}
               >
                 Guardar Preferências
               </button>

@@ -43,6 +43,15 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
 
+    // HTTP -> HTTPS (301). O Cloudflare normalmente trata disto na edge
+    // ("Always Use HTTPS"), mas se a opção estiver desligada o pedido http
+    // chega aqui — e um site sem este redirect perde pontos de SEO e expõe
+    // o visitante. Não se aplica em dev local (localhost usa http).
+    if (url.protocol === 'http:' && url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
+      url.protocol = 'https:';
+      return Response.redirect(url.toString(), 301);
+    }
+
     // Pre-flight CORS (mesma origem normalmente; útil para dev)
     if (request.method === 'OPTIONS') {
       return new Response(null, {

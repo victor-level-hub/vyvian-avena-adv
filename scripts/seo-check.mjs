@@ -40,7 +40,12 @@ const aviso = (rota, msg) => avisos.push(`${rota}: ${msg}`);
 const ficheiroDaRota = (rota) =>
   rota === '/' ? join(DIST, 'index.html') : join(DIST, `${rota.slice(1)}.html`);
 
-function verificarPagina(rota, html) {
+function verificarPagina(rota, htmlBruto) {
+  // Os blocos <style> inline (fontes + CSS do bundle, ver scripts/inline-css.mjs)
+  // contêm classes utilitárias como ".opacity-0" que não são conteúdo da página —
+  // sem isto o check do ScrollReveal dispararia um falso positivo em cada rota.
+  const html = htmlBruto.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '');
+
   // --- <h1> unico e nao vazio ---
   const h1s = [...html.matchAll(/<h1[^>]*>([\s\S]*?)<\/h1>/gi)];
   if (h1s.length === 0) erro(rota, 'sem <h1>. Um titulo estilizado como <div> nao conta para o Google.');

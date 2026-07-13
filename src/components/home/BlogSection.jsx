@@ -3,6 +3,7 @@ import { ArrowRight } from "lucide-react";
 import ScrollReveal from "../ScrollReveal";
 import { POSTS } from "../../data/blog";
 import { getArea } from "../../data/areas";
+import { capaSrcSet } from "../../lib/imagens";
 
 const areaTitle = (slug) => (slug ? (getArea(slug)?.title ?? "Blogue") : "Blogue");
 
@@ -48,8 +49,13 @@ export default function BlogSection() {
                 <div className="overflow-hidden aspect-[1200/630]">
                   <img
                     src={post.imagem}
+                    srcSet={capaSrcSet(post.imagem)}
+                    sizes="(min-width: 768px) 33vw, 100vw"
                     alt={post.imagem_alt || ""}
                     loading="lazy"
+                    decoding="async"
+                    width="1200"
+                    height="630"
                     className="w-full h-full object-cover transition-transform duration-[1200ms] ease-out group-hover:scale-[1.05]"
                   />
                 </div>

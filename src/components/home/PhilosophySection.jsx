@@ -6,6 +6,10 @@ export default function PhilosophySection({ oceanImage }) {
       {oceanImage && (
         <img
           src={oceanImage}
+          srcSet="/oceano-dois-paises-768.webp 768w, /oceano-dois-paises-1536.webp 1536w"
+          sizes="100vw"
+          loading="lazy"
+          decoding="async"
           alt="Oceano Atlântico"
           className="absolute inset-0 w-full h-full object-cover opacity-10"
         />

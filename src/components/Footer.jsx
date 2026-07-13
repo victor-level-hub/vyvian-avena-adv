@@ -88,7 +88,7 @@ export default function Footer() {
         </div>
 
         <div className="mt-12 pt-8 border-t border-warmwhite/10 flex items-center justify-center">
-          <p className="text-xs text-warmwhite/50">
+          <p className="text-xs text-warmwhite/60">
             © {new Date().getFullYear()} Vyvian Avena — Advogada. Todos os direitos reservados.
           </p>
         </div>

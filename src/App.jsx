@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { HelmetProvider } from 'react-helmet-async';
 import Layout from './components/Layout';
@@ -13,8 +14,13 @@ import PoliticaCookies from './pages/PoliticaCookies';
 import NaoEncontrado from './pages/NaoEncontrado';
 import Blog from './pages/Blog';
 import BlogArtigo from './pages/BlogArtigo';
-import AdminApp from './admin/AdminApp';
-import UploadPage from './upload/UploadPage';
+// Carregados sob demanda (React.lazy): a área privada e o upload tokenizado
+// não fazem parte do site público — mantê-los no bundle principal custava
+// ~80 KiB de JS não usado (e o Google Fonts do admin.css a bloquear o render)
+// em cada visita ao site. O prerender não é afetado: só renderiza PublicRoutes,
+// onde estes componentes não entram.
+const AdminApp = lazy(() => import('./admin/AdminApp'));
+const UploadPage = lazy(() => import('./upload/UploadPage'));
 
 // Injecta as meta tags correspondentes à rota pública activa.
 // As rotas dinâmicas gerem o seu próprio <Seo> (título, JSON-LD, noindex),
@@ -61,8 +67,22 @@ function PublicSite() {
 export function AppRoutes() {
   return (
     <Routes>
-      <Route path="/admin/*" element={<AdminApp />} />
-      <Route path="/upload/:token" element={<UploadPage />} />
+      <Route
+        path="/admin/*"
+        element={
+          <Suspense fallback={null}>
+            <AdminApp />
+          </Suspense>
+        }
+      />
+      <Route
+        path="/upload/:token"
+        element={
+          <Suspense fallback={null}>
+            <UploadPage />
+          </Suspense>
+        }
+      />
       <Route path="/*" element={<PublicSite />} />
     </Routes>
   );

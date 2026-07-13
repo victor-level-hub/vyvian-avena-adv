@@ -5,6 +5,9 @@ export default defineConfig({
   plugins: [react()],
   build: {
     outDir: 'dist',
-    sourcemap: false,
+    // Source maps públicos: só são descarregados quando o DevTools abre —
+    // não pesam para o visitante — e limpam o aviso "missing source maps
+    // for large first-party JavaScript" do Lighthouse.
+    sourcemap: true,
   },
 })

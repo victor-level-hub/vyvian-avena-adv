@@ -4,7 +4,9 @@
    Todas as classes têm prefixo .adm- para isolamento.
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Mulish:wght@300;400;500;600;700&display=swap');
+/* Fontes: auto-hospedadas em /fonts/fonts.css (inline no index.html).
+   O @import do Google Fonts que vivia aqui entrava no CSS principal do site
+   e bloqueava o render de TODAS as páginas públicas (~750 ms no 4G). */
 
 .adm-root {
   --forest: #12302a;

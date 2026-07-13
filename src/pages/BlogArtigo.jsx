@@ -6,6 +6,7 @@ import { breadcrumbJsonLd } from "../components/Breadcrumbs";
 import NaoEncontrado from "./NaoEncontrado";
 import { POSTS, getPost } from "../data/blog";
 import { getArea } from "../data/areas";
+import { capaSrcSet } from "../lib/imagens";
 import blogConfig from "../config/blog.json";
 
 const SITE = "https://vyavenaadv.com";
@@ -82,7 +83,7 @@ export default function BlogArtigo() {
       {/* Hero full-bleed */}
       <section className="relative min-h-[480px] md:min-h-[560px] bg-forest flex items-end">
         {post.imagem && (
-          <img src={post.imagem} alt="" className="absolute inset-0 w-full h-full object-cover opacity-[0.38]" />
+          <img src={post.imagem} srcSet={capaSrcSet(post.imagem)} sizes="100vw" width="1200" height="630" fetchpriority="high" alt="" className="absolute inset-0 w-full h-full object-cover opacity-[0.38]" />
         )}
         <div
           className="absolute inset-0"
@@ -172,8 +173,13 @@ export default function BlogArtigo() {
               <div className="overflow-hidden aspect-[1200/630]">
                 <img
                   src={p.imagem}
+                  srcSet={capaSrcSet(p.imagem)}
+                  sizes="(min-width: 768px) 160px, 112px"
+                  width="1200"
+                  height="630"
                   alt={p.imagem_alt || ""}
                   loading="lazy"
+                  decoding="async"
                   className="w-full h-full object-cover transition-transform duration-[1200ms] ease-out group-hover:scale-[1.05]"
                 />
               </div>

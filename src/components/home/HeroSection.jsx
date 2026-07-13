@@ -25,7 +25,7 @@ export default function HeroSection({ heroImage }) {
           <div className="flex flex-wrap gap-4">
             <Link
               to="/contacto"
-              className="px-7 py-3 bg-gold text-warmwhite font-body text-sm tracking-wide hover:bg-gold/90 transition-all duration-300"
+              className="px-7 py-3 bg-gold text-forest font-medium font-body text-sm tracking-wide hover:bg-gold/90 transition-all duration-300"
             >
               Consulta Inicial
             </Link>
@@ -42,8 +42,15 @@ export default function HeroSection({ heroImage }) {
 
       {/* Right: Image */}
       <div className="lg:w-1/2 relative min-h-[60vh] lg:min-h-screen">
+        {/* LCP da página: srcset evita descarregar 864px num ecrã de 400,
+            fetchpriority="high" adianta o pedido na fila do browser. */}
         <img
           src={heroImage}
+          srcSet="/hero-escritorio-480.webp 480w, /hero-escritorio-864.webp 864w"
+          sizes="(min-width: 1024px) 50vw, 100vw"
+          width="864"
+          height="1184"
+          fetchpriority="high"
           alt="Escritório de advocacia"
           className="absolute inset-0 w-full h-full object-cover"
         />

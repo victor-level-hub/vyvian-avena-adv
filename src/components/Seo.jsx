@@ -11,7 +11,7 @@ const SITE_NAME = "Vyvian Avena Advogada";
  */
 export const ROUTE_META = {
   "/": {
-    title: "Vyvian Avena Advogada | Direito de Família, Civil e Comercial",
+    title: "Vyvian Avena | Advogada de Família, Civil e Comercial",
     desc: "Advocacia em Portugal e Brasil: Direito de Família, Civil e Comercial. Atendimento humanizado em Cacilhas, Santa Maria da Feira e Barra Olímpica.",
   },
   "/sobre": {

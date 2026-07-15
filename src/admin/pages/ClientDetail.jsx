@@ -1,6 +1,6 @@
 // src/admin/pages/ClientDetail.jsx
 import LerIAModal from '../ler-ia-modal.jsx';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ContactsEditor, { parseContacts, cleanContacts } from '../ContactsEditor';
 import AddressEditor, { EMPTY_ADDRESS, composeAddress, hasAddress, parseAddressParts } from '../AddressEditor';
 import { useParams, Link, useNavigate } from 'react-router-dom';

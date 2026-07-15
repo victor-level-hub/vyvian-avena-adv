@@ -5,7 +5,7 @@ data: 2026-07-15
 revisto_em: 2026-07-15
 validade: perecivel
 imagem: /blog/cobrancas-indevidas-cidadania-portuguesa.jpg
-imagem_alt: Coluna dourada do escritório Vyvian Avena sobre fundo verde-floresta
+imagem_alt: Recibo de assessoria ao lado de um comprovante oficial com selo
 area: nacionalidade
 audio: sim
 ---
@@ -13,6 +13,8 @@ audio: sim
 A busca pela nacionalidade portuguesa cresceu significativamente nos últimos anos, e junto com ela expandiu-se o mercado de assessorias especializadas. A maioria opera com seriedade, mas existem práticas irregulares que todo requerente precisa saber identificar antes de contratar e durante o processo.
 
 Como advogada que atua na área de nacionalidade portuguesa, tenho recebido em meu escritório clientes que chegam após anos de espera, com processos mal instruídos, cobranças por etapas que juridicamente não podem ser cumpridas e, em alguns casos, com a percepção de que foram vítimas de um esquema organizado de cobranças indevidas. Os relatos não são isolados. Seguem um padrão que se repete de forma idêntica em diferentes contratações, o que descarta a hipótese de mero erro administrativo.
+
+<img src="/blog/cidadania-videochamada.webp" alt="Cliente em videochamada com a advogada, com um recibo na mão e o contrato sobre a mesa" width="1376" height="768" loading="lazy" />
 
 Este artigo tem caráter informativo e preventivo. Seu objetivo é disponibilizar informação jurídica para que o consumidor possa avaliar, por conta própria, se as cobranças que recebe estão adequadas à legislação portuguesa e aos normativos consulares vigentes.
 
@@ -47,6 +49,8 @@ Em caso de indeferimento liminar, os emolumentos são devidos na totalidade, nã
 
 Para outros atos registrais, como transcrição de casamento, certidões e demais serviços consulares, os valores estão detalhados na própria tabela do Regulamento Emolumentar do IRN e na tabela de emolumentos consulares do Consulado competente. Consulte sempre as fontes oficiais antes de aceitar qualquer cobrança.
 
+<img src="/blog/cidadania-conferir-valores.webp" alt="Mulher a conferir recibos ao computador, com a tabela de emolumentos no ecrã" width="1376" height="768" loading="lazy" />
+
 Esses valores são pagos diretamente ao Estado português (IRN ou Consulado). Não são pagos à assessoria. A assessoria pode intermediar o pagamento, mas o comprovante deve ser do órgão oficial, não um recibo próprio da assessoria.
 
 ## Cobranças que devem ser questionadas
@@ -75,11 +79,15 @@ Em vários casos que chegam ao meu escritório, encontro cobranças por etapas p
 
 Se a assessoria solicita pagamento para "taxas do IRN", "taxas do Consulado" ou "emolumentos" e o comprovante que entrega ao cliente é um recibo próprio, não um documento emitido pelo IRN ou pelo Consulado, há motivo para questionamento. O comprovante oficial deve vir do órgão português, não da assessoria. Se a assessoria não consegue apresentar o comprovante do órgão oficial, não há como confirmar que o valor foi efetivamente repassado.
 
+<img src="/blog/cidadania-comprovante-oficial.webp" alt="Recibo de assessoria ao lado de um comprovante oficial com selo" width="1376" height="768" loading="lazy" />
+
 ## A chave de acesso ao IRN e a demora no envio
 
 A chave de acesso ao sistema do IRN é o comprovante de que o processo foi efetivamente iniciado. Sem ela, o requerente não tem como acompanhar o andamento nem confirmar a existência do processo.
 
 É importante esclarecer que o próprio IRN pode demorar a enviar as chaves de acesso, especialmente em períodos de alta demanda. Essa demora administrativa do órgão português é um fato e não configura, por si só, irregularidade da assessoria. O que diferencia a demora legítima da conduta irregular é a transparência: uma assessoria idônea mantém o cliente informado, fornece o número do protocolo assim que disponível e não cobra por etapas posteriores enquanto as anteriores não estão concluídas.
+
+<img src="/blog/cidadania-espera-chave.webp" alt="Homem à espera de resposta, com a pasta do processo de nacionalidade e a caixa de e-mail vazia" width="1376" height="768" loading="lazy" />
 
 Se você pagou pelo processo e não recebeu a chave de acesso, solicite formalmente à assessoria o número de protocolo ou a chave de consulta. Se a assessoria não conseguir fornecer nem o protocolo, há motivo para preocupação. E enquanto a chave não for disponibilizada, não há razão para pagar por etapas posteriores (Cartão de Cidadão, passaporte, convolação ou quaisquer outras), pois sem a confirmação de que o processo foi iniciado, as etapas seguintes não podem existir.
 
@@ -119,6 +127,8 @@ Se você contratou uma assessoria de cidadania portuguesa e reconhece alguma das
 ## Proteção jurídica do consumidor
 
 A relação entre o requerente e a assessoria de cidadania é uma relação de consumo, regida pelo Código de Defesa do Consumidor (CDC). Tribunais brasileiros já reconheceram a aplicabilidade do CDC em contratos de prestação de serviços para obtenção de cidadania estrangeira.
+
+<img src="/blog/cidadania-advogada-cliente.webp" alt="Advogada a analisar um recibo com o cliente no escritório" width="1376" height="768" loading="lazy" />
 
 Isso significa que:
 

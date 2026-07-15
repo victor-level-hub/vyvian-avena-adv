@@ -85,7 +85,7 @@ const minutos = Math.max(1, Math.round(body.replace(/[#>*_`\-]/g, " ").split(/\s
 const intro =
   `Neste artigo: ${meta.descricao.replace(/\.$/, "")}.\n\n` +
   `Escrito pela Doutora Vyvian Avena, no dia ${dataExt}.\n\n` +
-  `Artigo com ${ext(minutos)} minutos de duração.`;
+  `Artigo com ${ext(minutos)} minutos de leitura.`;
 
 const narracao = intro + "\n\n" + corpo;
 console.log(`Narração: ${narracao.length} chars · ${palavrasDom.length} palavras no corpo · modelo ${MODEL}`);
@@ -145,7 +145,7 @@ if (partes.length === 1) {
   try {
     const lista = join(outDir, `.${SLUG}.lista.txt`);
     writeFileSync(lista, partes.map((_, i) => `file '.${SLUG}.parte${i}.mp3'`).join("\n"));
-    execFileSync("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", lista, "-c", "copy", mp3Final], { cwd: outDir, stdio: "pipe" });
+    execFileSync("ffmpeg", ["-y", "-f", "concat", "-safe", "0", "-i", lista, "-c", "copy", "-write_xing", "0", mp3Final], { cwd: outDir, stdio: "pipe" });
     unlinkSync(lista);
   } catch (e) {
     console.error("ffmpeg indisponível — em máquinas sem ffmpeg usa --model turbo (pedido único).");

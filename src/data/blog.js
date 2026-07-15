@@ -20,10 +20,10 @@ const RAW = import.meta.glob("../content/blog/*.md", {
 });
 
 function parseFrontmatter(raw) {
-  const m = raw.match(/^---\n([\s\S]*?)\n---\n?/);
+  const m = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n?/);
   if (!m) return { meta: {}, body: raw };
   const meta = {};
-  for (const line of m[1].split("\n")) {
+  for (const line of m[1].split(/\r?\n/)) {
     const i = line.indexOf(":");
     if (i === -1) continue;
     meta[line.slice(0, i).trim()] = line.slice(i + 1).trim();
@@ -62,6 +62,7 @@ export const POSTS = Object.entries(RAW)
       imagem: meta.imagem || "",
       imagem_alt: meta.imagem_alt || "",
       minutos: readingTime(body),
+      audio: (meta.audio || "").trim() === "sim",
       html: marked.parse(body),
       texto: body,
     };

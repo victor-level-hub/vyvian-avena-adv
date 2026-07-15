@@ -13,11 +13,15 @@ A maioria das pessoas contrata um advogado meia dúzia de vezes na vida — e qu
 
 A recomendação é um bom ponto de partida. Mas há perguntas que qualquer pessoa pode — e deve — fazer na primeira conversa, e que dizem muito sobre se aquele profissional é o certo *para o seu caso*. Nenhuma delas exige saber Direito.
 
+<img src="/blog/perguntar-espera.webp" alt="Cliente na sala de espera de um escritório de advocacia, a rever um caderno de apontamentos sobre o seu processo" width="1376" height="768" loading="lazy" />
+
 ## "Já acompanhou casos como o meu?"
 
 A pergunta mais óbvia é também a mais importante. O Direito é vasto, e o advogado excelente em matéria empresarial pode não ser a escolha certa para uma regulação de responsabilidades parentais — e vice-versa.
 
 Atenção à **especificidade da resposta**. "Sim, trato de tudo um pouco" é uma resposta diferente de uma descrição concreta do tipo de casos, dos contornos habituais e das dificuldades típicas. Não precisa de nomes nem de detalhes de clientes (que o sigilo protege, e bem); precisa de perceber se o terreno lhe é familiar.
+
+<img src="/blog/perguntar-consulta.webp" alt="Advogada explica o caso à cliente numa primeira consulta, enquanto esta toma notas" width="1376" height="768" loading="lazy" />
 
 Se o seu caso toca dois países — bens, família ou documentos repartidos entre Portugal e o Brasil, por exemplo — a pergunta afina-se: *"trabalha com as duas jurisdições, ou vai precisar de recorrer a um colega do outro lado?"* Ambos os modelos podem funcionar; o que importa é saber à partida qual é, porque afeta a coordenação, o custo e os tempos.
 
@@ -33,11 +37,15 @@ Grande parte da frustração das pessoas com advogados não vem do resultado —
 
 Clarifique à partida: quem é o ponto de contacto, por que canal, e com que regularidade pode esperar atualizações — mesmo quando a atualização é "nada se passou, o processo aguarda". Um profissional organizado tem resposta pronta para esta pergunta, porque já pensou nela.
 
+<img src="/blog/perguntar-telefone.webp" alt="Cliente ao telefone com a advogada, com a documentação do tribunal organizada sobre a mesa" width="1376" height="768" loading="lazy" />
+
 ## "Como funcionam os honorários?"
 
 Falar de dinheiro na primeira consulta não é falta de educação — é sinal de seriedade dos dois lados. O que interessa não é apenas o valor, mas a **estrutura**: o que está incluído, o que conta como despesa à parte, o que acontece se o processo se prolongar ou mudar de natureza, e como é formalizado o acordo.
 
 Este artigo não indica valores, porque variam com a complexidade de cada caso. O princípio, esse, é universal: tudo o que ficar claro por escrito no início é um desentendimento que não vai acontecer no fim.
+
+<img src="/blog/perguntar-honorarios.webp" alt="Advogada e cliente reveem juntos, cláusula a cláusula, o acordo de honorários por escrito" width="1376" height="768" loading="lazy" />
 
 ## "O que é que precisa de mim?"
 

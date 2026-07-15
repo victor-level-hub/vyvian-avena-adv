@@ -125,3 +125,18 @@
   font-size: 0.85rem;
   color: rgba(18, 48, 42, 0.55);
 }
+
+/* --- Leitura acompanhada (AudioArtigo): palavras acendem ao ritmo da narração --- */
+.blog-prose .aw { border-radius: 2px; }
+.blog-prose.audio-escuta .aw {
+  color: rgba(18, 48, 42, 0.3);
+  transition: color 0.25s ease, background-color 0.25s ease;
+}
+.blog-prose.audio-escuta strong,
+.blog-prose.audio-escuta h2,
+.blog-prose.audio-escuta h3 { color: inherit; }
+.blog-prose.audio-escuta .aw-lida { color: rgba(18, 48, 42, 0.88); }
+.blog-prose.audio-escuta .aw-on {
+  color: #12302a;
+  background: linear-gradient(transparent 78%, rgba(184, 147, 90, 0.55) 78%);
+}

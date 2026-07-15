@@ -126,6 +126,14 @@
   color: rgba(18, 48, 42, 0.55);
 }
 
+/* imagens no corpo dos artigos: largura total + respiro antes e depois */
+.blog-prose img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 2.4rem 0;
+}
+
 /* --- Leitura acompanhada (AudioArtigo): palavras acendem ao ritmo da narração --- */
 .blog-prose .aw { border-radius: 2px; }
 .blog-prose.audio-escuta .aw {

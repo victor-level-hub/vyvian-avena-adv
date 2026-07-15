@@ -65,12 +65,63 @@ const blocos = [...html.matchAll(/<(h2|h3|p|li|blockquote)[^>]*>([\s\S]*?)<\/\1>
   .map((m) => limpar(m[2]).replace(/\s+/g, " ").trim())
   .filter(Boolean);
 const vistos = new Set();
-const corpo = blocos.filter((b) => !vistos.has(b) && vistos.add(b)).join("\n\n");
-const pc = corpo.split(/\s+/).filter(Boolean);
-if (pc.length !== palavrasDom.length || !pc.every((w, i) => w === palavrasDom[i])) {
-  console.error("ERRO: a narração não coincide palavra a palavra com o DOM — rever extração.");
-  process.exit(1);
+const corpoDom = blocos.filter((b) => !vistos.has(b) && vistos.add(b)).join("\n\n");
+{
+  const pc = corpoDom.split(/\s+/).filter(Boolean);
+  if (pc.length !== palavrasDom.length || !pc.every((w, i) => w === palavrasDom[i])) {
+    console.error("ERRO: a extração não coincide palavra a palavra com o DOM.");
+    process.exit(1);
+  }
 }
+
+// ---------- normalização falada (mantendo o mapeamento token→palavras) ----------
+// Cada token do DOM pode corresponder a VÁRIAS palavras faladas; `grupos[i]`
+// guarda quantas, para depois agregar os timestamps por token do ecrã.
+const CARD = (n) => {
+  const U = ["", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito", "nove", "dez",
+    "onze", "doze", "treze", "catorze", "quinze", "dezasseis", "dezassete", "dezoito", "dezanove"];
+  const D = ["", "", "vinte", "trinta", "quarenta", "cinquenta", "sessenta", "setenta", "oitenta", "noventa"];
+  const C = ["", "cento", "duzentos", "trezentos", "quatrocentos", "quinhentos", "seiscentos", "setecentos", "oitocentos", "novecentos"];
+  if (n === 100) return "cem";
+  const c = Math.floor(n / 100), r = n % 100;
+  const dz = r < 20 ? U[r] : D[Math.floor(r / 10)] + (r % 10 ? " e " + U[r % 10] : "");
+  return [c ? C[c] : "", c && r ? "e" : "", dz].filter(Boolean).join(" ");
+};
+const ORD_M = ["", "primeiro", "segundo", "terceiro", "quarto", "quinto", "sexto", "sétimo", "oitavo", "nono", "décimo"];
+const ORD = (n, fem) => {
+  let s;
+  if (n <= 10) s = ORD_M[n];
+  else if (n < 20) s = "décimo " + ORD_M[n - 10];
+  else if (n === 20) s = "vigésimo";
+  else if (n < 30) s = "vigésimo " + ORD_M[n - 20];
+  else s = String(n); // fora do esperado: deixa em dígitos
+  return fem ? s.replace(/o( |$)/g, "a$1") : s;
+};
+function falar(token) {
+  // €175,00 (com eventual pontuação a seguir) → "cento e setenta e cinco euros"
+  let m = token.match(/^€(\d+),(\d{2})([)\].,;:!?»"]*)$/);
+  if (m) {
+    const eur = parseInt(m[1], 10), cent = parseInt(m[2], 10);
+    let f = CARD(eur) + (eur === 1 ? " euro" : " euros");
+    if (cent) f += " e " + CARD(cent) + (cent === 1 ? " cêntimo" : " cêntimos");
+    return f + m[3];
+  }
+  // 18.º / 11.ª (com pontuação à volta) → ordinal por extenso
+  m = token.match(/^([([«"]*)(\d+)\.(º|ª)([)\].,;:!?»"]*)$/);
+  if (m) return m[1] + ORD(parseInt(m[2], 10), m[3] === "ª") + m[4];
+  return token;
+}
+const tokensDom = corpoDom.split(/(\s+)/); // preserva separadores (parágrafos!)
+const grupos = [];
+const corpo = tokensDom.map((t) => {
+  if (/^\s*$/.test(t)) return t;
+  const f = falar(t);
+  grupos.push(f.split(/\s+/).filter(Boolean).length);
+  return f;
+}).join("");
+const totalFaladasCorpo = grupos.reduce((a, b) => a + b, 0);
+const normalizados = grupos.filter((g) => g > 1).length;
+console.log(`normalização falada: ${normalizados} tokens expandidos (${palavrasDom.length} tokens → ${totalFaladasCorpo} palavras faladas)`);
 
 // ---------- introdução falada ----------
 const UNID = ["", "um", "dois", "três", "quatro", "cinco", "seis", "sete", "oito", "nove", "dez",
@@ -171,16 +222,24 @@ for (let i = 0; i < respostas.length; i += 1) {
   if (w) todas.push(w);
   offset += duracaoBloco(i);
 }
-const esperado = introPalavras + palavrasDom.length;
+const esperado = introPalavras + totalFaladasCorpo;
 if (todas.length !== esperado) {
   console.error(`ERRO: ${todas.length} palavras temporizadas ≠ ${esperado} esperadas.`);
   process.exit(1);
+}
+// agregar palavras faladas → tokens do DOM (um intervalo por token do ecrã)
+const faladas = todas.slice(introPalavras);
+const porToken = [];
+let cursor = 0;
+for (const g of grupos) {
+  porToken.push([faladas[cursor][0], faladas[cursor + g - 1][1]]);
+  cursor += g;
 }
 const arred = (x) => Math.round(x * 100) / 100;
 const dados = {
   duracao: arred(offset),
   intro_fim: arred(todas[introPalavras - 1][1]),
-  palavras: todas.slice(introPalavras).map(([a, b]) => [arred(a), arred(b)]),
+  palavras: porToken.map(([a, b]) => [arred(a), arred(b)]),
 };
 writeFileSync(join(outDir, `${SLUG}.json`), JSON.stringify(dados));
 for (let i = 0; i < partes.length; i += 1) { try { unlinkSync(join(outDir, `.${SLUG}.parte${i}.mp3`)); } catch { /* noop */ } }

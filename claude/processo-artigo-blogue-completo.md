@@ -5,15 +5,9 @@ cobranças indevidas" — o primeiro a percorrer o fluxo de ponta a ponta.*
 
 ## Visão geral do fluxo
 
-```
-texto (.md) ──► imagens (agente "Gerador de Imagens" ► Gemini ► pipeline) ──► áudio (ElevenLabs)
-                                        │                                        │
-                                        ▼                                        ▼
-                              capa + fotos de corpo                    Modo Leitor (player +
-                              com marca de água                        leitura acompanhada)
-                                        └────────────► build + deploy ◄──────────┘
-                                                        verificação em produção
-```
+![Fluxo de criação de um artigo do blogue](fluxo-artigo-blogue.svg)
+
+*(diagrama editável em `claude/fluxo-artigo-blogue.svg` — SVG com a paleta da marca; renderiza no GitHub e em qualquer visualizador de markdown que suporte imagens)*
 
 ## 1. Texto do artigo
 

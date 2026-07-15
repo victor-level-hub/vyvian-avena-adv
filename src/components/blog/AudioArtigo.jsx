@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Play, Pause, RotateCcw } from "lucide-react";
+import { Play, Pause, RotateCcw, X } from "lucide-react";
 
 /**
  * "Ouvir este artigo" — narração ElevenLabs com leitura acompanhada.
@@ -63,8 +63,10 @@ export default function AudioArtigo({ slug, proseRef }) {
   const [terminou, setTerminou] = useState(false);
   const [t, setT] = useState(0);
   const [vel, setVel] = useState(0);
+  const [cardVisivel, setCardVisivel] = useState(true);
 
   const audioRef = useRef(null);
+  const cardRef = useRef(null);
   const spansRef = useRef(null); // [{el}] após envolver
   const idxRef = useRef(-1); // última palavra acesa
   const rafRef = useRef(0);
@@ -81,6 +83,13 @@ export default function AudioArtigo({ slug, proseRef }) {
       vivo = false;
     };
   }, [slug]);
+
+  useEffect(() => {
+    if (!cardRef.current) return undefined;
+    const obs = new IntersectionObserver(([e]) => setCardVisivel(e.isIntersecting), { threshold: 0 });
+    obs.observe(cardRef.current);
+    return () => obs.disconnect();
+  }, [dados]);
 
   const prepararSpans = () => {
     if (spansRef.current || !proseRef.current || !dados) return;
@@ -142,6 +151,7 @@ export default function AudioArtigo({ slug, proseRef }) {
       a.addEventListener("ended", () => {
         setATocar(false);
         setTerminou(true);
+        document.body.classList.remove("a-ouvir");
         proseRef.current?.classList.remove("audio-escuta");
         cancelAnimationFrame(rafRef.current);
       });
@@ -154,6 +164,7 @@ export default function AudioArtigo({ slug, proseRef }) {
       }
     }
     prepararSpans();
+    document.body.classList.add("a-ouvir");
     proseRef.current?.classList.add("audio-escuta");
     setTerminou(false);
     a.play();
@@ -167,6 +178,21 @@ export default function AudioArtigo({ slug, proseRef }) {
     setATocar(false);
     proseRef.current?.classList.remove("audio-escuta");
     cancelAnimationFrame(rafRef.current);
+  };
+
+  const parar = () => {
+    const a = audioRef.current;
+    if (!a) return;
+    a.pause();
+    a.currentTime = 0;
+    idxRef.current = -1;
+    spansRef.current?.forEach((sp) => sp.classList.remove("aw-on", "aw-lida"));
+    proseRef.current?.classList.remove("audio-escuta");
+    document.body.classList.remove("a-ouvir");
+    cancelAnimationFrame(rafRef.current);
+    setATocar(false);
+    setTerminou(false);
+    setT(0);
   };
 
   const recomecar = () => {
@@ -196,6 +222,7 @@ export default function AudioArtigo({ slug, proseRef }) {
     () => () => {
       cancelAnimationFrame(rafRef.current);
       audioRef.current?.pause();
+      document.body.classList.remove("a-ouvir");
     },
     []
   );
@@ -205,8 +232,11 @@ export default function AudioArtigo({ slug, proseRef }) {
   const dur = (pronto && audioRef.current?.duration) || dados.duracao;
   const naIntro = aTocar && t < dados.intro_fim;
 
+  const sessao = t > 0 && !terminou;
+
   return (
-    <div className="mb-10 border border-gold/35 bg-[#f7f2e9] px-5 py-4 md:px-6 md:py-5">
+    <>
+    <div ref={cardRef} className="mb-10 border border-gold/35 bg-[#f7f2e9] px-5 py-4 md:px-6 md:py-5">
       <div className="flex items-center gap-4">
         <button
           type="button"
@@ -272,8 +302,76 @@ export default function AudioArtigo({ slug, proseRef }) {
               <RotateCcw className="w-4 h-4" />
             </button>
           )}
+          {sessao && (
+            <button
+              type="button"
+              onClick={parar}
+              aria-label="Parar a leitura"
+              className="text-forest/50 hover:text-gold transition-colors duration-300"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
     </div>
+
+    {sessao && !cardVisivel && (
+      <div
+        className="miniplayer fixed bottom-5 left-1/2 z-[60] w-[min(560px,calc(100vw-2rem))] rounded-full bg-forest text-warmwhite shadow-2xl px-3 py-2 flex items-center gap-3"
+        role="region"
+        aria-label="Controlo da narração"
+      >
+        <button
+          type="button"
+          onClick={aTocar ? pause : play}
+          aria-label={aTocar ? "Pausar a narração" : "Retomar a narração"}
+          className="shrink-0 w-9 h-9 rounded-full bg-gold text-forest flex items-center justify-center hover:bg-[#a07d4a] hover:text-warmwhite transition-colors duration-300"
+        >
+          {aTocar ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 translate-x-[1px]" />}
+        </button>
+
+        <div
+          role="slider"
+          aria-label="Posição da narração"
+          aria-valuemin={0}
+          aria-valuemax={Math.round(dur)}
+          aria-valuenow={Math.round(t)}
+          tabIndex={0}
+          onClick={procurar}
+          className="flex-1 h-6 flex items-center cursor-pointer min-w-0"
+        >
+          <div className="relative h-[3px] w-full bg-warmwhite/20 rounded-full">
+            <div
+              className="absolute inset-y-0 left-0 bg-gold rounded-full"
+              style={{ width: `${dur ? (t / dur) * 100 : 0}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="font-body text-[11px] text-warmwhite/70 tabular-nums shrink-0 hidden sm:block">
+          {fmt(t / VELOCIDADES[vel])} / {fmt(dur / VELOCIDADES[vel])}
+        </div>
+
+        <button
+          type="button"
+          onClick={mudarVel}
+          aria-label="Velocidade da narração"
+          className="shrink-0 font-body text-[11px] tracking-wide text-warmwhite/85 border border-warmwhite/30 rounded-full px-2 py-0.5 hover:border-gold hover:text-gold transition-colors duration-300 tabular-nums"
+        >
+          {VELOCIDADES[vel]}x
+        </button>
+
+        <button
+          type="button"
+          onClick={parar}
+          aria-label="Parar a leitura"
+          className="shrink-0 text-warmwhite/60 hover:text-gold transition-colors duration-300 pr-1"
+        >
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    )}
+    </>
   );
 }

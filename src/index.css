@@ -148,3 +148,12 @@
   color: #12302a;
   background: linear-gradient(transparent 78%, rgba(184, 147, 90, 0.55) 78%);
 }
+
+/* modo escuta: o mini-player assume o fundo do ecrã; o pill de WhatsApp recolhe */
+body.a-ouvir .wa-flutuante { opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+.wa-flutuante { transition: opacity 0.3s ease; }
+@keyframes miniplayer-sobe {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+.miniplayer { animation: miniplayer-sobe 0.3s ease both; }

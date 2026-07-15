@@ -17,7 +17,10 @@ export default function ScrollReveal({ children, className = "", delay = 0 }) {
           observer.unobserve(entry.target);
         }
       },
-      { threshold: 0.15 }
+      // threshold 0 + margem inferior: revela assim que o elemento espreita
+      // (com threshold 0.15, blocos muito altos — ex.: coluna do formulário de
+      // Contacto — nunca atingiam 15% visíveis em ecrãs baixos e ficavam ocultos)
+      { threshold: 0, rootMargin: "0px 0px -48px 0px" }
     );
     if (ref.current) observer.observe(ref.current);
     return () => observer.disconnect();

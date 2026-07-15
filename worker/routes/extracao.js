@@ -75,23 +75,35 @@ export async function handleExtracao(request, env, path, session) {
   if (!env.GEMINI_API_KEY) return jsonError("Servi\u00e7o de extra\u00e7\u00e3o n\u00e3o configurado.", 503);
 
   const ct = (request.headers.get("content-type") || "").toLowerCase();
+
+  // Texto colado pelo utilizador (modal "Ler com IA"): segue o mesmo fluxo,
+  // mas como parte textual em vez de inline_data.
+  let textoColado = null;
+  if (ct.includes("text/plain")) {
+    textoColado = (await request.text()).trim();
+    if (!textoColado) return jsonError("Texto vazio.", 400);
+    if (textoColado.length > 30000) return jsonError("Texto demasiado longo (m\u00e1x. 30 000 caracteres).", 413);
+  }
+
   const geminiMime =
     ct.includes("image/png") ? "image/png" :
     ct.includes("image/jpeg") || ct.includes("image/jpg") ? "image/jpeg" :
     ct.includes("image/webp") ? "image/webp" :
     ct.includes("application/pdf") ? "application/pdf" :
     null;
-  if (!geminiMime) return jsonError("Tipo n\u00e3o suportado. Use PNG/JPEG/WEBP ou PDF.", 415);
+  if (!geminiMime && textoColado === null) return jsonError("Tipo n\u00e3o suportado. Use PNG/JPEG/WEBP, PDF ou texto.", 415);
 
-  const buf = await request.arrayBuffer();
-  if (!buf || buf.byteLength === 0) return jsonError("Ficheiro vazio.", 400);
-  if (buf.byteLength > MAX_BYTES) return jsonError("Ficheiro demasiado grande (m\u00e1x. 8 MB).", 413);
-
-  // base64 do binário (em chunks para ficheiros maiores)
-  const u8 = new Uint8Array(buf);
-  let bin = "";
-  for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
-  const b64 = btoa(bin);
+  let b64 = null;
+  if (textoColado === null) {
+    const buf = await request.arrayBuffer();
+    if (!buf || buf.byteLength === 0) return jsonError("Ficheiro vazio.", 400);
+    if (buf.byteLength > MAX_BYTES) return jsonError("Ficheiro demasiado grande (m\u00e1x. 8 MB).", 413);
+    // base64 do binário (em chunks para ficheiros maiores)
+    const u8 = new Uint8Array(buf);
+    let bin = "";
+    for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+    b64 = btoa(bin);
+  }
 
   // resumo do processo já existente (opcional) — enviado pelo frontend para melhoria incremental
   let resumoAtual = "";
@@ -101,10 +113,13 @@ export async function handleExtracao(request, env, path, session) {
   }
   const promptFinal = resumoAtual ? PROMPT + MERGE_NOTE(resumoAtual) : PROMPT;
 
+  const docPart = textoColado !== null
+    ? { text: "DOCUMENTO \u2014 texto colado pelo utilizador (e-mail, mensagem, excerto\u2026). Trata-o como o conte\u00fado do documento a analisar:\n-----\n" + textoColado + "\n-----" }
+    : { inline_data: { mime_type: geminiMime, data: b64 } };
   const body = {
     contents: [{
       parts: [
-        { inline_data: { mime_type: geminiMime, data: b64 } },
+        docPart,
         { text: promptFinal },
       ],
     }],

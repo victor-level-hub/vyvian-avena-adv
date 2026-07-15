@@ -1,4 +1,5 @@
 // src/admin/pages/NewClient.jsx
+import LerIAModal from '../ler-ia-modal.jsx';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clients as clientsApi, installments as installmentsApi, notifications as notifApi } from '../apiClient';
@@ -31,6 +32,9 @@ export default function NewClient() {
   const [aiMsg, setAiMsg] = useState(null);
   const [aiDragOver, setAiDragOver] = useState(false);
   const aiFileRef = React.useRef(null);
+  const [aiModalOpen, setAiModalOpen] = React.useState(false);
+  // ref com o form mais recente — evita stale closure na leitura em lote
+  const formRef = React.useRef(null);
 
   const [form, setForm] = useState({
     personType: 'singular',
@@ -70,6 +74,7 @@ export default function NewClient() {
     reminderDays: '5',
     reminderChannels: 'email+whatsapp',
   });
+  formRef.current = form;
 
   const update = (key) => (e) => {
     setForm({ ...form, [key]: e.target.value });
@@ -109,21 +114,22 @@ export default function NewClient() {
 
   const aiExtractFile = async (file) => {
     if (!file) return;
-    if (!aiAccept.includes(file.type)) {
+    const isTexto = typeof file === 'string';
+    if (!isTexto && !aiAccept.includes(file.type)) {
       setAiMsg({ kind: 'err', text: 'Tipo não suportado. Use PNG, JPEG, WEBP ou PDF.' });
       return;
     }
     setAiBusy(true);
-    setAiMsg({ kind: 'info', text: 'A ler o documento com IA…' });
+    setAiMsg({ kind: 'info', text: isTexto ? 'A ler o texto com IA…' : 'A ler o documento com IA…' });
     try {
       const token = sessionStorage.getItem('vyvian_admin_token');
       const res = await fetch('/api/cadastro/extrair-documento', {
         method: 'POST',
         headers: {
-          'Content-Type': file.type,
+          'Content-Type': isTexto ? 'text/plain;charset=utf-8' : file.type,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           // envia o resumo atual para a IA melhorar (em vez de substituir às cegas)
-          ...(form.processSummary ? { 'X-Resumo-Atual': encodeURIComponent(form.processSummary.slice(0, 4000)) } : {}),
+          ...(formRef.current.processSummary ? { 'X-Resumo-Atual': encodeURIComponent(formRef.current.processSummary.slice(0, 4000)) } : {}),
         },
         body: file,
       });
@@ -134,7 +140,7 @@ export default function NewClient() {
       }
       const f = data.fields || {};
       // mapear campos da IA -> campos do form (apenas preencher se não estiver vazio)
-      const merge = { ...form };
+      const merge = { ...formRef.current };
       const set = (k, v) => { if (v != null && v !== '' && !merge[k]) merge[k] = String(v); };
       if (f.person_type === 'coletiva') merge.personType = 'coletiva';
       set('name', f.name);
@@ -171,12 +177,12 @@ export default function NewClient() {
       set('niss', f.niss);
       if (f.country && (f.country === 'PT' || f.country === 'BR')) merge.country = f.country;
       // resumo do processo: a IA já devolve a versão fundida com o resumo anterior
-      const summaryUpdated = !!(f.process_summary && f.process_summary !== form.processSummary);
+      const summaryUpdated = !!(f.process_summary && f.process_summary !== formRef.current.processSummary);
       if (f.process_summary) merge.processSummary = String(f.process_summary);
       setForm(merge);
       const filled = Object.keys(f).filter((k) => f[k]).length;
       const u = data.usage || {};
-      setAiMsg({ kind: 'ok', text: `Documento lido — ${filled} campos preenchidos${summaryUpdated ? ' · resumo do processo atualizado (ver aba Dados do Processo)' : ''}. Reveja antes de guardar. (uso: ${u.input_tokens||0} entrada, ${u.output_tokens||0} saída)` });
+      setAiMsg({ kind: 'ok', text: `${isTexto ? 'Texto lido' : 'Documento lido'} — ${filled} campos preenchidos${summaryUpdated ? ' · resumo do processo atualizado (ver aba Dados do Processo)' : ''}. Reveja antes de guardar. (uso: ${u.input_tokens||0} entrada, ${u.output_tokens||0} saída)` });
     } catch (err) {
       setAiMsg({ kind: 'err', text: 'Erro: ' + err.message });
     } finally {
@@ -186,8 +192,14 @@ export default function NewClient() {
 
   const aiOnDrop = (e) => {
     e.preventDefault(); setAiDragOver(false);
-    const file = e.dataTransfer.files && e.dataTransfer.files[0];
-    if (file) aiExtractFile(file);
+    const fs = e.dataTransfer.files ? [...e.dataTransfer.files] : [];
+    if (fs.length) aiSubmeterLote('', fs);
+  };
+  // modal: texto colado + ficheiros, processados em sequência
+  const aiSubmeterLote = async (texto, files) => {
+    setAiModalOpen(false);
+    if (texto) await aiExtractFile(texto);
+    for (const f of files || []) await aiExtractFile(f); // eslint-disable-line no-await-in-loop
   };
   const aiOnFile = (e) => {
     const file = e.target.files && e.target.files[0];
@@ -378,11 +390,12 @@ export default function NewClient() {
 
       <form onSubmit={handleSubmit}>
         <input ref={aiFileRef} type="file" accept="image/png,image/jpeg,image/webp,application/pdf" style={{ display: 'none' }} onChange={aiOnFile} />
+        <LerIAModal open={aiModalOpen} onClose={() => setAiModalOpen(false)} onSubmeter={aiSubmeterLote} />
         <div
           onDragOver={(e) => { e.preventDefault(); setAiDragOver(true); }}
           onDragLeave={() => setAiDragOver(false)}
           onDrop={aiOnDrop}
-          onClick={() => !aiBusy && aiFileRef.current && aiFileRef.current.click()}
+          onClick={() => !aiBusy && setAiModalOpen(true)}
           style={{
             border: `2px dashed ${aiDragOver ? 'var(--gold, #b8935a)' : 'rgba(0,0,0,0.18)'}`,
             background: aiDragOver ? 'rgba(184,147,90,0.08)' : 'var(--cream, #f5f0e8)',

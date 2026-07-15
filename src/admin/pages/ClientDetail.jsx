@@ -1,4 +1,5 @@
 // src/admin/pages/ClientDetail.jsx
+import LerIAModal from '../ler-ia-modal.jsx';
 import React, { useState, useEffect } from 'react';
 import ContactsEditor, { parseContacts, cleanContacts } from '../ContactsEditor';
 import AddressEditor, { EMPTY_ADDRESS, composeAddress, hasAddress, parseAddressParts } from '../AddressEditor';
@@ -40,6 +41,9 @@ export default function ClientDetail() {
   const { clientId } = useParams();
   const [activeTab, setActiveTab] = useState('plan');
   const [data, setData] = useState(null);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const dataRef = useRef(null);
+  dataRef.current = data;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [markingPaid, setMarkingPaid] = useState(null);
@@ -118,20 +122,21 @@ export default function ClientDetail() {
   };
 
   const aiExtractFile = async (file) => {
-    const client = data?.client;
+    const client = dataRef.current?.client;
     if (!client || !file) return;
-    if (!AI_ACCEPT.includes(file.type)) {
+    const isTexto = typeof file === 'string';
+    if (!isTexto && !AI_ACCEPT.includes(file.type)) {
       setAiMsg({ kind: 'err', text: 'Tipo não suportado. Use PNG, JPEG, WEBP ou PDF.' });
       return;
     }
     setAiBusy(true);
-    setAiMsg({ kind: 'info', text: 'A ler o documento com IA…' });
+    setAiMsg({ kind: 'info', text: isTexto ? 'A ler o texto com IA…' : 'A ler o documento com IA…' });
     try {
       const token = sessionStorage.getItem('vyvian_admin_token');
       const res = await fetch('/api/cadastro/extrair-documento', {
         method: 'POST',
         headers: {
-          'Content-Type': file.type,
+          'Content-Type': isTexto ? 'text/plain;charset=utf-8' : file.type,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...(client.process_summary ? { 'X-Resumo-Atual': encodeURIComponent(client.process_summary.slice(0, 4000)) } : {}),
         },
@@ -192,18 +197,25 @@ export default function ClientDetail() {
       if (f.process_summary && f.process_summary !== client.process_summary) upd.process_summary = f.process_summary;
 
       if (Object.keys(upd).length === 0) {
-        setAiMsg({ kind: 'ok', text: 'Documento lido — sem informação nova para acrescentar.' });
+        setAiMsg({ kind: 'ok', text: `${isTexto ? 'Texto lido' : 'Documento lido'} — sem informação nova para acrescentar.` });
         return;
       }
       await clientsApi.update(client.id, upd);
       await loadData();
       const changed = [...new Set(Object.keys(upd).filter((k) => k !== 'email' && k !== 'phone').map((k) => FIELD_PT[k] || k))];
-      setAiMsg({ kind: 'ok', text: `Documento lido — atualizado: ${changed.join(', ')}.` });
+      setAiMsg({ kind: 'ok', text: `${isTexto ? 'Texto lido' : 'Documento lido'} — atualizado: ${changed.join(', ')}.` });
     } catch (err) {
       setAiMsg({ kind: 'err', text: 'Erro: ' + err.message });
     } finally {
       setAiBusy(false);
     }
+  };
+
+  // modal "Ler com IA": texto colado + ficheiros, em sequência (dataRef mantém o cliente fresco entre itens)
+  const aiSubmeterLote = async (texto, files) => {
+    setAiModalOpen(false);
+    if (texto) await aiExtractFile(texto);
+    for (const f of files || []) await aiExtractFile(f); // eslint-disable-line no-await-in-loop
   };
 
   const loadData = async () => {
@@ -1083,8 +1095,8 @@ export default function ClientDetail() {
       <div
         onDragOver={(e) => { e.preventDefault(); setAiDragOver(true); }}
         onDragLeave={() => setAiDragOver(false)}
-        onDrop={(e) => { e.preventDefault(); setAiDragOver(false); const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) aiExtractFile(f); }}
-        onClick={() => !aiBusy && aiFileRef.current && aiFileRef.current.click()}
+        onDrop={(e) => { e.preventDefault(); setAiDragOver(false); const fs = e.dataTransfer.files ? [...e.dataTransfer.files] : []; if (fs.length) aiSubmeterLote('', fs); }}
+        onClick={() => !aiBusy && setAiModalOpen(true)}
         style={{
           border: `2px dashed ${aiDragOver ? 'var(--gold, #b8935a)' : 'rgba(0,0,0,0.15)'}`,
           background: aiDragOver ? 'rgba(184,147,90,0.08)' : 'var(--cream, #f5f0e8)',
@@ -1111,6 +1123,8 @@ export default function ClientDetail() {
           </div>
         )}
       </div>
+
+      <LerIAModal open={aiModalOpen} onClose={() => setAiModalOpen(false)} onSubmeter={aiSubmeterLote} />
 
       <div className="adm-tabs">
         {[

@@ -98,6 +98,7 @@ const ORD = (n, fem) => {
   return fem ? s.replace(/o( |$)/g, "a$1") : s;
 };
 function falar(token) {
+  if (token === "*") return "Nota:"; // marcador visual; falado como "Nota:"
   // €175,00 (com eventual pontuação a seguir) → "cento e setenta e cinco euros"
   let m = token.match(/^€(\d+),(\d{2})([)\].,;:!?»"]*)$/);
   if (m) {

@@ -47,6 +47,8 @@ Conforme o Regulamento Emolumentar dos Registos e do Notariado (Artigo 18.º), d
 
 Em caso de indeferimento liminar, os emolumentos são devidos na totalidade, não sendo reembolsáveis.
 
+<small>* Valores do Regulamento Emolumentar em vigor na data de publicação deste artigo, 15 de julho de 2026 — confirme sempre a tabela atualizada no site oficial do IRN ou do Consulado competente.</small>
+
 Para outros atos registrais, como transcrição de casamento, certidões e demais serviços consulares, os valores estão detalhados na própria tabela do Regulamento Emolumentar do IRN e na tabela de emolumentos consulares do Consulado competente. Consulte sempre as fontes oficiais antes de aceitar qualquer cobrança.
 
 <img src="/blog/cidadania-conferir-valores.webp" alt="Mulher a conferir recibos ao computador, com a tabela de emolumentos no ecrã" width="1376" height="768" loading="lazy" />

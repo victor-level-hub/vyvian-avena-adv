@@ -1,7 +1,10 @@
+import { trackEvent } from "../lib/analytics";
+
 export default function WhatsAppButton() {
   return (
     <a
       href="https://wa.me/351911831530?text=Olá,%20gostaria%20de%20agendar%20uma%20consulta."
+      onClick={() => trackEvent("whatsapp_click", { origem: "pill_flutuante" })}
       target="_blank"
       rel="noopener noreferrer"
       aria-label="Fale connosco via WhatsApp"

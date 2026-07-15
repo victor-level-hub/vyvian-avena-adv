@@ -1,7 +1,9 @@
+import { useEffect } from "react";
 import { useForm, ValidationError } from "@formspree/react";
 import { Phone, Mail, Clock, MessageCircle, Instagram } from "lucide-react";
 import ScrollReveal from "../components/ScrollReveal";
 import ContactMap from "../components/ContactMap";
+import { trackEvent } from "../lib/analytics";
 
 const AREAS_OPTIONS = [
   "Direito de Família",
@@ -15,6 +17,11 @@ const AREAS_OPTIONS = [
 
 export default function Contacto() {
   const [state, handleSubmit] = useForm("mqewdklw");
+
+  // GA4: conversão quando o formulário é enviado com sucesso
+  useEffect(() => {
+    if (state.succeeded) trackEvent("generate_lead", { form: "contacto" });
+  }, [state.succeeded]);
 
   return (
     <div>
@@ -150,7 +157,7 @@ export default function Contacto() {
                 <Phone className="w-5 h-5 text-gold mt-1 shrink-0" />
                 <div>
                   <div className="font-body text-xs tracking-widest uppercase text-forest/40 mb-1">Telefone</div>
-                  <a href="tel:+351911831530" className="font-body text-forest hover:text-gold transition-colors">
+                  <a href="tel:+351911831530" onClick={() => trackEvent("tel_click", { origem: "pagina_contacto" })} className="font-body text-forest hover:text-gold transition-colors">
                     +351 911 831 530
                   </a>
                 </div>
@@ -159,10 +166,10 @@ export default function Contacto() {
                 <Mail className="w-5 h-5 text-gold mt-1 shrink-0" />
                 <div>
                   <div className="font-body text-xs tracking-widest uppercase text-forest/40 mb-1">Email</div>
-                  <a href="mailto:vyavena@gmail.com" className="font-body text-forest hover:text-gold transition-colors block">
+                  <a href="mailto:vyavena@gmail.com" onClick={() => trackEvent("email_click", { origem: "pagina_contacto" })} className="font-body text-forest hover:text-gold transition-colors block">
                     vyavena@gmail.com
                   </a>
-                  <a href="mailto:vyvianavena-60987P@adv.oa.pt" className="font-body text-forest/70 hover:text-gold transition-colors block text-sm mt-1">
+                  <a href="mailto:vyvianavena-60987P@adv.oa.pt" onClick={() => trackEvent("email_click", { origem: "pagina_contacto" })} className="font-body text-forest/70 hover:text-gold transition-colors block text-sm mt-1">
                     vyvianavena-60987P@adv.oa.pt
                   </a>
                 </div>
@@ -172,6 +179,7 @@ export default function Contacto() {
                 <div>
                   <div className="font-body text-xs tracking-widest uppercase text-forest/40 mb-1">WhatsApp</div>
                   <a href="https://wa.me/351911831530" target="_blank" rel="noopener noreferrer"
+                    onClick={() => trackEvent("whatsapp_click", { origem: "pagina_contacto" })}
                     className="font-body text-forest hover:text-gold transition-colors">
                     +351 911 831 530
                   </a>

@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { trackEvent } from "../lib/analytics";
 import { Phone, Mail, MapPin, Instagram } from "lucide-react";
 
 const LINKS = [
@@ -45,15 +46,15 @@ export default function Footer() {
           <div>
             <h4 className="font-heading text-lg text-warmwhite mb-4">Contacto</h4>
             <div className="flex flex-col gap-3 text-sm">
-              <a href="tel:+351911831530" className="flex items-center gap-2 hover:text-gold transition-colors">
+              <a href="tel:+351911831530" onClick={() => trackEvent("tel_click", { origem: "rodape" })} className="flex items-center gap-2 hover:text-gold transition-colors">
                 <Phone className="w-4 h-4 text-gold" />
                 +351 911 831 530
               </a>
-              <a href="mailto:vyavena@gmail.com" className="flex items-center gap-2 hover:text-gold transition-colors">
+              <a href="mailto:vyavena@gmail.com" onClick={() => trackEvent("email_click", { origem: "rodape" })} className="flex items-center gap-2 hover:text-gold transition-colors">
                 <Mail className="w-4 h-4 text-gold" />
                 vyavena@gmail.com
               </a>
-              <a href="mailto:vyvianavena-60987P@adv.oa.pt" className="flex items-center gap-2 hover:text-gold transition-colors text-warmwhite/60">
+              <a href="mailto:vyvianavena-60987P@adv.oa.pt" onClick={() => trackEvent("email_click", { origem: "rodape" })} className="flex items-center gap-2 hover:text-gold transition-colors text-warmwhite/60">
                 <Mail className="w-4 h-4 text-gold" />
                 vyvianavena-60987P@adv.oa.pt
               </a>

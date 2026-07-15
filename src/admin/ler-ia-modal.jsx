@@ -41,6 +41,8 @@ export default function LerIAModal({ open, onClose, onSubmeter }) {
   return (
     <div
       onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      onDragOver={(e) => e.preventDefault()}
+      onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files) juntar(e.dataTransfer.files); }}
       style={{ position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.65)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '4rem 1rem', zIndex: 1100, overflowY: 'auto' }}
     >
       <div

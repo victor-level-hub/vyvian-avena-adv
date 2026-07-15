@@ -40,7 +40,7 @@ export const AREAS = [
       "Sucessões e heranças",
       "Direito do consumidor",
     ],
-    metaTitle: "Advogada de Direito Civil | Contratos, Heranças e Indemnizações",
+    metaTitle: "Advogada de Direito Civil | Contratos e Heranças",
     metaDesc:
       "Apoio jurídico em contratos, arrendamento, responsabilidade civil, sucessões e heranças. Atendimento em Portugal e Brasil, incluindo casos transfronteiriços.",
   },
@@ -74,7 +74,7 @@ export const AREAS = [
       "Recuperação de crédito",
       "Insolvência e reestruturação",
     ],
-    metaTitle: "Advogada para Cobrança de Dívida | Injunções e Ações Executivas",
+    metaTitle: "Advogada | Cobrança de Dívida, Injunções e Ações Executivas",
     metaDesc:
       "Recuperação de créditos por via extrajudicial e judicial: injunções, ações executivas e negociação. Apoio a empresas e particulares em Portugal e Brasil.",
   },
@@ -91,9 +91,9 @@ export const AREAS = [
       "Autorização de residência",
       "Vistos e permissões migratórias",
     ],
-    metaTitle: "Advogada de Nacionalidade Portuguesa | Naturalização e Residência",
+    metaTitle: "Advogada | Nacionalidade Portuguesa e Naturalização",
     metaDesc:
-      "Apoio no processo de nacionalidade portuguesa, naturalização, reagrupamento familiar e autorização de residência. Acompanhamento para quem vive entre Portugal e Brasil.",
+      "Apoio em nacionalidade portuguesa, naturalização, reagrupamento familiar e autorização de residência, para quem vive entre Portugal e Brasil.",
   },
   {
     icon: BookOpen,

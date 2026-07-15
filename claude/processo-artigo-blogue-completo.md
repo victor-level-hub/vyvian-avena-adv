@@ -125,6 +125,11 @@ ELEVENLABS_API_KEY=sk_... node scripts/gerar-audio-blogue.mjs --slug {slug} [--m
 5. Commit + push para `main` — **sempre**, no próprio dia. (Regra reforçada a
    15 jul: foi preciso reconstruir do site publicado o trabalho de 13-14 jul que
    tinha ficado só em produção.)
+6. **Solicitar indexação ao Google** (ação do Victor, ~2 min): em
+   https://search.google.com/search-console (propriedade `vyavenaadv.com`),
+   colar o URL do artigo na barra **Inspeção de URL** → **Solicitar indexação**.
+   Salta a fila de rastreio: o artigo aparece nas pesquisas em horas em vez de
+   dias. O Bing não precisa — apanha o sitemap sozinho.
 
 ## Checklist rápido por artigo
 
@@ -138,3 +143,4 @@ ELEVENLABS_API_KEY=sk_... node scripts/gerar-audio-blogue.mjs --slug {slug} [--m
 - [ ] Áudio gerado + validação automática OK
 - [ ] Build BUILD_OK → deploy → verificação em produção (lista acima)
 - [ ] Commit + push no `main`
+- [ ] [Solicitar indexação](https://search.google.com/search-console) do URL novo no Search Console (Victor)

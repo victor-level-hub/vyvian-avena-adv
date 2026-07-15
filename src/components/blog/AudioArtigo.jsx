@@ -223,7 +223,7 @@ export default function AudioArtigo({ slug, proseRef }) {
               Ouvir este artigo
             </div>
             <div className="font-body text-[12px] text-forest/50 tabular-nums shrink-0">
-              {fmt(t)} / {fmt(dur)}
+              {fmt(t / VELOCIDADES[vel])} / {fmt(dur / VELOCIDADES[vel])}
             </div>
           </div>
           <div className="font-body text-[12.5px] text-forest/55 mt-0.5">

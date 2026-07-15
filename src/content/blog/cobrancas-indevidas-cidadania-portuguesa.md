@@ -5,7 +5,7 @@ data: 2026-07-15
 revisto_em: 2026-07-15
 validade: perecivel
 imagem: /blog/cobrancas-indevidas-cidadania-portuguesa.jpg
-imagem_alt: Recibo de assessoria ao lado de um comprovante oficial com selo
+imagem_alt: Cliente em videochamada com a advogada, com um recibo na mão
 area: nacionalidade
 audio: sim
 ---

@@ -5,7 +5,7 @@ data: 2026-07-11
 revisto_em: 2026-07-11
 validade: estavel
 imagem: /blog/o-que-perguntar-a-um-advogado-antes-de-contratar.jpg
-imagem_alt: Aspas tipográficas douradas em grande escala
+imagem_alt: Sala de espera de um escritório de advocacia, com um cliente a rever notas
 area:
 ---
 

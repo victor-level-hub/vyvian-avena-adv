@@ -5,7 +5,7 @@ data: 2026-07-11
 revisto_em: 2026-07-11
 validade: estavel
 imagem: /blog/responsabilidades-parentais-pais-em-paises-diferentes.jpg
-imagem_alt: Dois pontos ligados por um arco dourado sobre uma linha horizontal
+imagem_alt: Criança em videochamada com o pai, a mostrar o caderno da escola
 area: familia
 ---
 

@@ -6,6 +6,7 @@ import { clients as clientsApi, installments as installmentsApi, notifications a
 import { IconDoc } from '../icons';
 import ContactsEditor, { cleanContacts } from '../ContactsEditor';
 import AddressEditor, { EMPTY_ADDRESS, composeAddress, hasAddress } from '../AddressEditor';
+import PersonFields, { PersonPills, EMPTY_PERSON, personHasData } from '../PersonFields';
 
 function makeId(name) {
   return name
@@ -35,6 +36,12 @@ export default function NewClient() {
   const [aiModalOpen, setAiModalOpen] = React.useState(false);
   // ref com o form mais recente — evita stale closure na leitura em lote
   const formRef = React.useRef(null);
+
+  // Cliente conjunto (várias pessoas singulares, ex.: casal):
+  // people = pessoas ADICIONAIS; activePerson: 0 = titular, 1.. = people[i-1]
+  const [people, setPeople] = useState([]);
+  const [activePerson, setActivePerson] = useState(0);
+  const peopleRef = React.useRef({ people, activePerson });
 
   const [form, setForm] = useState({
     personType: 'singular',
@@ -75,6 +82,19 @@ export default function NewClient() {
     reminderChannels: 'email+whatsapp',
   });
   formRef.current = form;
+  peopleRef.current = { people, activePerson };
+
+  const addPerson = () => {
+    setPeople((ps) => {
+      setActivePerson(ps.length + 1);
+      return [...ps, { ...EMPTY_PERSON, addrParts: { ...EMPTY_ADDRESS, country: formRef.current.country || 'PT' } }];
+    });
+  };
+  const updatePerson = (idx) => (v) => setPeople((ps) => ps.map((p, i) => (i === idx ? v : p)));
+  const removePerson = (idx) => {
+    setPeople((ps) => ps.filter((_, i) => i !== idx));
+    setActivePerson(0);
+  };
 
   const update = (key) => (e) => {
     setForm({ ...form, [key]: e.target.value });
@@ -84,6 +104,7 @@ export default function NewClient() {
   // mudar o tipo de cliente ajusta as labels default dos contactos ainda vazios
   const updatePersonType = (e) => {
     const pt = e.target.value;
+    if (pt === 'coletiva') setActivePerson(0); // pessoas adicionais só em singular
     const relabel = (list, lbl) => list.every((c) => !c.value) ? list.map((c, i) => ({ ...c, label: i === 0 ? lbl : c.label })) : list;
     setForm((f) => ({
       ...f,
@@ -139,6 +160,41 @@ export default function NewClient() {
         return;
       }
       const f = data.fields || {};
+      // Pessoa adicional ativa? Os campos PESSOAIS vão para ela (preencher só vazios);
+      // contactos e resumo do processo continuam no nível do cliente.
+      const { people: curPeople, activePerson: curActive } = peopleRef.current;
+      if (formRef.current.personType === 'singular' && curActive > 0 && curPeople[curActive - 1]) {
+        const idx = curActive - 1;
+        const pp = { ...curPeople[idx] };
+        const pset = (k, v) => { if (v != null && v !== '' && !pp[k]) pp[k] = String(v); };
+        pset('name', f.name);
+        pset('identification', f.identification);
+        pset('nationality', f.nationality);
+        pset('marital_status', f.marital_status);
+        pset('birth_date', f.birth_date);
+        pset('birth_place', f.birth_place);
+        pset('doc_type', f.doc_type);
+        pset('doc_number', f.doc_number);
+        pset('doc_validity', f.doc_validity);
+        pset('niss', f.niss);
+        pset('rg', f.rg);
+        pset('father_name', f.father_name);
+        pset('mother_name', f.mother_name);
+        const cleanP = (o) => Object.fromEntries(Object.entries(o || {}).filter(([, v]) => v != null && v !== ''));
+        if (f.address_parts && !hasAddress(pp.addrParts)) {
+          pp.addrParts = { ...EMPTY_ADDRESS, country: formRef.current.country || 'PT', ...cleanP(f.address_parts) };
+        } else if (f.address && !hasAddress(pp.addrParts)) {
+          pp.addrParts = { ...EMPTY_ADDRESS, country: formRef.current.country || 'PT', via_type: 'Outro', via_name: String(f.address) };
+        }
+        setPeople((ps) => ps.map((x, i) => (i === idx ? pp : x)));
+        // resumo do processo continua a ser do cliente
+        if (f.process_summary && f.process_summary !== formRef.current.processSummary) {
+          setForm((prev) => ({ ...prev, processSummary: String(f.process_summary) }));
+        }
+        const uP = data.usage || {};
+        setAiMsg({ kind: 'ok', text: `${isTexto ? 'Texto lido' : 'Documento lido'} — campos aplicados à pessoa ${curActive + 1} (${pp.name || 'sem nome'}). Reveja antes de guardar. (uso: ${uP.input_tokens||0} entrada, ${uP.output_tokens||0} saída)` });
+        return;
+      }
       // mapear campos da IA -> campos do form (apenas preencher se não estiver vazio)
       const merge = { ...formRef.current };
       const set = (k, v) => { if (v != null && v !== '' && !merge[k]) merge[k] = String(v); };
@@ -242,6 +298,17 @@ export default function NewClient() {
       focusField(first[1], first[2]);
       return;
     }
+
+    // pessoas adicionais: se tem dados preenchidos, o nome é obrigatório
+    if (form.personType === 'singular') {
+      const semNome = people.findIndex((p) => !p.name.trim() && personHasData(p));
+      if (semNome !== -1) {
+        setError(`A pessoa ${semNome + 2} tem dados preenchidos mas falta o nome.`);
+        setTab('cliente');
+        setActivePerson(semNome + 1);
+        return;
+      }
+    }
     setSubmitting(true);
 
     try {
@@ -257,6 +324,19 @@ export default function NewClient() {
         : 0;
 
       const isColetiva = form.personType === 'coletiva';
+
+      // pessoas adicionais (cliente conjunto) — só em pessoa singular
+      const extraPeople = isColetiva ? [] : people
+        .filter((p) => p.name.trim())
+        .map((p) => {
+          const { addrParts, ...rest } = p;
+          return {
+            ...rest,
+            address: hasAddress(addrParts) ? composeAddress(addrParts) : null,
+            address_parts: hasAddress(addrParts) ? JSON.stringify(addrParts) : null,
+          };
+        });
+
       await clientsApi.create({
         id: clientId,
         name: form.name,
@@ -294,6 +374,7 @@ export default function NewClient() {
         honorarios_total: totalContracted,
         honorarios_parcelas: numParcelas,
         contract_start_date: form.startDate,
+        people: extraPeople,
       });
 
       // 2. Gerar parcelas
@@ -475,6 +556,21 @@ export default function NewClient() {
         </div>
 
         <div className="adm-form-section-title">{form.personType === 'coletiva' ? 'Dados da empresa' : 'Dados pessoais'}</div>
+        {form.personType === 'singular' && (
+          <PersonPills
+            names={[form.name || 'Pessoa 1', ...people.map((p) => p.name)]}
+            active={activePerson}
+            onSelect={setActivePerson}
+            onAdd={addPerson}
+            disabled={submitting}
+          />
+        )}
+        {form.personType === 'singular' && people.length > 0 && activePerson === 0 && (
+          <div className="adm-field-helper" style={{ margin: '-0.4rem 0 0.8rem' }}>
+            Cliente conjunto: os contactos, a área e o plano financeiro são partilhados; cada pessoa tem os seus dados pessoais (use as pills acima).
+          </div>
+        )}
+        {(form.personType === 'coletiva' || activePerson === 0) && (
         <div className="adm-form-grid">
           <div className="adm-field">
             <label style={invLabel('name')}>{form.personType === 'coletiva' ? 'Denominação da empresa *' : 'Nome completo *'}</label>
@@ -575,6 +671,31 @@ export default function NewClient() {
             </>
           )}
         </div>
+        )}
+
+        {form.personType === 'singular' && activePerson > 0 && people[activePerson - 1] && (
+          <>
+            <div className="adm-form-grid">
+              <PersonFields
+                value={people[activePerson - 1]}
+                onChange={updatePerson(activePerson - 1)}
+                country={form.country}
+                disabled={submitting}
+              />
+            </div>
+            <div style={{ margin: '0.6rem 0 0.2rem' }}>
+              <button
+                type="button"
+                className="adm-btn adm-btn-ghost adm-btn-sm"
+                style={{ color: '#b00', borderColor: 'rgba(176,0,0,0.35)' }}
+                onClick={() => removePerson(activePerson - 1)}
+                disabled={submitting}
+              >
+                Remover esta pessoa
+              </button>
+            </div>
+          </>
+        )}
 
         {form.personType === 'coletiva' && (
           <>

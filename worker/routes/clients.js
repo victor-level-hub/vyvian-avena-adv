@@ -40,7 +40,11 @@ async function listClients(request, env) {
   const status = url.searchParams.get('status');
   const search = url.searchParams.get('search');
 
-  let sql = 'SELECT * FROM clients WHERE 1=1';
+  // extra_people / extra_names: pessoas adicionais (clientes conjuntos, ex.: casais)
+  let sql = `SELECT clients.*,
+    (SELECT COUNT(*) FROM client_people cp WHERE cp.client_id = clients.id) AS extra_people,
+    (SELECT group_concat(cp.name, ' · ') FROM client_people cp WHERE cp.client_id = clients.id) AS extra_names
+    FROM clients WHERE 1=1`;
   const params = [];
   if (country) { sql += ' AND country = ?'; params.push(country); }
   if (status) { sql += ' AND status = ?'; params.push(status); }
@@ -69,10 +73,16 @@ async function getClient(env, clientId) {
     'SELECT * FROM notification_rules WHERE client_id = ?'
   ).bind(clientId).all();
 
+  // Junta pessoas adicionais (clientes conjuntos)
+  const people = await env.DB.prepare(
+    'SELECT * FROM client_people WHERE client_id = ? ORDER BY position ASC, created_at ASC'
+  ).bind(clientId).all();
+
   return jsonResponse({
     client,
     installments: installments.results,
     rules: rules.results,
+    people: people.results,
   });
 }
 
@@ -105,7 +115,38 @@ async function createClient(request, env) {
     throw err;
   }
 
+  // Pessoas adicionais (cliente conjunto): opcional, array de objetos
+  if (Array.isArray(body.people) && body.people.length) {
+    const stmts = peopleInsertStatements(env, id, body.people);
+    if (stmts.length) await env.DB.batch(stmts);
+  }
+
   return jsonResponse({ ok: true, id }, 201);
+}
+
+// Constrói os INSERTs das pessoas adicionais (ignora entradas sem nome).
+function peopleInsertStatements(env, clientId, people) {
+  const stmts = [];
+  let pos = 2;
+  for (const p of people) {
+    if (!p || !String(p.name || '').trim()) continue;
+    const pid = p.id && String(p.id).startsWith(`${clientId}-pes`) ? p.id : `${clientId}-pes${pos}-${Math.random().toString(36).slice(2, 6)}`;
+    stmts.push(env.DB.prepare(`
+      INSERT INTO client_people (id, client_id, position, name, identification, nationality, marital_status, rg, birth_date, birth_place, doc_type, doc_number, doc_validity, niss, father_name, mother_name, filiation, address, address_parts)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      pid, clientId, pos,
+      String(p.name).trim(),
+      p.identification || null, p.nationality || null, p.marital_status || null, p.rg || null,
+      p.birth_date || null, p.birth_place || null,
+      p.doc_type || null, p.doc_number || null, p.doc_validity || null, p.niss || null,
+      p.father_name || null, p.mother_name || null,
+      p.filiation || [p.father_name, p.mother_name].filter(Boolean).join(' e ') || null,
+      p.address || null, serializeContacts(p.address_parts)
+    ));
+    pos++;
+  }
+  return stmts;
 }
 
 async function updateClient(request, env, clientId) {
@@ -121,15 +162,32 @@ async function updateClient(request, env, clientId) {
       params.push(['emails', 'phones', 'address_parts', 'rep_address_parts'].includes(key) ? serializeContacts(body[key]) : body[key]);
     }
   }
-  if (updates.length === 0) return jsonError('Nenhum campo para atualizar', 400);
-  updates.push("updated_at = datetime('now')");
-  params.push(clientId);
+  // Sincronização das pessoas adicionais: quando `people` vem no body,
+  // o array é a verdade completa — substitui as linhas existentes.
+  const syncPeople = Array.isArray(body.people);
 
-  const result = await env.DB.prepare(
-    `UPDATE clients SET ${updates.join(', ')} WHERE id = ?`
-  ).bind(...params).run();
+  if (updates.length === 0 && !syncPeople) return jsonError('Nenhum campo para atualizar', 400);
 
-  if (result.meta.changes === 0) return jsonError('Cliente não encontrado', 404);
+  if (updates.length > 0) {
+    updates.push("updated_at = datetime('now')");
+    params.push(clientId);
+    const result = await env.DB.prepare(
+      `UPDATE clients SET ${updates.join(', ')} WHERE id = ?`
+    ).bind(...params).run();
+    if (result.meta.changes === 0) return jsonError('Cliente não encontrado', 404);
+  } else {
+    const exists = await env.DB.prepare('SELECT id FROM clients WHERE id = ?').bind(clientId).first();
+    if (!exists) return jsonError('Cliente não encontrado', 404);
+  }
+
+  if (syncPeople) {
+    const stmts = [
+      env.DB.prepare('DELETE FROM client_people WHERE client_id = ?').bind(clientId),
+      ...peopleInsertStatements(env, clientId, body.people),
+    ];
+    await env.DB.batch(stmts);
+  }
+
   return jsonResponse({ ok: true });
 }
 

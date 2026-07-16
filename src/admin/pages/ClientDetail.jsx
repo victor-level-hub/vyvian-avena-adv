@@ -3,6 +3,7 @@ import LerIAModal from '../ler-ia-modal.jsx';
 import React, { useState, useEffect, useRef } from 'react';
 import ContactsEditor, { parseContacts, cleanContacts } from '../ContactsEditor';
 import AddressEditor, { EMPTY_ADDRESS, composeAddress, hasAddress, parseAddressParts } from '../AddressEditor';
+import PersonFields, { PersonPills, EMPTY_PERSON, personFromRow, personHasData } from '../PersonFields';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { clients as clientsApi, installments as installmentsApi, recibos as recibosApi, procuracoes as procApi, planos as planosApi, uploadTokens as utApi, clientDocs as docsApi, clientLogo, calendar as calendarApi, notifications as notifApi } from '../apiClient';
 import { IconPhone, IconBuilding, IconCamera, IconDoc, IconUpload } from '../icons';
@@ -61,6 +62,7 @@ export default function ClientDetail() {
   const [editForm, setEditForm] = useState(null);
   const [editBusy, setEditBusy] = useState(false);
   const [editError, setEditError] = useState(null);
+  const [editPerson, setEditPerson] = useState(0); // 0 = titular; 1.. = editForm.people[i-1]
   const fileInputRef = React.useRef(null);
   const pendingUploadId = React.useRef(null);
   const logoInputRef = React.useRef(null);
@@ -531,7 +533,9 @@ export default function ClientDetail() {
 
   const openEdit = () => {
     setEditError(null);
+    setEditPerson(0);
     setEditForm({
+      people: (data?.people || []).map((row) => personFromRow(row, client.country)),
       name: client.name || '',
       emails: parseContacts(client.emails, client.email),
       phones: parseContacts(client.phones, client.phone),
@@ -569,6 +573,12 @@ export default function ClientDetail() {
 
   const handleSaveEdit = async () => {
     if (!editForm.name.trim()) { setEditError('O nome é obrigatório.'); return; }
+    const semNome = (editForm.people || []).findIndex((p) => !String(p.name || '').trim() && personHasData(p));
+    if (semNome !== -1) {
+      setEditError(`A pessoa ${semNome + 2} tem dados preenchidos mas falta o nome.`);
+      setEditPerson(semNome + 1);
+      return;
+    }
     const emailList = cleanContacts(editForm.emails);
     const phoneList = cleanContacts(editForm.phones);
     setEditBusy(true);
@@ -583,6 +593,17 @@ export default function ClientDetail() {
         rep_address: editForm.person_type === 'coletiva' && hasAddress(editForm.repAddrParts) ? composeAddress(editForm.repAddrParts) : null,
         rep_address_parts: editForm.person_type === 'coletiva' && hasAddress(editForm.repAddrParts) ? JSON.stringify(editForm.repAddrParts) : null,
         filiation: [editForm.father_name, editForm.mother_name].filter(Boolean).join(' e ') || editForm.filiation || null,
+        // pessoas adicionais (cliente conjunto): o array enviado substitui o existente
+        people: editForm.person_type === 'coletiva' ? [] : (editForm.people || [])
+          .filter((p) => String(p.name || '').trim())
+          .map((p) => {
+            const { addrParts, ...rest } = p;
+            return {
+              ...rest,
+              address: hasAddress(addrParts) ? composeAddress(addrParts) : null,
+              address_parts: hasAddress(addrParts) ? JSON.stringify(addrParts) : null,
+            };
+          }),
       };
       delete payload.addrParts;
       delete payload.repAddrParts;
@@ -806,6 +827,24 @@ export default function ClientDetail() {
               <div style={{ gridColumn: '1 / -1', fontWeight: 600, color: 'var(--forest, #12302a)', borderBottom: '1px solid rgba(0,0,0,0.1)', paddingBottom: '0.3rem', marginTop: '0.3rem' }}>
                 {editForm.person_type === 'coletiva' ? 'Dados da empresa' : 'Dados pessoais'}
               </div>
+              {editForm.person_type === 'singular' && (
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <PersonPills
+                    names={[editForm.name || 'Titular', ...(editForm.people || []).map((p) => p.name)]}
+                    active={editPerson}
+                    onSelect={setEditPerson}
+                    onAdd={() => {
+                      setEditForm((f) => {
+                        const next = [...(f.people || []), { ...EMPTY_PERSON, addrParts: { ...EMPTY_ADDRESS, country: client.country || 'PT' } }];
+                        setEditPerson(next.length);
+                        return { ...f, people: next };
+                      });
+                    }}
+                    disabled={editBusy}
+                  />
+                </div>
+              )}
+              {(editForm.person_type === 'coletiva' || editPerson === 0) && (<>
               <label className="adm-field" style={{ gridColumn: '1 / -1' }}>
                 <span>{editForm.person_type === 'coletiva' ? 'Denominação da empresa *' : 'Nome *'}</span>
                 <input type="text" value={editForm.name} onChange={editField('name')} disabled={editBusy} />
@@ -876,6 +915,35 @@ export default function ClientDetail() {
                     disabled={editBusy}
                   />
                 </div>
+              )}
+              </>)}
+
+              {editForm.person_type === 'singular' && editPerson > 0 && editForm.people[editPerson - 1] && (
+                <>
+                  <PersonFields
+                    value={editForm.people[editPerson - 1]}
+                    onChange={(v) => setEditForm((f) => ({ ...f, people: f.people.map((p, i) => (i === editPerson - 1 ? v : p)) }))}
+                    country={client.country}
+                    disabled={editBusy}
+                  />
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <button
+                      type="button"
+                      className="adm-btn adm-btn-sm"
+                      style={{ color: '#b00', borderColor: 'rgba(176,0,0,0.35)' }}
+                      onClick={() => {
+                        setEditForm((f) => ({ ...f, people: f.people.filter((_, i) => i !== editPerson - 1) }));
+                        setEditPerson(0);
+                      }}
+                      disabled={editBusy}
+                    >
+                      Remover esta pessoa
+                    </button>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--muted)', marginLeft: '0.7rem' }}>
+                      A remoção só é aplicada ao Guardar alterações.
+                    </span>
+                  </div>
+                </>
               )}
 
               <label className="adm-field" style={{ gridColumn: '1 / -1' }}>
@@ -1083,6 +1151,11 @@ export default function ClientDetail() {
             {client.person_type === 'coletiva' && (
               <span><IconBuilding /> Pessoa coletiva{client.rep_name ? ` · Rep.: ${client.rep_name}${client.rep_role ? ` (${client.rep_role})` : ''}` : ''}</span>
             )}
+            {(data.people || []).length > 0 && (
+              <span title="Cliente conjunto — os documentos e planos incluem todas as pessoas">
+                Cliente conjunto · com {(data.people || []).map((p) => p.name).join(' e ')}
+              </span>
+            )}
           </div>
         </div>
         <div className="adm-client-actions">
@@ -1277,7 +1350,9 @@ export default function ClientDetail() {
         <div className="adm-card">
           <div className="adm-card-title">Resumo</div>
           <p style={{ marginBottom: '0.5rem' }}>
-            <strong>{client.name}</strong> é cliente desde {fmtDate(client.contract_start_date)},
+            <strong>{client.name}</strong>{(data.people || []).length > 0 && (
+              <> — em conjunto com <strong>{(data.people || []).map((p) => p.name).join(' e ')}</strong> —</>
+            )} é cliente desde {fmtDate(client.contract_start_date)},
             na área de <strong>{client.practice_area || 'geral'}</strong>.
           </p>
           <p>

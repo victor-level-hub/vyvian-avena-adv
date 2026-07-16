@@ -158,6 +158,7 @@ export default function Clients() {
         const q = search.toLowerCase();
         return (
           c.name.toLowerCase().includes(q) ||
+          (c.extra_names || '').toLowerCase().includes(q) ||
           (c.email || '').toLowerCase().includes(q) ||
           (c.identification || '').replace(/\s/g, '').toLowerCase().includes(q.replace(/\s/g, ''))
         );
@@ -283,6 +284,19 @@ export default function Clients() {
                       <RowAvatar client={c} />
                       <span>
                         <strong>{c.name}</strong>
+                        {Number(c.extra_people) > 0 && (
+                          <span
+                            title={`Cliente conjunto · com ${c.extra_names || ''}`}
+                            style={{
+                              marginLeft: '0.45rem', fontSize: '0.68rem', fontWeight: 700,
+                              color: 'var(--forest, #12302a)', background: 'rgba(184,147,90,0.22)',
+                              border: '1px solid rgba(184,147,90,0.45)', borderRadius: 999,
+                              padding: '0.08rem 0.45rem', verticalAlign: 'middle',
+                            }}
+                          >
+                            +{c.extra_people}
+                          </span>
+                        )}
                         <br />
                         <small style={{ color: 'var(--muted)' }}>
                           {c.country === 'BR' ? c.phone : c.email}

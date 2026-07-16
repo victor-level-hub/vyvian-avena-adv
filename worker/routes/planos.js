@@ -30,6 +30,13 @@ async function loadPlan(env, clientId) {
   ).bind(clientId).all();
   const installments = r.results || [];
   if (!installments.length) return { error: jsonError("Este cliente não tem parcelas registadas.", 400) };
+  // Cliente conjunto (várias pessoas): o PDF do plano lista todos os titulares
+  try {
+    const pp = await env.DB.prepare(
+      "SELECT name, identification FROM client_people WHERE client_id = ? ORDER BY position ASC"
+    ).bind(clientId).all();
+    client.people = pp.results || [];
+  } catch { client.people = []; }
   return { client, installments };
 }
 

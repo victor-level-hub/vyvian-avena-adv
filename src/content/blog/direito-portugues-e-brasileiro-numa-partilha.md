@@ -5,7 +5,7 @@ data: 2026-07-11
 revisto_em: 2026-07-11
 validade: estavel
 imagem: /blog/direito-portugues-e-brasileiro-numa-partilha.jpg
-imagem_alt: Dois quadrados dourados entrelaçados sobre fundo verde-escuro
+imagem_alt: Troca de chaves entre duas pessoas, com a certidão do registo predial português de um lado e a matrícula do imóvel brasileira do outro
 area: civil
 ---
 

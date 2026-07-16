@@ -5,6 +5,8 @@ import ContactsEditor, { parseContacts, cleanContacts } from '../ContactsEditor'
 import AddressEditor, { EMPTY_ADDRESS, composeAddress, hasAddress, parseAddressParts } from '../AddressEditor';
 import PersonFields, { PersonPills, EMPTY_PERSON, personFromRow, personHasData } from '../PersonFields';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import ModalClose from '../modal-close.jsx';
+import PeoplePicker from '../people-picker.jsx';
 import { clients as clientsApi, installments as installmentsApi, recibos as recibosApi, procuracoes as procApi, planos as planosApi, uploadTokens as utApi, clientDocs as docsApi, clientLogo, calendar as calendarApi, notifications as notifApi } from '../apiClient';
 import { IconPhone, IconBuilding, IconCamera, IconDoc, IconUpload } from '../icons';
 
@@ -71,6 +73,8 @@ export default function ClientDetail() {
 
   // ── Procurações
   const [procTemplates, setProcTemplates] = useState([]);
+  const [planPeopleSel, setPlanPeopleSel] = useState(null); // null = todos os titulares
+  const [procPersonId, setProcPersonId] = useState('');     // '' = titular
   const [procTemplateId, setProcTemplateId] = useState('');
   const [procText, setProcText] = useState('');
   const [procEditable, setProcEditable] = useState([]);   // ['poderes', ...]
@@ -504,7 +508,7 @@ export default function ClientDetail() {
     setPlanPdfBusy(true);
     setPlanMsg(null);
     try {
-      await planosApi.generateOpen(client.id);
+      await planosApi.generateOpen(client.id, { people_ids: planPeople });
     } catch (err) {
       setPlanMsg({ type: 'error', text: err.message || 'Falha ao gerar o PDF.' });
     } finally {
@@ -521,7 +525,7 @@ export default function ClientDetail() {
     setPlanSendBusy(true);
     setPlanMsg(null);
     try {
-      const r = await planosApi.enviar(client.id);
+      const r = await planosApi.enviar(client.id, { people_ids: planPeople });
       if (r.skipped) setPlanMsg({ type: 'error', text: `Envio não configurado: ${r.reason}` });
       else setPlanMsg({ type: 'ok', text: `Plano enviado para ${r.sent_to}.` });
     } catch (err) {
@@ -617,6 +621,19 @@ export default function ClientDetail() {
     }
   };
 
+  // Trocar de outorgante: só o preview é refeito — os poderes já editados mantêm-se.
+  const handlePickOutorgante = async (ids) => {
+    const pid = ids[0];
+    setProcPersonId(pid);
+    if (!procTemplateId) return;
+    setProcBusy(true);
+    try {
+      const r = await procApi.preview({ template_id: procTemplateId, client_id: clientId, person_id: pid, overrides: procOverrides });
+      setProcText(r.texto || '');
+    } catch { /* o texto final é sempre o do PDF gerado */ }
+    finally { setProcBusy(false); }
+  };
+
   const handlePickTemplate = async (templateId) => {
     setProcTemplateId(templateId);
     setProcOverrides({});
@@ -627,7 +644,7 @@ export default function ClientDetail() {
     if (!templateId) return;
     setProcBusy(true);
     try {
-      const r = await procApi.preview({ template_id: templateId, client_id: clientId });
+      const r = await procApi.preview({ template_id: templateId, client_id: clientId, person_id: procPerson });
       const fields = r.campos_editaveis || [];
       setProcEditable(fields);
       if (fields.includes('poderes')) {
@@ -639,7 +656,7 @@ export default function ClientDetail() {
         setProcOverrides({ poderes });
         // preview com os poderes já aplicados para o texto refletir o documento final
         try {
-          const r2 = await procApi.preview({ template_id: templateId, client_id: clientId, overrides: { poderes } });
+          const r2 = await procApi.preview({ template_id: templateId, client_id: clientId, person_id: procPerson, overrides: { poderes } });
           setProcText(r2.texto || r.texto || '');
         } catch { setProcText(r.texto || ''); }
       } else {
@@ -660,6 +677,7 @@ export default function ClientDetail() {
       await procApi.generateOpen({
         template_id: procTemplateId,
         client_id: clientId,
+        person_id: procPerson,
         overrides: procOverrides,
         local: procLocal,
         data: procData,
@@ -726,6 +744,14 @@ export default function ClientDetail() {
   const pending = installments.filter((i) => i.status !== 'paid');
 
   const initials = (client.name || '').split(' ').filter(Boolean).slice(0, 2).map((s) => s[0]).join('').toUpperCase();
+  // Pessoas do cliente para os documentos: o titular vive em `clients` (id = client.id),
+  // as adicionais em `client_people` (ids `{client.id}-pesN-xxxx`, nunca iguais ao do titular).
+  const pessoas = [
+    { id: client.id, name: client.name, identification: client.identification },
+    ...(data.people || []).map((p) => ({ id: p.id, name: p.name, identification: p.identification })),
+  ];
+  const planPeople = planPeopleSel || pessoas.map((p) => p.id);
+  const procPerson = procPersonId || client.id;
   const planType = client.plan_type || ((!client.honorarios_total || client.honorarios_total === 0) ? 'monthly' : 'installment');
   const semPlano = planType === 'oficioso' || planType === 'probono';
   const isMonthly = !semPlano && (planType === 'monthly' || !client.honorarios_total || client.honorarios_total === 0);
@@ -772,8 +798,9 @@ export default function ClientDetail() {
           onMouseDown={(e) => { if (e.target === e.currentTarget && !editBusy) setEditing(false); }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '3rem 1rem', zIndex: 1000, overflowY: 'auto' }}
         >
-          <div style={{ background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 640, padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-            <h2 style={{ margin: '0 0 1.25rem', fontFamily: 'var(--serif)' }}>Editar cliente</h2>
+          <div style={{ position: 'relative', background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 640, padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <ModalClose onClose={() => setEditing(false)} disabled={editBusy} />
+            <h2 style={{ margin: '0 0 1.25rem', paddingRight: '2.5rem', fontFamily: 'var(--serif)' }}>Editar cliente</h2>
 
             {/* Logo do cliente — badge da câmara fora do círculo (não é cortado) */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
@@ -994,8 +1021,9 @@ export default function ClientDetail() {
           onMouseDown={(e) => { if (e.target === e.currentTarget && !payBusy) setPayOpen(false); }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '3rem 1rem', zIndex: 1000, overflowY: 'auto' }}
         >
-          <div style={{ background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 440, padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-            <h2 style={{ margin: '0 0 0.4rem', fontFamily: 'var(--serif)' }}>Pagamento avulso</h2>
+          <div style={{ position: 'relative', background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 440, padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <ModalClose onClose={() => setPayOpen(false)} disabled={payBusy} />
+            <h2 style={{ margin: '0 0 0.4rem', paddingRight: '2.5rem', fontFamily: 'var(--serif)' }}>Pagamento avulso</h2>
             <p style={{ margin: '0 0 1.25rem', fontSize: '0.85rem', color: 'var(--muted, #666)' }}>
               Registo único, fora do plano de parcelas — consultas soltas, honorários pontuais, acertos.
             </p>
@@ -1083,8 +1111,9 @@ export default function ClientDetail() {
           onMouseDown={(e) => { if (e.target === e.currentTarget && !delBusy) setDelOpen(false); }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.65)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '4rem 1rem', zIndex: 1100, overflowY: 'auto' }}
         >
-          <div style={{ background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 460, padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.4)', borderTop: '3px solid #b00' }}>
-            <h2 style={{ margin: '0 0 0.75rem', fontFamily: 'var(--serif)', color: '#b00' }}>Eliminar cliente</h2>
+          <div style={{ position: 'relative', background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 460, padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.4)', borderTop: '3px solid #b00' }}>
+            <ModalClose onClose={() => setDelOpen(false)} disabled={delBusy} />
+            <h2 style={{ margin: '0 0 0.75rem', paddingRight: '2.5rem', fontFamily: 'var(--serif)', color: '#b00' }}>Eliminar cliente</h2>
             <p style={{ margin: '0 0 0.5rem', fontSize: '0.9rem' }}>
               Isto elimina <strong>{data?.client?.name}</strong> e <strong>tudo o que lhe está associado</strong>:
               parcelas e pagamentos, histórico de comunicações, regras de notificação e documentos.
@@ -1267,6 +1296,16 @@ export default function ClientDetail() {
               </span>
             )}
           </div>
+          )}
+          {!semPlano && (
+            <PeoplePicker
+              people={pessoas}
+              selected={planPeople}
+              onChange={setPlanPeopleSel}
+              disabled={planPdfBusy || planSendBusy}
+              label="Titulares no PDF do plano"
+              helper="Só as pessoas assinaladas constam do plano gerado e do que é enviado ao cliente."
+            />
           )}
           <div className="adm-plan-summary">
             <div className="adm-plan-item">
@@ -1643,6 +1682,16 @@ export default function ClientDetail() {
               ))}
             </select>
           </div>
+
+          <PeoplePicker
+            people={pessoas}
+            selected={[procPerson]}
+            onChange={handlePickOutorgante}
+            mode="single"
+            disabled={procBusy}
+            label="Outorgante desta procuração"
+            helper="Uma procuração por outorgante — o documento é preenchido com os dados da pessoa assinalada. Os modelos atuais estão redigidos no singular; uma procuração conjunta (dois outorgantes no mesmo documento) precisa de um modelo no plural, a aprovar com a Dra."
+          />
 
           {procTemplateId && (
             <>

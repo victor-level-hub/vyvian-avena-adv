@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import ModalClose from './modal-close.jsx';
 
 // Modal partilhado dos leitores IA (NewClient e ClientDetail).
 // Arrastar diretamente para o dropzone continua a funcionar sem modal;
@@ -49,9 +50,10 @@ export default function LerIAModal({ open, onClose, onSubmeter }) {
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={(e) => { e.preventDefault(); setDragOver(false); if (e.dataTransfer.files) juntar(e.dataTransfer.files); }}
-        style={{ background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 560, padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.4)', borderTop: `3px solid var(--gold, #b8935a)`, outline: dragOver ? '2px dashed var(--gold, #b8935a)' : 'none', outlineOffset: -8 }}
+        style={{ position: 'relative', background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 560, padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.4)', borderTop: `3px solid var(--gold, #b8935a)`, outline: dragOver ? '2px dashed var(--gold, #b8935a)' : 'none', outlineOffset: -8 }}
       >
-        <h2 style={{ margin: '0 0 0.35rem', fontFamily: 'var(--serif)', color: 'var(--forest, #12302a)' }}>Ler com IA</h2>
+        <ModalClose onClose={onClose} />
+        <h2 style={{ margin: '0 0 0.35rem', paddingRight: '2.5rem', fontFamily: 'var(--serif)', color: 'var(--forest, #12302a)' }}>Ler com IA</h2>
         <p style={{ margin: '0 0 1rem', fontSize: '0.86rem', color: 'var(--muted, #666)' }}>
           Cole texto (e-mail, mensagem, excerto de documento…), anexe ficheiros — ou ambos.
           A IA extrai os dados e preenche apenas o que estiver em falta.

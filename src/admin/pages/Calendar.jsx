@@ -4,6 +4,7 @@
 // glassmorphism, adaptado à paleta do site (verde-floresta + dourado).
 // Dados: tipos/eventos em D1 (API /api/calendar) + vencimentos (parcelas).
 import React, { useState, useEffect, useMemo } from 'react';
+import ModalClose from '../modal-close.jsx';
 import { Link } from 'react-router-dom';
 import { installments as installmentsApi, calendar as calendarApi } from '../apiClient';
 import { IconUser, IconFolder, IconFilter, IconSearch } from '../icons';
@@ -157,6 +158,7 @@ const GLASS_CSS = `
 .gcal-row:hover { background: rgba(255,255,255,0.1); transform: translateY(-1px); }
 .gcal-modal-bg { position: fixed; inset: 0; background: rgba(8,22,18,0.72); backdrop-filter: blur(6px); display: flex; align-items: flex-start; justify-content: center; padding: 3rem 1rem; z-index: 1000; overflow-y: auto; }
 .gcal-modal {
+  position: relative;
   background: linear-gradient(150deg, rgba(19,50,41,0.96), rgba(13,36,30,0.98));
   border: 1px solid rgba(213,177,124,0.35); border-radius: 18px; width: 100%; padding: 1.6rem;
   box-shadow: 0 30px 80px rgba(0,0,0,0.55); color: #f4efe6;
@@ -707,7 +709,8 @@ export default function Calendar() {
       {evModal && (
         <div className="gcal-modal-bg" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) setEvModal(null); }}>
           <div className="gcal-modal" style={{ maxWidth: 560 }}>
-            <h2 style={{ margin: '0 0 1.1rem' }}>
+            <ModalClose onClose={() => setEvModal(null)} disabled={busy} />
+            <h2 style={{ margin: '0 0 1.1rem', paddingRight: '2.5rem' }}>
               {evModal.mode === 'create' ? 'Novo evento' : 'Editar evento'}
               {focusType && <span style={{ fontSize: '0.78rem', marginLeft: 10, color: focusType.color, fontFamily: 'inherit' }}>● {focusType.label}</span>}
             </h2>
@@ -784,7 +787,8 @@ export default function Calendar() {
       {typeMgrOpen && (
         <div className="gcal-modal-bg" onMouseDown={(e) => { if (e.target === e.currentTarget && !busy) { setTypeMgrOpen(false); setTypeForm(null); setTypeDeleting(null); } }}>
           <div className="gcal-modal" style={{ maxWidth: 640 }}>
-            <h2 style={{ margin: '0 0 0.4rem' }}>Tipos de data</h2>
+            <ModalClose onClose={() => { setTypeMgrOpen(false); setTypeForm(null); setTypeDeleting(null); }} disabled={busy} />
+            <h2 style={{ margin: '0 0 0.4rem', paddingRight: '2.5rem' }}>Tipos de data</h2>
             <p className="gcal-sub" style={{ margin: '0 0 1rem' }}>
               Ative/desative os tipos visíveis no calendário. Os tipos nativos não podem ser apagados; pode criar tipos personalizados.
             </p>

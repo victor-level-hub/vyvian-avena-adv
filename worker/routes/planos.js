@@ -25,6 +25,9 @@ export async function handlePlanos(request, env, path, session) {
 async function loadPlan(env, clientId) {
   const client = await env.DB.prepare("SELECT * FROM clients WHERE id = ?").bind(clientId).first();
   if (!client) return { error: jsonError("Cliente não encontrado", 404) };
+  if (client.plan_type === 'oficioso' || client.plan_type === 'probono') {
+    return { error: jsonError("Este cliente não tem plano de pagamento (atendimento " + (client.plan_type === 'probono' ? 'pro bono' : 'oficioso') + ").", 400) };
+  }
   const r = await env.DB.prepare(
     "SELECT * FROM installments WHERE client_id = ? ORDER BY installment_number ASC"
   ).bind(clientId).all();

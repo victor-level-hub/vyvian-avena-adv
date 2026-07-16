@@ -62,7 +62,10 @@ function daysUntil(dateStr) {
   return Math.round((new Date(dateStr) - today) / (1000 * 60 * 60 * 24));
 }
 
-function StatusBadge({ installment }) {
+function StatusBadge({ installment, client }) {
+  const pt = client?.plan_type;
+  if (pt === 'probono') return <span className="adm-badge" style={{ background: 'rgba(18,48,42,0.10)', color: 'var(--forest, #12302a)' }}>Pro bono</span>;
+  if (pt === 'oficioso' && !installment) return <span className="adm-badge" style={{ background: 'rgba(184,147,90,0.20)', color: '#7a5c2e' }}>Aguarda trânsito</span>;
   if (!installment) return <span className="adm-badge adm-badge-paid">Concluído</span>;
   if (installment.status === 'late') {
     const days = Math.abs(daysUntil(installment.due_date));
@@ -151,7 +154,9 @@ export default function Clients() {
       if (countryFilter !== 'all' && c.country !== countryFilter) return false;
       if (payFilter !== 'all') {
         const next = nextByClient[c.id];
-        const situ = !next ? 'quitado' : (next.status === 'late' ? 'late' : 'pending');
+        const situ = c.plan_type === 'probono' ? 'probono'
+          : (c.plan_type === 'oficioso' && !next) ? 'oficioso'
+          : !next ? 'quitado' : (next.status === 'late' ? 'late' : 'pending');
         if (situ !== payFilter) return false;
       }
       if (search) {
@@ -245,6 +250,8 @@ export default function Clients() {
           <option value="late">Em atraso</option>
           <option value="pending">A vencer</option>
           <option value="quitado">Quitado</option>
+          <option value="oficioso">Oficioso — aguarda trânsito</option>
+          <option value="probono">Pro bono</option>
         </select>
         {hasFilters && (
           <button type="button" className="adm-btn" onClick={clearFilters}>Limpar filtros</button>
@@ -308,11 +315,12 @@ export default function Clients() {
                   <td>{c.country}</td>
                   <td>{next ? fmtDate(next.due_date) : '—'}</td>
                   <td className="adm-text-right adm-val">
-                    {next ? fmtMoney(next.amount, next.currency) : (
-                      <span style={{ color: 'var(--success)' }}>Quitado</span>
-                    )}
+                    {next ? fmtMoney(next.amount, next.currency)
+                      : c.plan_type === 'probono' ? <span style={{ color: 'var(--muted)' }}>—</span>
+                      : c.plan_type === 'oficioso' ? <span style={{ color: 'var(--muted)' }}>A fixar</span>
+                      : <span style={{ color: 'var(--success)' }}>Quitado</span>}
                   </td>
-                  <td><StatusBadge installment={next} /></td>
+                  <td><StatusBadge installment={next} client={c} /></td>
                 </tr>
               );
             })}

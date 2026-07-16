@@ -726,11 +726,18 @@ export default function ClientDetail() {
   const pending = installments.filter((i) => i.status !== 'paid');
 
   const initials = (client.name || '').split(' ').filter(Boolean).slice(0, 2).map((s) => s[0]).join('').toUpperCase();
-  const isMonthly = !client.honorarios_total || client.honorarios_total === 0;
+  const planType = client.plan_type || ((!client.honorarios_total || client.honorarios_total === 0) ? 'monthly' : 'installment');
+  const semPlano = planType === 'oficioso' || planType === 'probono';
+  const isMonthly = !semPlano && (planType === 'monthly' || !client.honorarios_total || client.honorarios_total === 0);
   const currency = client.country === 'BR' ? 'BRL' : 'EUR';
 
   let summary;
-  if (!isMonthly) {
+  if (semPlano) {
+    summary = {
+      paid: paid.reduce((s2, i) => s2 + Number(i.amount), 0),
+      progress: paid.length ? `${paid.length} pagamento${paid.length > 1 ? 's' : ''} registado${paid.length > 1 ? 's' : ''}` : '—',
+    };
+  } else if (!isMonthly) {
     const totalPaid = paid.reduce((s, i) => s + Number(i.amount), 0);
     const totalRemaining = pending.reduce((s, i) => s + Number(i.amount), 0);
     summary = {
@@ -1160,7 +1167,7 @@ export default function ClientDetail() {
         </div>
         <div className="adm-client-actions">
           <button onClick={openEdit}>Editar</button>
-          <button className="primary" onClick={openPay}>+ Pagamento</button>
+          {planType !== 'probono' && <button className="primary" onClick={openPay}>+ Pagamento</button>}
         </div>
       </div>
 
@@ -1221,6 +1228,23 @@ export default function ClientDetail() {
 
       {activeTab === 'plan' && (
         <>
+          {semPlano && (
+            <div style={{
+              padding: '0.85rem 1.1rem', borderRadius: 8, marginBottom: '1rem',
+              background: planType === 'oficioso' ? 'rgba(184,147,90,0.12)' : 'rgba(18,48,42,0.07)',
+              border: `1px solid ${planType === 'oficioso' ? 'rgba(184,147,90,0.45)' : 'rgba(18,48,42,0.18)'}`,
+              lineHeight: 1.6, fontSize: '0.9rem',
+            }}>
+              {planType === 'oficioso' ? (
+                paid.length === 0
+                  ? <><strong>Oficioso — aguarda trânsito em julgado.</strong> Nomeação pela Ordem dos Advogados: os honorários são fixados e recebidos após o trânsito em julgado. Quando receber, registe o valor com <strong>+ Pagamento</strong>.</>
+                  : <><strong>Oficioso</strong> — nomeação pela Ordem dos Advogados. Recebimentos registados como pagamentos avulsos.</>
+              ) : (
+                <><strong>Pro bono</strong> — atendimento gratuito e voluntário, sem componente financeira.</>
+              )}
+            </div>
+          )}
+          {!semPlano && (
           <div className="adm-plan-actions">
             <button
               className="adm-btn"
@@ -1243,15 +1267,18 @@ export default function ClientDetail() {
               </span>
             )}
           </div>
+          )}
           <div className="adm-plan-summary">
             <div className="adm-plan-item">
               <div className="adm-plan-item-label">
-                {!isMonthly ? 'Total contratado' : 'Avença mensal'}
+                {semPlano ? 'Honorários' : !isMonthly ? 'Total contratado' : 'Avença mensal'}
               </div>
-              <div className="adm-plan-item-value">
-                {!isMonthly
-                  ? fmtMoney(summary.contracted, currency)
-                  : fmtMoney(summary.monthlyValue, currency)}
+              <div className="adm-plan-item-value" style={semPlano ? { fontSize: '0.95rem', lineHeight: 1.4 } : undefined}>
+                {semPlano
+                  ? (planType === 'probono' ? 'Pro bono' : (paid.length ? 'Fixados no trânsito' : 'Aguarda trânsito'))
+                  : !isMonthly
+                    ? fmtMoney(summary.contracted, currency)
+                    : fmtMoney(summary.monthlyValue, currency)}
               </div>
             </div>
             <div className="adm-plan-item">
@@ -1260,7 +1287,7 @@ export default function ClientDetail() {
                 {fmtMoney(summary.paid, currency)}
               </div>
             </div>
-            {!isMonthly ? (
+            {semPlano ? null : !isMonthly ? (
               <div className="adm-plan-item">
                 <div className="adm-plan-item-label">Em aberto</div>
                 <div className="adm-plan-item-value adm-plan-item-value-warn">
@@ -1275,12 +1302,13 @@ export default function ClientDetail() {
             )}
             <div className="adm-plan-item">
               <div className="adm-plan-item-label">
-                {!isMonthly ? 'Progresso' : 'Tempo ativo'}
+                {semPlano ? 'Recebimentos' : !isMonthly ? 'Progresso' : 'Tempo ativo'}
               </div>
               <div className="adm-plan-item-value">{summary.progress}</div>
             </div>
           </div>
 
+          {!(semPlano && installments.length === 0) && (
           <table className="adm-table">
             <thead>
               <tr>
@@ -1343,6 +1371,7 @@ export default function ClientDetail() {
               })}
             </tbody>
           </table>
+          )}
         </>
       )}
 
@@ -1352,13 +1381,17 @@ export default function ClientDetail() {
           <p style={{ marginBottom: '0.5rem' }}>
             <strong>{client.name}</strong>{(data.people || []).length > 0 && (
               <> — em conjunto com <strong>{(data.people || []).map((p) => p.name).join(' e ')}</strong> —</>
-            )} é cliente desde {fmtDate(client.contract_start_date)},
+            )} é cliente desde {fmtDate(client.contract_start_date || client.created_at)},
             na área de <strong>{client.practice_area || 'geral'}</strong>.
           </p>
           <p>
-            Plano contratado: {isMonthly
-              ? `avença mensal de ${fmtMoney(summary.monthlyValue, currency)}`
-              : `parcelado em ${client.honorarios_parcelas} prestações (total ${fmtMoney(client.honorarios_total, currency)})`}.
+            {semPlano
+              ? (planType === 'oficioso'
+                  ? <>Atendimento <strong>oficioso</strong> (nomeação da Ordem dos Advogados) — honorários fixados e recebidos após o trânsito em julgado{paid.length === 0 ? '; aguarda trânsito em julgado' : ''}.</>
+                  : <>Atendimento <strong>pro bono</strong> — gratuito e voluntário, sem componente financeira.</>)
+              : <>Plano contratado: {isMonthly
+                  ? `avença mensal de ${fmtMoney(summary.monthlyValue, currency)}`
+                  : `parcelado em ${client.honorarios_parcelas} prestações (total ${fmtMoney(client.honorarios_total, currency)})`}.</>}
           </p>
           {data.rules?.length > 0 && (
             <p>

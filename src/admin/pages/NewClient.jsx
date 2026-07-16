@@ -274,7 +274,8 @@ export default function NewClient() {
     if (!form.name.trim()) inv.name = true;
     if (emailList.length === 0) inv.email = true;
     if (phoneList.length === 0) inv.phone = true;
-    if (!form.startDate) inv.startDate = true;
+    const semPlano = form.planType === 'oficioso' || form.planType === 'probono';
+    if (!semPlano && !form.startDate) inv.startDate = true;
     if (form.planType === 'installment') {
       if (!form.totalValue) inv.totalValue = true;
       if (!form.installments) inv.installments = true;
@@ -371,15 +372,19 @@ export default function NewClient() {
         practice_area: form.area,
         process_summary: form.processSummary || null,
         notes: form.process ? `Processo: ${form.process}` : '',
-        honorarios_total: totalContracted,
-        honorarios_parcelas: numParcelas,
-        contract_start_date: form.startDate,
+        plan_type: form.planType,
+        honorarios_total: semPlano ? 0 : totalContracted,
+        honorarios_parcelas: semPlano ? 0 : numParcelas,
+        contract_start_date: semPlano ? null : form.startDate,
         people: extraPeople,
       });
 
       // 2. Gerar parcelas
       let installmentsToCreate = [];
-      if (form.planType === 'installment') {
+      if (semPlano) {
+        // Oficioso: honorários fixados no trânsito em julgado — registados depois
+        // como pagamento avulso na ficha. Pro bono: sem componente financeira.
+      } else if (form.planType === 'installment') {
         const per = totalContracted / numParcelas;
         for (let n = 1; n <= numParcelas; n++) {
           installmentsToCreate.push({
@@ -421,7 +426,7 @@ export default function NewClient() {
       }
 
       // 3. Criar regras de notificação
-      if (form.reminderChannels !== 'none') {
+      if (!semPlano && form.reminderChannels !== 'none') {
         const channels = form.reminderChannels.split('+');
         for (let idx = 0; idx < channels.length; idx++) {
           const channel = channels[idx];
@@ -452,6 +457,10 @@ export default function NewClient() {
       const symbol = form.country === 'BR' ? 'R$' : '€';
       planPreview = `→ ${n} parcelas de ${symbol}\u00A0${per}, mensais`;
     }
+  } else if (form.planType === 'oficioso') {
+    planPreview = '→ sem valor à partida — honorários fixados e recebidos após o trânsito em julgado; registe com "+ Pagamento" na ficha do cliente';
+  } else if (form.planType === 'probono') {
+    planPreview = '→ atendimento gratuito e voluntário — sem parcelas nem cobranças';
   } else if (form.planType === 'monthly' && form.monthlyValue) {
     const v = parseFloat(form.monthlyValue.toString().replace(',', '.'));
     const symbol = form.country === 'BR' ? 'R$' : '€';
@@ -824,12 +833,16 @@ export default function NewClient() {
               <select value={form.planType} onChange={update('planType')} disabled={submitting}>
                 <option value="installment">Parcelado (montante dividido)</option>
                 <option value="monthly">Avença mensal (recorrente)</option>
+                <option value="oficioso">Oficioso (nomeação da Ordem)</option>
+                <option value="probono">Pro bono (gratuito)</option>
               </select>
             </div>
+            {(form.planType === 'installment' || form.planType === 'monthly') && (
             <div className="adm-field">
               <label style={invLabel('startDate')}>Data da primeira cobrança *</label>
               <input id="f-startDate" type="date" value={form.startDate} onChange={update('startDate')} disabled={submitting} style={invStyle('startDate')} />
             </div>
+            )}
 
             {form.planType === 'installment' && (
               <>
@@ -845,6 +858,16 @@ export default function NewClient() {
               </>
             )}
 
+            {(form.planType === 'oficioso' || form.planType === 'probono') && (
+              <div className="adm-field adm-full">
+                <div className="adm-field-helper" style={{ padding: '0.75rem 1rem', background: 'var(--cream, #f5f0e8)', borderRadius: 8, lineHeight: 1.6 }}>
+                  {form.planType === 'oficioso'
+                    ? <>Nomeação pela Ordem dos Advogados: o valor dos honorários não é conhecido à partida e só é recebido após o trânsito em julgado. O cliente é criado sem parcelas — quando receber, registe o valor na ficha do cliente com <strong>+ Pagamento</strong>.</>
+                    : <>Atendimento gratuito e voluntário — este cliente não tem componente financeira: sem parcelas, cobranças ou lembretes.</>}
+                </div>
+              </div>
+            )}
+
             {form.planType === 'monthly' && (
               <div className="adm-field adm-full">
                 <label style={invLabel('monthlyValue')}>Valor mensal *</label>
@@ -853,6 +876,7 @@ export default function NewClient() {
               </div>
             )}
 
+            {(form.planType === 'installment' || form.planType === 'monthly') && (
             <div className="adm-field adm-full">
               <label>Lembrete automático antes do vencimento</label>
               <select
@@ -869,6 +893,7 @@ export default function NewClient() {
                 <option value="0:none">Não enviar lembrete automático</option>
               </select>
             </div>
+            )}
           </div>
         </div>
         )}
@@ -878,7 +903,7 @@ export default function NewClient() {
             Cancelar
           </button>
           <button type="submit" className="adm-btn adm-btn-primary" disabled={submitting}>
-            {submitting ? 'A criar…' : 'Criar cliente e gerar parcelas'}
+            {submitting ? 'A criar…' : (form.planType === 'oficioso' || form.planType === 'probono' ? 'Criar cliente' : 'Criar cliente e gerar parcelas')}
           </button>
         </div>
       </form>

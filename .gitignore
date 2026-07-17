@@ -7,5 +7,7 @@ SEGREDOS.md
 dist-ssr
 .dev.vars
 cloudflare-token*.txt
+.env
+.claude/settings.local.json
 _deploy_snapshot.tgz
 _to_delete/

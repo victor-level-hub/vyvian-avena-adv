@@ -116,7 +116,9 @@ const GLASS_CSS = `
 }
 .gcal-input::placeholder { color: rgba(244,239,230,0.45); }
 .gcal-input:focus { outline: none; border-color: rgba(213,177,124,0.6); }
-.gcal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; }
+/* minmax(0,1fr): sem isto o nowrap dos chips fixa o mínimo da coluna e a grelha
+   transborda do painel em janelas estreitas (fundo creme a aparecer à direita) */
+.gcal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
 .gcal-dh { text-align: center; font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(244,239,230,0.5); padding: 0.35rem 0; }
 .gcal-day {
   min-height: 96px; border-radius: 12px; padding: 0.4rem 0.45rem; cursor: pointer;
@@ -141,10 +143,15 @@ const GLASS_CSS = `
 .gcal-chip:hover .gcal-chip-label { transform: scale(1.04); }
 .gcal-pop {
   display: none; position: absolute; top: calc(100% + 4px); left: 0; z-index: 80; width: 250px;
+  max-width: 78vw;
   background: rgba(13,36,30,0.97); border: 1px solid rgba(213,177,124,0.4); border-radius: 12px;
   padding: 0.7rem 0.8rem; box-shadow: 0 16px 40px rgba(0,0,0,0.5); cursor: default; text-align: left;
 }
 .gcal-chip:hover .gcal-pop { display: block; }
+/* popover não pode sair do painel: nas 2 últimas colunas alinha à direita,
+   e com .up (últimas linhas da grelha) abre para cima */
+.gcal-day:nth-child(7n) .gcal-pop, .gcal-day:nth-child(7n-1) .gcal-pop { left: auto; right: 0; }
+.gcal-pop.up { top: auto; bottom: calc(100% + 4px); }
 .gcal-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 2px; }
 .gcal-amount { font-size: 0.66rem; font-weight: 700; color: #d5b17c; margin-top: 2px; }
 .gcal-amount.late { color: #e88; }
@@ -425,7 +432,7 @@ export default function Calendar() {
     `${MONTHS_PT[month]} · ${year}`;
 
   // chip de evento com popover hover (EventCard do event-manager)
-  const EventChip = ({ ev, k }) => {
+  const EventChip = ({ ev, k, popUp }) => {
     const t = typeById[ev.type_id];
     const color = t?.color || '#888';
     const multi = ev.end_date && ev.end_date > ev.start_date;
@@ -434,7 +441,7 @@ export default function Calendar() {
         <span className="gcal-chip-label" style={{ background: color + '55', borderLeft: `3px solid ${color}` }}>
           {multi && k && k !== ev.start_date ? '· ' : ''}{ev.title}
         </span>
-        <span className="gcal-pop">
+        <span className={'gcal-pop' + (popUp ? ' up' : '')}>
           <span style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
             <strong style={{ fontSize: '0.85rem', color: '#fff' }}>{ev.title}</strong>
             <span className="gcal-dot" style={{ background: color, width: 10, height: 10, flexShrink: 0, marginTop: 3 }} />
@@ -636,7 +643,7 @@ export default function Calendar() {
                         <div className={'gcal-amount' + (hasLate ? ' late' : '')}>{fmtMoney(dayTotal, dayCurrency, true)}</div>
                       </>
                     )}
-                    {shown.map((ev) => <EventChip key={ev.id} ev={ev} k={k} />)}
+                    {shown.map((ev) => <EventChip key={ev.id} ev={ev} k={k} popUp={idx >= grid.length - 14} />)}
                     {extra > 0 && <span style={{ display: 'block', fontSize: '0.62rem', color: 'rgba(244,239,230,0.5)', marginTop: 2 }}>+{extra} evento{extra > 1 ? 's' : ''}</span>}
                   </div>
                 );
@@ -647,7 +654,7 @@ export default function Calendar() {
 
         {/* ── vista SEMANA ── */}
         {view === 'week' && (
-          <div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 6 }}>
+          <div style={{ marginTop: '1rem', display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 6 }}>
             {weekDays.map((d) => {
               const k = dateKey(d);
               const inst = installmentsByDate[k] || [];

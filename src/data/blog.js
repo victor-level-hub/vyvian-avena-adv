@@ -63,6 +63,7 @@ export const POSTS = Object.entries(RAW)
       imagem: meta.imagem || "",
       imagem_alt: meta.imagem_alt || "",
       minutos: readingTime(body),
+      audio: (meta.audio || "").trim() === "sim",
       html: marked.parse(body),
       texto: body,
     };

@@ -5,7 +5,7 @@ data: 2026-06-19
 revisto_em: 2026-06-19
 validade: estavel
 imagem: /blog/direito-portugues-e-brasileiro-numa-partilha.jpg
-imagem_alt: Troca de chaves entre duas pessoas sobre as certidões do registo predial português e da matrícula do imóvel brasileira
+imagem_alt: Troca de chaves entre duas pessoas, com a certidão do registo predial português de um lado e a matrícula do imóvel brasileira do outro
 area: civil
 ---
 

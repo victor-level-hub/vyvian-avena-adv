@@ -133,3 +133,35 @@
   font-size: 0.85rem;
   color: rgba(18, 48, 42, 0.55);
 }
+
+/* imagens no corpo dos artigos: largura total + respiro antes e depois */
+.blog-prose img {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin: 2.4rem 0;
+}
+
+/* --- Leitura acompanhada (AudioArtigo): palavras acendem ao ritmo da narração --- */
+.blog-prose .aw { border-radius: 2px; }
+.blog-prose.audio-escuta .aw {
+  color: rgba(18, 48, 42, 0.3);
+  transition: color 0.25s ease, background-color 0.25s ease;
+}
+.blog-prose.audio-escuta strong,
+.blog-prose.audio-escuta h2,
+.blog-prose.audio-escuta h3 { color: inherit; }
+.blog-prose.audio-escuta .aw-lida { color: rgba(18, 48, 42, 0.88); }
+.blog-prose.audio-escuta .aw-on {
+  color: #12302a;
+  background: linear-gradient(transparent 78%, rgba(184, 147, 90, 0.55) 78%);
+}
+
+/* modo escuta: o mini-player assume o fundo do ecrã; o pill de WhatsApp recolhe */
+body.a-ouvir .wa-flutuante { opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
+.wa-flutuante { transition: opacity 0.3s ease; }
+@keyframes miniplayer-sobe {
+  from { opacity: 0; transform: translate(-50%, 12px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+.miniplayer { animation: miniplayer-sobe 0.3s ease both; }

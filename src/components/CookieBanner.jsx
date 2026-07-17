@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
+import { applyConsent } from "../lib/analytics";
 
 const STORAGE_KEY = "cookie_consent";
 
@@ -13,7 +14,17 @@ export default function CookieBanner() {
   }, []);
 
   const accept = (value) => {
-    localStorage.setItem(STORAGE_KEY, value);
+    let stored = value;
+    let consent;
+    if (value === "accepted") consent = { statistics: true, marketing: true };
+    else if (value === "essential") consent = { statistics: false, marketing: false };
+    else {
+      // "custom": guardar as preferências escolhidas (antes perdiam-se)
+      consent = { statistics: !!prefs.statistics, marketing: !!prefs.marketing };
+      stored = "custom:" + JSON.stringify(consent);
+    }
+    localStorage.setItem(STORAGE_KEY, stored);
+    applyConsent(consent);
     setVisible(false);
   };
 

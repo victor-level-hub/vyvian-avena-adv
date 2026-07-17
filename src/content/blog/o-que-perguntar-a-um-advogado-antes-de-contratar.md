@@ -5,7 +5,7 @@ data: 2026-06-02
 revisto_em: 2026-06-02
 validade: estavel
 imagem: /blog/o-que-perguntar-a-um-advogado-antes-de-contratar.jpg
-imagem_alt: Cliente na sala de espera de um escritório de advocacia, com um caderno de apontamentos sobre o processo
+imagem_alt: Sala de espera de um escritório de advocacia, com um cliente a rever notas
 area:
 ---
 

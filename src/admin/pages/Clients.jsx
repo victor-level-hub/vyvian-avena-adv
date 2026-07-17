@@ -65,7 +65,10 @@ function daysUntil(dateStr) {
   return Math.round((new Date(dateStr) - today) / (1000 * 60 * 60 * 24));
 }
 
-function StatusBadge({ installment }) {
+function StatusBadge({ installment, client }) {
+  const pt = client?.plan_type;
+  if (pt === 'probono') return <span className="adm-badge" style={{ background: 'rgba(18,48,42,0.10)', color: 'var(--forest, #12302a)' }}>Pro bono</span>;
+  if (pt === 'oficioso' && !installment) return <span className="adm-badge" style={{ background: 'rgba(184,147,90,0.20)', color: '#7a5c2e' }}>Aguarda trânsito</span>;
   if (!installment) return <span className="adm-badge adm-badge-paid">Concluído</span>;
   if (installment.status === 'late') {
     const days = Math.abs(daysUntil(installment.due_date));
@@ -159,13 +162,16 @@ export default function Clients() {
       if (countryFilter !== 'all' && c.country !== countryFilter) return false;
       if (payFilter !== 'all') {
         const next = nextByClient[c.id];
-        const situ = !next ? 'quitado' : (next.status === 'late' ? 'late' : 'pending');
+        const situ = c.plan_type === 'probono' ? 'probono'
+          : (c.plan_type === 'oficioso' && !next) ? 'oficioso'
+          : !next ? 'quitado' : (next.status === 'late' ? 'late' : 'pending');
         if (situ !== payFilter) return false;
       }
       if (search) {
         const q = search.toLowerCase();
         return (
           c.name.toLowerCase().includes(q) ||
+          (c.extra_names || '').toLowerCase().includes(q) ||
           (c.email || '').toLowerCase().includes(q) ||
           (c.identification || '').replace(/\s/g, '').toLowerCase().includes(q.replace(/\s/g, ''))
         );
@@ -269,6 +275,8 @@ export default function Clients() {
             { value: 'late', label: 'Em atraso' },
             { value: 'pending', label: 'A vencer' },
             { value: 'quitado', label: 'Quitado' },
+            { value: 'oficioso', label: 'Oficioso — aguarda trânsito' },
+            { value: 'probono', label: 'Pro bono' },
           ]}
         />
         {hasFilters && (
@@ -309,6 +317,19 @@ export default function Clients() {
                       <RowAvatar client={c} />
                       <span>
                         <strong>{c.name}</strong>
+                        {Number(c.extra_people) > 0 && (
+                          <span
+                            title={`Cliente conjunto · com ${c.extra_names || ''}`}
+                            style={{
+                              marginLeft: '0.45rem', fontSize: '0.68rem', fontWeight: 700,
+                              color: 'var(--forest, #12302a)', background: 'rgba(184,147,90,0.22)',
+                              border: '1px solid rgba(184,147,90,0.45)', borderRadius: 999,
+                              padding: '0.08rem 0.45rem', verticalAlign: 'middle',
+                            }}
+                          >
+                            +{c.extra_people}
+                          </span>
+                        )}
                         <br />
                         <small style={{ color: 'var(--muted)' }}>
                           {c.country === 'BR' ? c.phone : c.email}
@@ -320,11 +341,12 @@ export default function Clients() {
                   <td>{c.country}</td>
                   <td>{next ? fmtDate(next.due_date) : '—'}</td>
                   <td className="adm-text-right adm-val">
-                    {next ? fmtMoney(next.amount, next.currency) : (
-                      <span style={{ color: 'var(--success)' }}>Quitado</span>
-                    )}
+                    {next ? fmtMoney(next.amount, next.currency)
+                      : c.plan_type === 'probono' ? <span style={{ color: 'var(--muted)' }}>—</span>
+                      : c.plan_type === 'oficioso' ? <span style={{ color: 'var(--muted)' }}>A fixar</span>
+                      : <span style={{ color: 'var(--success)' }}>Quitado</span>}
                   </td>
-                  <td><StatusBadge installment={next} /></td>
+                  <td><StatusBadge installment={next} client={c} /></td>
                 </tr>
               );
             })}

@@ -1,0 +1,82 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 560" font-family="Georgia, 'Times New Roman', serif">
+  <defs>
+    <marker id="seta" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#b8935a"/>
+    </marker>
+    <style>
+      .caixa   { fill:#f7f2e9; stroke:#b8935a; stroke-width:1.5; rx:6; }
+      .marco   { fill:#12302a; stroke:#b8935a; stroke-width:1.5; rx:6; }
+      .tit     { fill:#12302a; font-size:15px; font-weight:bold; }
+      .sub     { fill:#5c6f6a; font-size:11.5px; font-family:Verdana, sans-serif; }
+      .titM    { fill:#faf8f4; font-size:15px; font-weight:bold; }
+      .subM    { fill:#cbb894; font-size:11.5px; font-family:Verdana, sans-serif; }
+      .linha   { stroke:#b8935a; stroke-width:1.8; fill:none; marker-end:url(#seta); }
+      .num     { fill:#b8935a; font-size:11px; font-family:Verdana, sans-serif; font-weight:bold; letter-spacing:1px; }
+      .rotulo  { fill:#8a7350; font-size:10.5px; font-family:Verdana, sans-serif; font-style:italic; }
+    </style>
+  </defs>
+
+  <!-- título -->
+  <text x="480" y="34" text-anchor="middle" class="tit" font-size="19">Fluxo de criação de um artigo do blogue</text>
+  <rect x="432" y="44" width="96" height="2" fill="#b8935a"/>
+
+  <!-- 1. texto -->
+  <rect class="caixa" x="310" y="70" width="340" height="62" rx="6"/>
+  <text x="480" y="93" text-anchor="middle" class="num">PASSO 1</text>
+  <text x="480" y="112" text-anchor="middle" class="tit">Texto do artigo (.md)</text>
+  <text x="480" y="126" text-anchor="middle" class="sub">frontmatter completo · título ≤60 · audio: sim</text>
+
+  <!-- bifurcação -->
+  <path class="linha" d="M400 132 L240 168"/>
+  <path class="linha" d="M560 132 L720 168"/>
+  <text x="272" y="150" class="rotulo">imagens</text>
+  <text x="642" y="150" class="rotulo">narração</text>
+
+  <!-- ramo esquerdo: imagens -->
+  <rect class="caixa" x="70" y="172" width="340" height="62" rx="6"/>
+  <text x="240" y="195" text-anchor="middle" class="num">PASSO 2</text>
+  <text x="240" y="214" text-anchor="middle" class="tit">Agente «Gerador de Imagens»</text>
+  <text x="240" y="228" text-anchor="middle" class="sub">«modo imagens: …» → prompts na arte da marca</text>
+
+  <path class="linha" d="M240 234 L240 258"/>
+
+  <rect class="caixa" x="70" y="260" width="340" height="62" rx="6"/>
+  <text x="240" y="283" text-anchor="middle" class="num">PASSO 3</text>
+  <text x="240" y="302" text-anchor="middle" class="tit">Gemini — fotografias 16:9</text>
+  <text x="240" y="316" text-anchor="middle" class="sub">≥1280 px · margens livres · images\blogue-N-*.jpg</text>
+
+  <path class="linha" d="M240 322 L240 346"/>
+
+  <rect class="caixa" x="70" y="348" width="340" height="76" rx="6"/>
+  <text x="240" y="371" text-anchor="middle" class="num">PASSO 4 · PIPELINE DE IMAGENS</text>
+  <text x="240" y="390" text-anchor="middle" class="tit">Capa + fotos de corpo</text>
+  <text x="240" y="404" text-anchor="middle" class="sub">capa 1200×630: carimbo dourado + dwtDctSvd + EXIF</text>
+  <text x="240" y="417" text-anchor="middle" class="sub">corpo webp 1376 · marca 64/22/88 · cantos vistos</text>
+
+  <!-- ramo direito: áudio -->
+  <rect class="caixa" x="550" y="172" width="340" height="76" rx="6"/>
+  <text x="720" y="195" text-anchor="middle" class="num">PASSO 5 · MODO LEITOR</text>
+  <text x="720" y="214" text-anchor="middle" class="tit">ElevenLabs: narração + timestamps</text>
+  <text x="720" y="228" text-anchor="middle" class="sub">gerar-audio-blogue.mjs · voz Claudia</text>
+  <text x="720" y="241" text-anchor="middle" class="sub">euros/ordinais por extenso · mp3 + json por token</text>
+
+  <rect class="caixa" x="550" y="286" width="340" height="62" rx="6"/>
+  <text x="720" y="309" text-anchor="middle" class="num">NO SITE</text>
+  <text x="720" y="328" text-anchor="middle" class="tit">AudioArtigo.jsx</text>
+  <text x="720" y="342" text-anchor="middle" class="sub">leitura acompanhada · velocidades · mini-player</text>
+  <path class="linha" d="M720 248 L720 284"/>
+
+  <!-- convergência para build -->
+  <path class="linha" d="M240 424 L240 470 L306 470"/>
+  <path class="linha" d="M720 348 L720 470 L654 470"/>
+
+  <!-- marcos finais -->
+  <rect class="marco" x="310" y="446" width="340" height="48" rx="6"/>
+  <text x="480" y="466" text-anchor="middle" class="titM">Build + Deploy (Cloudflare)</text>
+  <text x="480" y="482" text-anchor="middle" class="subM">pipefail+BUILD_OK · dist/blog-audio · wrangler deploy</text>
+
+  <path class="linha" d="M480 494 L480 512"/>
+
+  <rect class="marco" x="250" y="514" width="460" height="38" rx="6"/>
+  <text x="480" y="538" text-anchor="middle" class="titM" font-size="14">Verificação em produção → commit + push no main</text>
+</svg>

@@ -104,10 +104,17 @@ export async function generatePaymentPlanPdf(data) {
   y -= 32;
   page.drawText('CLIENTE', { x: 50, y, size: 8, font: fontBold, color: COLORS.gold, characterSpacing: 2 });
   y -= 18;
-  page.drawText(c.name, { x: 50, y, size: 14, font: fontSerifBold, color: COLORS.ink });
+  // Cliente conjunto: uma linha por pessoa. `c.pessoas` vem já filtrado pela
+  // escolha feita na ficha (worker/routes/planos.js); sem ele, todos os titulares.
+  const pessoas = c.pessoas || [{ name: c.name, identification: c.identification }, ...(c.people || [])];
+  for (let i = 0; i < pessoas.length; i++) {
+    page.drawText(pessoas[i].name, { x: 50, y, size: 14, font: fontSerifBold, color: COLORS.ink });
+    if (i < pessoas.length - 1) y -= 17;
+  }
   y -= 14;
   const idLabel = c.country === 'BR' ? 'CPF/CNPJ' : 'NIF';
-  page.drawText(`${idLabel}: ${c.identification || '—'}`, { x: 50, y, size: 9, font: fontRegular, color: COLORS.muted });
+  const idents = pessoas.map((p) => p.identification || '—').join(' · ');
+  page.drawText(`${idLabel}: ${idents}`, { x: 50, y, size: 9, font: fontRegular, color: COLORS.muted });
   if (c.email) {
     page.drawText(c.email, { x: 250, y, size: 9, font: fontRegular, color: COLORS.muted });
   }

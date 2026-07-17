@@ -1,5 +1,6 @@
 // src/admin/pages/ClientDetail.jsx
-import React, { useState, useEffect } from 'react';
+import LerIAModal from '../ler-ia-modal.jsx';
+import React, { useState, useEffect, useRef } from 'react';
 import ContactsEditor, { parseContacts, cleanContacts } from '../ContactsEditor';
 import ParcelasEditor, { gerarParcelas, somaParcelas, parseValor, fmtValor } from '../ParcelasEditor';
 import { MoneyInput, StepperInput } from '../inputs';
@@ -9,7 +10,10 @@ import DateInput from '../datepicker';
 import { IconMail, IconGear } from '../icons';
 import { SkeletonPage } from '../skeletons';
 import AddressEditor, { EMPTY_ADDRESS, composeAddress, hasAddress, parseAddressParts } from '../AddressEditor';
+import PersonFields, { PersonPills, EMPTY_PERSON, personFromRow, personHasData } from '../PersonFields';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import ModalClose from '../modal-close.jsx';
+import PeoplePicker from '../people-picker.jsx';
 import { clients as clientsApi, installments as installmentsApi, recibos as recibosApi, procuracoes as procApi, planos as planosApi, uploadTokens as utApi, clientDocs as docsApi, clientLogo, calendar as calendarApi, notifications as notifApi } from '../apiClient';
 import { IconPhone, IconBuilding, IconCamera, IconDoc, IconUpload } from '../icons';
 import { admAlert, admConfirm } from '../dialogs';
@@ -155,6 +159,9 @@ export default function ClientDetail() {
   const { clientId } = useParams();
   const [activeTab, setActiveTab] = useState('plan');
   const [data, setData] = useState(null);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const dataRef = useRef(null);
+  dataRef.current = data;
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [markingPaid, setMarkingPaid] = useState(null);
@@ -176,6 +183,7 @@ export default function ClientDetail() {
   const [editForm, setEditForm] = useState(null);
   const [editBusy, setEditBusy] = useState(false);
   const [editError, setEditError] = useState(null);
+  const [editPerson, setEditPerson] = useState(0); // 0 = titular; 1.. = editForm.people[i-1]
   const fileInputRef = React.useRef(null);
   const pendingUploadId = React.useRef(null);
   const logoInputRef = React.useRef(null);
@@ -184,6 +192,8 @@ export default function ClientDetail() {
 
   // ── Procurações
   const [procTemplates, setProcTemplates] = useState([]);
+  const [planPeopleSel, setPlanPeopleSel] = useState(null); // null = todos os titulares
+  const [procPersonId, setProcPersonId] = useState('');     // '' = titular
   const [procTemplateId, setProcTemplateId] = useState('');
   const [procText, setProcText] = useState('');
   const [procEditable, setProcEditable] = useState([]);   // ['poderes', ...]
@@ -237,20 +247,21 @@ export default function ClientDetail() {
   };
 
   const aiExtractFile = async (file) => {
-    const client = data?.client;
+    const client = dataRef.current?.client;
     if (!client || !file) return;
-    if (!AI_ACCEPT.includes(file.type)) {
+    const isTexto = typeof file === 'string';
+    if (!isTexto && !AI_ACCEPT.includes(file.type)) {
       setAiMsg({ kind: 'err', text: 'Tipo não suportado. Use PNG, JPEG, WEBP ou PDF.' });
       return;
     }
     setAiBusy(true);
-    setAiMsg({ kind: 'info', text: 'A ler o documento com IA…' });
+    setAiMsg({ kind: 'info', text: isTexto ? 'A ler o texto com IA…' : 'A ler o documento com IA…' });
     try {
       const token = sessionStorage.getItem('vyvian_admin_token');
       const res = await fetch('/api/cadastro/extrair-documento', {
         method: 'POST',
         headers: {
-          'Content-Type': file.type,
+          'Content-Type': isTexto ? 'text/plain;charset=utf-8' : file.type,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           ...(client.process_summary ? { 'X-Resumo-Atual': encodeURIComponent(client.process_summary.slice(0, 4000)) } : {}),
         },
@@ -311,18 +322,25 @@ export default function ClientDetail() {
       if (f.process_summary && f.process_summary !== client.process_summary) upd.process_summary = f.process_summary;
 
       if (Object.keys(upd).length === 0) {
-        setAiMsg({ kind: 'ok', text: 'Documento lido — sem informação nova para acrescentar.' });
+        setAiMsg({ kind: 'ok', text: `${isTexto ? 'Texto lido' : 'Documento lido'} — sem informação nova para acrescentar.` });
         return;
       }
       await clientsApi.update(client.id, upd);
       await loadData();
       const changed = [...new Set(Object.keys(upd).filter((k) => k !== 'email' && k !== 'phone').map((k) => FIELD_PT[k] || k))];
-      setAiMsg({ kind: 'ok', text: `Documento lido — atualizado: ${changed.join(', ')}.` });
+      setAiMsg({ kind: 'ok', text: `${isTexto ? 'Texto lido' : 'Documento lido'} — atualizado: ${changed.join(', ')}.` });
     } catch (err) {
       setAiMsg({ kind: 'err', text: 'Erro: ' + err.message });
     } finally {
       setAiBusy(false);
     }
+  };
+
+  // modal "Ler com IA": texto colado + ficheiros, em sequência (dataRef mantém o cliente fresco entre itens)
+  const aiSubmeterLote = async (texto, files) => {
+    setAiModalOpen(false);
+    if (texto) await aiExtractFile(texto);
+    for (const f of files || []) await aiExtractFile(f); // eslint-disable-line no-await-in-loop
   };
 
   const loadData = async () => {
@@ -831,7 +849,7 @@ export default function ClientDetail() {
     setPlanPdfBusy(true);
     setPlanMsg(null);
     try {
-      await planosApi.generateOpen(client.id);
+      await planosApi.generateOpen(client.id, { people_ids: planPeople });
     } catch (err) {
       setPlanMsg({ type: 'error', text: err.message || 'Falha ao gerar o PDF.' });
     } finally {
@@ -848,7 +866,7 @@ export default function ClientDetail() {
     setPlanSendBusy(true);
     setPlanMsg(null);
     try {
-      const r = await planosApi.enviar(client.id);
+      const r = await planosApi.enviar(client.id, { people_ids: planPeople });
       if (r.skipped) setPlanMsg({ type: 'error', text: `Envio não configurado: ${r.reason}` });
       else setPlanMsg({ type: 'ok', text: `Plano enviado para ${r.sent_to}.` });
     } catch (err) {
@@ -860,7 +878,9 @@ export default function ClientDetail() {
 
   const openEdit = () => {
     setEditError(null);
+    setEditPerson(0);
     setEditForm({
+      people: (data?.people || []).map((row) => personFromRow(row, client.country)),
       name: client.name || '',
       emails: parseContacts(client.emails, client.email),
       phones: parseContacts(client.phones, client.phone),
@@ -900,6 +920,12 @@ export default function ClientDetail() {
 
   const handleSaveEdit = async () => {
     if (!editForm.name.trim()) { setEditError('O nome é obrigatório.'); return; }
+    const semNome = (editForm.people || []).findIndex((p) => !String(p.name || '').trim() && personHasData(p));
+    if (semNome !== -1) {
+      setEditError(`A pessoa ${semNome + 2} tem dados preenchidos mas falta o nome.`);
+      setEditPerson(semNome + 1);
+      return;
+    }
     const emailList = cleanContacts(editForm.emails);
     const phoneList = cleanContacts(editForm.phones);
     setEditBusy(true);
@@ -916,6 +942,17 @@ export default function ClientDetail() {
         filiation: [editForm.father_name, editForm.mother_name].filter(Boolean).join(' e ') || editForm.filiation || null,
         contract_start_date: editForm.contract_start_date || null,
         first_attendance_date: editForm.first_attendance_date || null,
+        // pessoas adicionais (cliente conjunto): o array enviado substitui o existente
+        people: editForm.person_type === 'coletiva' ? [] : (editForm.people || [])
+          .filter((p) => String(p.name || '').trim())
+          .map((p) => {
+            const { addrParts, ...rest } = p;
+            return {
+              ...rest,
+              address: hasAddress(addrParts) ? composeAddress(addrParts) : null,
+              address_parts: hasAddress(addrParts) ? JSON.stringify(addrParts) : null,
+            };
+          }),
       };
       delete payload.addrParts;
       delete payload.repAddrParts;
@@ -930,6 +967,19 @@ export default function ClientDetail() {
     }
   };
 
+  // Trocar de outorgante: só o preview é refeito — os poderes já editados mantêm-se.
+  const handlePickOutorgante = async (ids) => {
+    const pid = ids[0];
+    setProcPersonId(pid);
+    if (!procTemplateId) return;
+    setProcBusy(true);
+    try {
+      const r = await procApi.preview({ template_id: procTemplateId, client_id: clientId, person_id: pid, overrides: procOverrides });
+      setProcText(r.texto || '');
+    } catch { /* o texto final é sempre o do PDF gerado */ }
+    finally { setProcBusy(false); }
+  };
+
   const handlePickTemplate = async (templateId) => {
     setProcTemplateId(templateId);
     setProcOverrides({});
@@ -940,7 +990,7 @@ export default function ClientDetail() {
     if (!templateId) return;
     setProcBusy(true);
     try {
-      const r = await procApi.preview({ template_id: templateId, client_id: clientId });
+      const r = await procApi.preview({ template_id: templateId, client_id: clientId, person_id: procPerson });
       const fields = r.campos_editaveis || [];
       setProcEditable(fields);
       if (fields.includes('poderes')) {
@@ -952,7 +1002,7 @@ export default function ClientDetail() {
         setProcOverrides({ poderes });
         // preview com os poderes já aplicados para o texto refletir o documento final
         try {
-          const r2 = await procApi.preview({ template_id: templateId, client_id: clientId, overrides: { poderes } });
+          const r2 = await procApi.preview({ template_id: templateId, client_id: clientId, person_id: procPerson, overrides: { poderes } });
           setProcText(r2.texto || r.texto || '');
         } catch { setProcText(r.texto || ''); }
       } else {
@@ -973,6 +1023,7 @@ export default function ClientDetail() {
       await procApi.generateOpen({
         template_id: procTemplateId,
         client_id: clientId,
+        person_id: procPerson,
         overrides: procOverrides,
         local: procLocal,
         data: procData,
@@ -1039,11 +1090,26 @@ export default function ClientDetail() {
   const pending = installments.filter((i) => i.status !== 'paid');
 
   const initials = (client.name || '').split(' ').filter(Boolean).slice(0, 2).map((s) => s[0]).join('').toUpperCase();
-  const isMonthly = !client.honorarios_total || client.honorarios_total === 0;
+  // Pessoas do cliente para os documentos: o titular vive em `clients` (id = client.id),
+  // as adicionais em `client_people` (ids `{client.id}-pesN-xxxx`, nunca iguais ao do titular).
+  const pessoas = [
+    { id: client.id, name: client.name, identification: client.identification },
+    ...(data.people || []).map((p) => ({ id: p.id, name: p.name, identification: p.identification })),
+  ];
+  const planPeople = planPeopleSel || pessoas.map((p) => p.id);
+  const procPerson = procPersonId || client.id;
+  const planType = client.plan_type || ((!client.honorarios_total || client.honorarios_total === 0) ? 'monthly' : 'installment');
+  const semPlano = planType === 'oficioso' || planType === 'probono';
+  const isMonthly = !semPlano && (planType === 'monthly' || !client.honorarios_total || client.honorarios_total === 0);
   const currency = client.country === 'BR' ? 'BRL' : 'EUR';
 
   let summary;
-  if (!isMonthly) {
+  if (semPlano) {
+    summary = {
+      paid: paid.reduce((s2, i) => s2 + Number(i.amount), 0),
+      progress: paid.length ? `${paid.length} pagamento${paid.length > 1 ? 's' : ''} registado${paid.length > 1 ? 's' : ''}` : '—',
+    };
+  } else if (!isMonthly) {
     const totalPaid = paid.reduce((s, i) => s + Number(i.amount), 0);
     const totalRemaining = pending.reduce((s, i) => s + Number(i.amount), 0);
     summary = {
@@ -1079,8 +1145,9 @@ export default function ClientDetail() {
           onMouseDown={(e) => { if (e.target === e.currentTarget && !editBusy) setEditing(false); }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '3rem 1rem', zIndex: 1000, overflowY: 'auto' }}
         >
-          <div style={{ background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 640, padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-            <h2 style={{ margin: '0 0 1.25rem', fontFamily: 'var(--serif)' }}>Editar cliente</h2>
+          <div style={{ position: 'relative', background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 640, padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <ModalClose onClose={() => setEditing(false)} disabled={editBusy} />
+            <h2 style={{ margin: '0 0 1.25rem', paddingRight: '2.5rem', fontFamily: 'var(--serif)' }}>Editar cliente</h2>
 
             {/* Logo do cliente — badge da câmara fora do círculo (não é cortado) */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.25rem' }}>
@@ -1151,6 +1218,24 @@ export default function ClientDetail() {
               <div style={{ gridColumn: '1 / -1', fontWeight: 600, color: 'var(--forest, #12302a)', borderBottom: '1px solid rgba(0,0,0,0.1)', paddingBottom: '0.3rem', marginTop: '0.3rem' }}>
                 {editForm.person_type === 'coletiva' ? 'Dados da empresa' : 'Dados pessoais'}
               </div>
+              {editForm.person_type === 'singular' && (
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <PersonPills
+                    names={[editForm.name || 'Titular', ...(editForm.people || []).map((p) => p.name)]}
+                    active={editPerson}
+                    onSelect={setEditPerson}
+                    onAdd={() => {
+                      setEditForm((f) => {
+                        const next = [...(f.people || []), { ...EMPTY_PERSON, addrParts: { ...EMPTY_ADDRESS, country: client.country || 'PT' } }];
+                        setEditPerson(next.length);
+                        return { ...f, people: next };
+                      });
+                    }}
+                    disabled={editBusy}
+                  />
+                </div>
+              )}
+              {(editForm.person_type === 'coletiva' || editPerson === 0) && (<>
               <label className="adm-field" style={{ gridColumn: '1 / -1' }}>
                 <span>{editForm.person_type === 'coletiva' ? 'Denominação da empresa *' : 'Nome *'}</span>
                 <input type="text" value={editForm.name} onChange={editField('name')} disabled={editBusy} />
@@ -1222,6 +1307,35 @@ export default function ClientDetail() {
                   />
                 </div>
               )}
+              </>)}
+
+              {editForm.person_type === 'singular' && editPerson > 0 && editForm.people[editPerson - 1] && (
+                <>
+                  <PersonFields
+                    value={editForm.people[editPerson - 1]}
+                    onChange={(v) => setEditForm((f) => ({ ...f, people: f.people.map((p, i) => (i === editPerson - 1 ? v : p)) }))}
+                    country={client.country}
+                    disabled={editBusy}
+                  />
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <button
+                      type="button"
+                      className="adm-btn adm-btn-sm"
+                      style={{ color: '#b00', borderColor: 'rgba(176,0,0,0.35)' }}
+                      onClick={() => {
+                        setEditForm((f) => ({ ...f, people: f.people.filter((_, i) => i !== editPerson - 1) }));
+                        setEditPerson(0);
+                      }}
+                      disabled={editBusy}
+                    >
+                      Remover esta pessoa
+                    </button>
+                    <span style={{ fontSize: '0.78rem', color: 'var(--muted)', marginLeft: '0.7rem' }}>
+                      A remoção só é aplicada ao Guardar alterações.
+                    </span>
+                  </div>
+                </>
+              )}
 
               <label className="adm-field" style={{ gridColumn: '1 / -1' }}>
                 <span>Estado</span>
@@ -1265,8 +1379,9 @@ export default function ClientDetail() {
           onMouseDown={(e) => { if (e.target === e.currentTarget && !payBusy) setPayOpen(false); }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '3rem 1rem', zIndex: 1000, overflowY: 'auto' }}
         >
-          <div style={{ background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 440, padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
-            <h2 style={{ margin: '0 0 0.4rem', fontFamily: 'var(--serif)' }}>Pagamento avulso</h2>
+          <div style={{ position: 'relative', background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 440, padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)' }}>
+            <ModalClose onClose={() => setPayOpen(false)} disabled={payBusy} />
+            <h2 style={{ margin: '0 0 0.4rem', paddingRight: '2.5rem', fontFamily: 'var(--serif)' }}>Pagamento avulso</h2>
             <p style={{ margin: '0 0 1.25rem', fontSize: '0.85rem', color: 'var(--muted, #666)' }}>
               Registo único, fora do plano de parcelas — consultas soltas, honorários pontuais, acertos.
             </p>
@@ -1355,8 +1470,9 @@ export default function ClientDetail() {
           onMouseDown={(e) => { if (e.target === e.currentTarget && !delBusy) setDelOpen(false); }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.65)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '4rem 1rem', zIndex: 1100, overflowY: 'auto' }}
         >
-          <div style={{ background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 460, padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.4)', borderTop: '3px solid #b00' }}>
-            <h2 style={{ margin: '0 0 0.75rem', fontFamily: 'var(--serif)', color: '#b00' }}>Eliminar cliente</h2>
+          <div style={{ position: 'relative', background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 460, padding: '1.75rem', boxShadow: '0 20px 60px rgba(0,0,0,0.4)', borderTop: '3px solid #b00' }}>
+            <ModalClose onClose={() => setDelOpen(false)} disabled={delBusy} />
+            <h2 style={{ margin: '0 0 0.75rem', paddingRight: '2.5rem', fontFamily: 'var(--serif)', color: '#b00' }}>Eliminar cliente</h2>
             <p style={{ margin: '0 0 0.5rem', fontSize: '0.9rem' }}>
               Isto elimina <strong>{data?.client?.name}</strong> e <strong>tudo o que lhe está associado</strong>:
               parcelas e pagamentos, histórico de comunicações, regras de notificação e documentos.
@@ -1430,11 +1546,16 @@ export default function ClientDetail() {
             {client.person_type === 'coletiva' && (
               <span><IconBuilding /> Pessoa coletiva{client.rep_name ? ` · Rep.: ${client.rep_name}${client.rep_role ? ` (${client.rep_role})` : ''}` : ''}</span>
             )}
+            {(data.people || []).length > 0 && (
+              <span title="Cliente conjunto — os documentos e planos incluem todas as pessoas">
+                Cliente conjunto · com {(data.people || []).map((p) => p.name).join(' e ')}
+              </span>
+            )}
           </div>
         </div>
         <div className="adm-client-actions">
           <button onClick={openEdit}>Editar</button>
-          <button className="primary" onClick={openPay}>+ Pagamento</button>
+          {planType !== 'probono' && <button className="primary" onClick={openPay}>+ Pagamento</button>}
         </div>
       </div>
 
@@ -1442,8 +1563,8 @@ export default function ClientDetail() {
       <div
         onDragOver={(e) => { e.preventDefault(); setAiDragOver(true); }}
         onDragLeave={() => setAiDragOver(false)}
-        onDrop={(e) => { e.preventDefault(); setAiDragOver(false); const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (f) aiExtractFile(f); }}
-        onClick={() => !aiBusy && aiFileRef.current && aiFileRef.current.click()}
+        onDrop={(e) => { e.preventDefault(); setAiDragOver(false); const fs = e.dataTransfer.files ? [...e.dataTransfer.files] : []; if (fs.length) aiSubmeterLote('', fs); }}
+        onClick={() => !aiBusy && setAiModalOpen(true)}
         style={{
           border: `2px dashed ${aiDragOver ? 'var(--gold, #b8935a)' : 'rgba(0,0,0,0.15)'}`,
           background: aiDragOver ? 'rgba(184,147,90,0.08)' : 'var(--cream, #f5f0e8)',
@@ -1471,6 +1592,8 @@ export default function ClientDetail() {
         )}
       </div>
 
+      <LerIAModal open={aiModalOpen} onClose={() => setAiModalOpen(false)} onSubmeter={aiSubmeterLote} />
+
       <SlidingTabs
         items={[
           { id: 'plan', label: 'Plano de pagamento' },
@@ -1489,6 +1612,23 @@ export default function ClientDetail() {
 
       {activeTab === 'plan' && (
         <>
+          {semPlano && (
+            <div style={{
+              padding: '0.85rem 1.1rem', borderRadius: 8, marginBottom: '1rem',
+              background: planType === 'oficioso' ? 'rgba(184,147,90,0.12)' : 'rgba(18,48,42,0.07)',
+              border: `1px solid ${planType === 'oficioso' ? 'rgba(184,147,90,0.45)' : 'rgba(18,48,42,0.18)'}`,
+              lineHeight: 1.6, fontSize: '0.9rem',
+            }}>
+              {planType === 'oficioso' ? (
+                paid.length === 0
+                  ? <><strong>Oficioso — aguarda trânsito em julgado.</strong> Nomeação pela Ordem dos Advogados: os honorários são fixados e recebidos após o trânsito em julgado. Quando receber, registe o valor com <strong>+ Pagamento</strong>.</>
+                  : <><strong>Oficioso</strong> — nomeação pela Ordem dos Advogados. Recebimentos registados como pagamentos avulsos.</>
+              ) : (
+                <><strong>Pro bono</strong> — atendimento gratuito e voluntário, sem componente financeira.</>
+              )}
+            </div>
+          )}
+          {!semPlano && (
           <div className="adm-plan-actions">
             <button
               className="adm-btn"
@@ -1519,6 +1659,17 @@ export default function ClientDetail() {
               </span>
             )}
           </div>
+          )}
+          {!semPlano && (
+            <PeoplePicker
+              people={pessoas}
+              selected={planPeople}
+              onChange={setPlanPeopleSel}
+              disabled={planPdfBusy || planSendBusy}
+              label="Titulares no PDF do plano"
+              helper="Só as pessoas assinaladas constam do plano gerado e do que é enviado ao cliente."
+            />
+          )}
           {planEdit && planForm && (
             <div
               className="adm-overlay"
@@ -1627,12 +1778,14 @@ export default function ClientDetail() {
           <div className="adm-plan-summary">
             <div className="adm-plan-item">
               <div className="adm-plan-item-label">
-                {!isMonthly ? 'Total contratado' : 'Avença mensal'}
+                {semPlano ? 'Honorários' : !isMonthly ? 'Total contratado' : 'Avença mensal'}
               </div>
-              <div className="adm-plan-item-value">
-                {!isMonthly
-                  ? fmtMoney(summary.contracted, currency)
-                  : fmtMoney(summary.monthlyValue, currency)}
+              <div className="adm-plan-item-value" style={semPlano ? { fontSize: '0.95rem', lineHeight: 1.4 } : undefined}>
+                {semPlano
+                  ? (planType === 'probono' ? 'Pro bono' : (paid.length ? 'Fixados no trânsito' : 'Aguarda trânsito'))
+                  : !isMonthly
+                    ? fmtMoney(summary.contracted, currency)
+                    : fmtMoney(summary.monthlyValue, currency)}
               </div>
             </div>
             <div className="adm-plan-item">
@@ -1641,7 +1794,7 @@ export default function ClientDetail() {
                 {fmtMoney(summary.paid, currency)}
               </div>
             </div>
-            {!isMonthly ? (
+            {semPlano ? null : !isMonthly ? (
               <div className="adm-plan-item">
                 <div className="adm-plan-item-label">Em aberto</div>
                 <div className="adm-plan-item-value adm-plan-item-value-warn">
@@ -1656,12 +1809,13 @@ export default function ClientDetail() {
             )}
             <div className="adm-plan-item">
               <div className="adm-plan-item-label">
-                {!isMonthly ? 'Progresso' : 'Tempo ativo'}
+                {semPlano ? 'Recebimentos' : !isMonthly ? 'Progresso' : 'Tempo ativo'}
               </div>
               <div className="adm-plan-item-value">{summary.progress}</div>
             </div>
           </div>
 
+          {!(semPlano && installments.length === 0) && (
           <table className="adm-table">
             <thead>
               <tr>
@@ -1755,6 +1909,7 @@ export default function ClientDetail() {
               })}
             </tbody>
           </table>
+          )}
         </>
       )}
 
@@ -1762,13 +1917,19 @@ export default function ClientDetail() {
         <div className="adm-card">
           <div className="adm-card-title">Resumo</div>
           <p style={{ marginBottom: '0.5rem' }}>
-            <strong>{client.name}</strong> é cliente desde {fmtDate(client.first_attendance_date || client.contract_start_date)},
+            <strong>{client.name}</strong>{(data.people || []).length > 0 && (
+              <> — em conjunto com <strong>{(data.people || []).map((p) => p.name).join(' e ')}</strong> —</>
+            )} é cliente desde {fmtDate(client.first_attendance_date || client.contract_start_date || client.created_at)},
             na área de <strong>{client.practice_area || 'geral'}</strong>.
           </p>
           <p>
-            Plano contratado: {isMonthly
-              ? `avença mensal de ${fmtMoney(summary.monthlyValue, currency)}`
-              : `parcelado em ${client.honorarios_parcelas} prestações (total ${fmtMoney(client.honorarios_total, currency)})`}.
+            {semPlano
+              ? (planType === 'oficioso'
+                  ? <>Atendimento <strong>oficioso</strong> (nomeação da Ordem dos Advogados) — honorários fixados e recebidos após o trânsito em julgado{paid.length === 0 ? '; aguarda trânsito em julgado' : ''}.</>
+                  : <>Atendimento <strong>pro bono</strong> — gratuito e voluntário, sem componente financeira.</>)
+              : <>Plano contratado: {isMonthly
+                  ? `avença mensal de ${fmtMoney(summary.monthlyValue, currency)}`
+                  : `parcelado em ${client.honorarios_parcelas} prestações (total ${fmtMoney(client.honorarios_total, currency)})`}.</>}
           </p>
           {data.rules?.length > 0 && (
             <p>
@@ -2012,6 +2173,16 @@ export default function ClientDetail() {
               ))}
             </select>
           </div>
+
+          <PeoplePicker
+            people={pessoas}
+            selected={[procPerson]}
+            onChange={handlePickOutorgante}
+            mode="single"
+            disabled={procBusy}
+            label="Outorgante desta procuração"
+            helper="Uma procuração por outorgante — o documento é preenchido com os dados da pessoa assinalada. Os modelos atuais estão redigidos no singular; uma procuração conjunta (dois outorgantes no mesmo documento) precisa de um modelo no plural, a aprovar com a Dra."
+          />
 
           {procTemplateId && (
             <>

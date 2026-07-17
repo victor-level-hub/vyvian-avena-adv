@@ -5,6 +5,7 @@ import Seo from "../components/Seo";
 import { breadcrumbJsonLd } from "../components/Breadcrumbs";
 import NaoEncontrado from "./NaoEncontrado";
 import { POSTS, getPost } from "../data/blog";
+import AudioArtigo from "../components/blog/AudioArtigo";
 import { getArea } from "../data/areas";
 import { capaSrcSet } from "../lib/imagens";
 import blogConfig from "../config/blog.json";
@@ -56,6 +57,7 @@ function ProgressoLeitura() {
  */
 export default function BlogArtigo() {
   const { slug } = useParams();
+  const proseRef = useRef(null);
   const post = getPost(slug);
 
   if (!post) return <NaoEncontrado />;
@@ -118,7 +120,10 @@ export default function BlogArtigo() {
           <div className="font-body text-[12.5px] text-forest/40">Advogada · Portugal e Brasil</div>
         </aside>
 
-        <article className="blog-prose max-w-[680px]" dangerouslySetInnerHTML={{ __html: post.html }} />
+        <div className="max-w-[680px] min-w-0">
+          {post.audio && <AudioArtigo slug={post.slug} proseRef={proseRef} />}
+          <article ref={proseRef} className="blog-prose" dangerouslySetInnerHTML={{ __html: post.html }} />
+        </div>
       </div>
 
       {/* CTA contextual */}

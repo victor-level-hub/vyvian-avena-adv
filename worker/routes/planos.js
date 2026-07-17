@@ -22,14 +22,39 @@ export async function handlePlanos(request, env, path, session) {
   return jsonError("Not found", 404);
 }
 
-async function loadPlan(env, clientId) {
+// peopleIds: ids das pessoas a constar do PDF (titular = client.id, adicionais =
+// client_people.id). Vazio/ausente = todas — comportamento anterior.
+async function loadPlan(env, clientId, peopleIds) {
   const client = await env.DB.prepare("SELECT * FROM clients WHERE id = ?").bind(clientId).first();
   if (!client) return { error: jsonError("Cliente não encontrado", 404) };
+  if (client.plan_type === 'oficioso' || client.plan_type === 'probono') {
+    return { error: jsonError("Este cliente não tem plano de pagamento (atendimento " + (client.plan_type === 'probono' ? 'pro bono' : 'oficioso') + ").", 400) };
+  }
   const r = await env.DB.prepare(
     "SELECT * FROM installments WHERE client_id = ? ORDER BY installment_number ASC"
   ).bind(clientId).all();
   const installments = r.results || [];
   if (!installments.length) return { error: jsonError("Este cliente não tem parcelas registadas.", 400) };
+  // Cliente conjunto (várias pessoas): por defeito o PDF lista todos os titulares;
+  // se vierem peopleIds, lista só os assinalados na ficha.
+  try {
+    const pp = await env.DB.prepare(
+      "SELECT id, name, identification FROM client_people WHERE client_id = ? ORDER BY position ASC"
+    ).bind(clientId).all();
+    client.people = pp.results || [];
+  } catch { client.people = []; }
+
+  const todas = [
+    { id: client.id, name: client.name, identification: client.identification },
+    ...client.people,
+  ];
+  if (Array.isArray(peopleIds) && peopleIds.length) {
+    const escolhidas = todas.filter((p) => peopleIds.includes(p.id));
+    if (!escolhidas.length) return { error: jsonError("Nenhuma das pessoas indicadas pertence a este cliente.", 400) };
+    client.pessoas = escolhidas;
+  } else {
+    client.pessoas = todas;
+  }
   return { client, installments };
 }
 
@@ -50,10 +75,10 @@ function u8ToBase64(u8) {
 async function gerarPlano(request, env, _unused) {
   let body;
   try { body = await request.json(); } catch { return jsonError("Invalid JSON", 400); }
-  const { client_id, local, issue_date } = body || {};
+  const { client_id, local, issue_date, people_ids } = body || {};
   if (!client_id) return jsonError("client_id é obrigatório", 400);
 
-  const { client, installments, error } = await loadPlan(env, client_id);
+  const { client, installments, error } = await loadPlan(env, client_id, people_ids);
   if (error) return error;
 
   const bytes = await generatePaymentPlanPdf({
@@ -76,10 +101,10 @@ async function gerarPlano(request, env, _unused) {
 async function enviarPlano(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError("Invalid JSON", 400); }
-  const { client_id, channel = "email", local } = body || {};
+  const { client_id, channel = "email", local, people_ids } = body || {};
   if (!client_id) return jsonError("client_id é obrigatório", 400);
 
-  const { client, installments, error } = await loadPlan(env, client_id);
+  const { client, installments, error } = await loadPlan(env, client_id, people_ids);
   if (error) return error;
 
   const planNumber = planNumberFor(client, installments);

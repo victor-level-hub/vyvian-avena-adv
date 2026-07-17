@@ -208,6 +208,22 @@ async function main() {
       }
       if (!/<h1[\s>]/i.test(html)) falhas.push(`${rota}: sem <h1>.`);
     }
+
+    // --- capas fotograficas presentes (guarda de regressao 2026-07-16) ---
+    // Ja aconteceu: a capa fotografica de um artigo ficou so em producao (sem
+    // commit) e o deploy seguinte repos o placeholder verde do repo. O placeholder
+    // chapado tem ~19 KB; uma capa fotografica q82 1200x630 tem 100 KB+. Abaixo de
+    // 50 KB assume-se regressao e o build falha antes de chegar a producao.
+    const { statSync } = await import('node:fs');
+    for (const s of blogSlugs) {
+      const capa = join(DIST, 'blog', `${s}.jpg`);
+      if (!existsSync(capa)) { falhas.push(`/blog/${s}: capa ${s}.jpg ausente do dist/.`); continue; }
+      const kb = statSync(capa).size / 1024;
+      if (kb < 50) falhas.push(`/blog/${s}: capa com ${kb.toFixed(0)} KB — parece o placeholder, nao uma fotografia. Regenerar a capa (processo-artigo-blogue-completo.md).`);
+      for (const w of [480, 800, 1200]) {
+        if (!existsSync(join(DIST, 'blog', `${s}-${w}.webp`))) falhas.push(`/blog/${s}: variante ${s}-${w}.webp ausente.`);
+      }
+    }
   }
 
   // --- higiene de performance e presença (guardas de regressão 2026-07) ---

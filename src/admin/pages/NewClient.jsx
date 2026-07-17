@@ -1,4 +1,5 @@
 // src/admin/pages/NewClient.jsx
+import LerIAModal from '../ler-ia-modal.jsx';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clients as clientsApi, installments as installmentsApi, notifications as notifApi } from '../apiClient';
@@ -10,6 +11,7 @@ import { MoneyInput, StepperInput, TagsInput, RadioCards } from '../inputs';
 import SlidingTabs from '../tabs';
 import DateInput from '../datepicker';
 import { IconUpload, IconPencil, IconRotate } from '../icons';
+import PersonFields, { PersonPills, EMPTY_PERSON, personHasData } from '../PersonFields';
 
 function makeId(name) {
   return name
@@ -36,6 +38,15 @@ export default function NewClient() {
   const [aiMsg, setAiMsg] = useState(null);
   const [aiDragOver, setAiDragOver] = useState(false);
   const aiFileRef = React.useRef(null);
+  const [aiModalOpen, setAiModalOpen] = React.useState(false);
+  // ref com o form mais recente — evita stale closure na leitura em lote
+  const formRef = React.useRef(null);
+
+  // Cliente conjunto (várias pessoas singulares, ex.: casal):
+  // people = pessoas ADICIONAIS; activePerson: 0 = titular, 1.. = people[i-1]
+  const [people, setPeople] = useState([]);
+  const [activePerson, setActivePerson] = useState(0);
+  const peopleRef = React.useRef({ people, activePerson });
 
   const [form, setForm] = useState({
     personType: 'singular',
@@ -76,6 +87,20 @@ export default function NewClient() {
     reminderDays: '5',
     reminderChannels: 'email+whatsapp',
   });
+  formRef.current = form;
+  peopleRef.current = { people, activePerson };
+
+  const addPerson = () => {
+    setPeople((ps) => {
+      setActivePerson(ps.length + 1);
+      return [...ps, { ...EMPTY_PERSON, addrParts: { ...EMPTY_ADDRESS, country: formRef.current.country || 'PT' } }];
+    });
+  };
+  const updatePerson = (idx) => (v) => setPeople((ps) => ps.map((p, i) => (i === idx ? v : p)));
+  const removePerson = (idx) => {
+    setPeople((ps) => ps.filter((_, i) => i !== idx));
+    setActivePerson(0);
+  };
 
   // parcelas com valores personalizados (null = divisão igual automática)
   const [parcelasCustom, setParcelasCustom] = useState(null);
@@ -112,6 +137,7 @@ export default function NewClient() {
   // mudar o tipo de cliente ajusta as labels default dos contactos ainda vazios
   const updatePersonType = (e) => {
     const pt = e.target.value;
+    if (pt === 'coletiva') setActivePerson(0); // pessoas adicionais só em singular
     const relabel = (list, lbl) => list.every((c) => !c.value) ? list.map((c, i) => ({ ...c, label: i === 0 ? lbl : c.label })) : list;
     setForm((f) => ({
       ...f,
@@ -142,18 +168,19 @@ export default function NewClient() {
 
   const aiExtractFile = async (file) => {
     if (!file) return;
-    if (!aiAccept.includes(file.type)) {
+    const isTexto = typeof file === 'string';
+    if (!isTexto && !aiAccept.includes(file.type)) {
       setAiMsg({ kind: 'err', text: 'Tipo não suportado. Use PNG, JPEG, WEBP ou PDF.' });
       return;
     }
     setAiBusy(true);
-    setAiMsg({ kind: 'info', text: 'A ler o documento com IA…' });
+    setAiMsg({ kind: 'info', text: isTexto ? 'A ler o texto com IA…' : 'A ler o documento com IA…' });
     try {
       const token = sessionStorage.getItem('vyvian_admin_token');
       const res = await fetch('/api/cadastro/extrair-documento', {
         method: 'POST',
         headers: {
-          'Content-Type': file.type,
+          'Content-Type': isTexto ? 'text/plain;charset=utf-8' : file.type,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
           // envia os processos já registados: a IA decide se o documento pertence a um
           // existente (melhora esse resumo) ou é um processo novo (cria resumo à parte)
@@ -169,8 +196,43 @@ export default function NewClient() {
         return;
       }
       const f = data.fields || {};
+      // Pessoa adicional ativa? Os campos PESSOAIS vão para ela (preencher só vazios);
+      // contactos e resumo do processo continuam no nível do cliente.
+      const { people: curPeople, activePerson: curActive } = peopleRef.current;
+      if (formRef.current.personType === 'singular' && curActive > 0 && curPeople[curActive - 1]) {
+        const idx = curActive - 1;
+        const pp = { ...curPeople[idx] };
+        const pset = (k, v) => { if (v != null && v !== '' && !pp[k]) pp[k] = String(v); };
+        pset('name', f.name);
+        pset('identification', f.identification);
+        pset('nationality', f.nationality);
+        pset('marital_status', f.marital_status);
+        pset('birth_date', f.birth_date);
+        pset('birth_place', f.birth_place);
+        pset('doc_type', f.doc_type);
+        pset('doc_number', f.doc_number);
+        pset('doc_validity', f.doc_validity);
+        pset('niss', f.niss);
+        pset('rg', f.rg);
+        pset('father_name', f.father_name);
+        pset('mother_name', f.mother_name);
+        const cleanP = (o) => Object.fromEntries(Object.entries(o || {}).filter(([, v]) => v != null && v !== ''));
+        if (f.address_parts && !hasAddress(pp.addrParts)) {
+          pp.addrParts = { ...EMPTY_ADDRESS, country: formRef.current.country || 'PT', ...cleanP(f.address_parts) };
+        } else if (f.address && !hasAddress(pp.addrParts)) {
+          pp.addrParts = { ...EMPTY_ADDRESS, country: formRef.current.country || 'PT', via_type: 'Outro', via_name: String(f.address) };
+        }
+        setPeople((ps) => ps.map((x, i) => (i === idx ? pp : x)));
+        // resumo do processo continua a ser do cliente
+        if (f.process_summary && f.process_summary !== formRef.current.processSummary) {
+          setForm((prev) => ({ ...prev, processSummary: String(f.process_summary) }));
+        }
+        const uP = data.usage || {};
+        setAiMsg({ kind: 'ok', text: `${isTexto ? 'Texto lido' : 'Documento lido'} — campos aplicados à pessoa ${curActive + 1} (${pp.name || 'sem nome'}). Reveja antes de guardar. (uso: ${uP.input_tokens||0} entrada, ${uP.output_tokens||0} saída)` });
+        return;
+      }
       // mapear campos da IA -> campos do form (apenas preencher se não estiver vazio)
-      const merge = { ...form };
+      const merge = { ...formRef.current };
       const set = (k, v) => { if (v != null && v !== '' && !merge[k]) merge[k] = String(v); };
       if (f.person_type === 'coletiva') merge.personType = 'coletiva';
       set('name', f.name);
@@ -259,8 +321,14 @@ export default function NewClient() {
 
   const aiOnDrop = (e) => {
     e.preventDefault(); setAiDragOver(false);
-    const file = e.dataTransfer.files && e.dataTransfer.files[0];
-    if (file) aiExtractFile(file);
+    const fs = e.dataTransfer.files ? [...e.dataTransfer.files] : [];
+    if (fs.length) aiSubmeterLote('', fs);
+  };
+  // modal: texto colado + ficheiros, processados em sequência
+  const aiSubmeterLote = async (texto, files) => {
+    setAiModalOpen(false);
+    if (texto) await aiExtractFile(texto);
+    for (const f of files || []) await aiExtractFile(f); // eslint-disable-line no-await-in-loop
   };
   const aiOnFile = (e) => {
     const file = e.target.files && e.target.files[0];
@@ -276,7 +344,46 @@ export default function NewClient() {
     // As parcelas só são geradas quando houver data de vencimento e valores válidos.
     const emailList = cleanContacts(form.emails);
     const phoneList = cleanContacts(form.phones);
-    setInvalid({});
+    const inv = {};
+    if (!form.name.trim()) inv.name = true;
+    if (emailList.length === 0) inv.email = true;
+    if (phoneList.length === 0) inv.phone = true;
+    const semPlano = form.planType === 'oficioso' || form.planType === 'probono';
+    if (!semPlano && !form.startDate) inv.startDate = true;
+    if (form.planType === 'installment') {
+      if (!form.totalValue) inv.totalValue = true;
+      if (!form.installments) inv.installments = true;
+    }
+    if (form.planType === 'monthly' && !form.monthlyValue) inv.monthlyValue = true;
+    setInvalid(inv);
+
+    // primeiro campo em falta ganha o scroll + cursor
+    const FIELD_META = [
+      ['name', 'cliente', 'f-name'],
+      ['email', 'cliente', 'f-email'],
+      ['phone', 'cliente', 'f-phone'],
+      ['startDate', 'financeiro', 'f-startDate'],
+      ['totalValue', 'financeiro', 'f-totalValue'],
+      ['installments', 'financeiro', 'f-installments'],
+      ['monthlyValue', 'financeiro', 'f-monthlyValue'],
+    ];
+    const first = FIELD_META.find(([k]) => inv[k]);
+    if (first) {
+      setError('Faltam campos obrigatórios (assinalados a vermelho).');
+      focusField(first[1], first[2]);
+      return;
+    }
+
+    // pessoas adicionais: se tem dados preenchidos, o nome é obrigatório
+    if (form.personType === 'singular') {
+      const semNome = people.findIndex((p) => !p.name.trim() && personHasData(p));
+      if (semNome !== -1) {
+        setError(`A pessoa ${semNome + 2} tem dados preenchidos mas falta o nome.`);
+        setTab('cliente');
+        setActivePerson(semNome + 1);
+        return;
+      }
+    }
     setSubmitting(true);
 
     try {
@@ -299,6 +406,19 @@ export default function NewClient() {
         .filter((p) => p.ref.trim() || p.resumo.trim())
         .map((p) => ({ ref: p.ref.trim(), area: p.area, resumo: p.resumo }));
       const proc0 = form.processos[0] || { ref: '', area: 'Família', resumo: '' };
+
+      // pessoas adicionais (cliente conjunto) — só em pessoa singular
+      const extraPeople = isColetiva ? [] : people
+        .filter((p) => p.name.trim())
+        .map((p) => {
+          const { addrParts, ...rest } = p;
+          return {
+            ...rest,
+            address: hasAddress(addrParts) ? composeAddress(addrParts) : null,
+            address_parts: hasAddress(addrParts) ? JSON.stringify(addrParts) : null,
+          };
+        });
+
       await clientsApi.create({
         id: clientId,
         name: form.name,
@@ -336,16 +456,21 @@ export default function NewClient() {
         process_summary: proc0.resumo || null,
         notes: proc0.ref ? `Processo: ${proc0.ref}` : '',
         processes: procList.length ? JSON.stringify(procList) : null,
-        honorarios_total: totalContracted,
-        honorarios_parcelas: numParcelas,
-        contract_start_date: form.startDate || null,
+        plan_type: form.planType,
+        honorarios_total: semPlano ? 0 : totalContracted,
+        honorarios_parcelas: semPlano ? 0 : numParcelas,
+        contract_start_date: semPlano ? null : (form.startDate || null),
         first_attendance_date: form.firstAttendance || null,
+        people: extraPeople,
       });
 
       // 2. Gerar parcelas — só quando há data de vencimento e valores válidos.
       //    Sem esses dados, o cliente é criado sem plano (pode ser preenchido depois).
       let installmentsToCreate = [];
-      if (form.startDate && form.planType === 'installment' && totalContracted > 0 && numParcelas > 0) {
+      if (semPlano) {
+        // Oficioso: honorários fixados no trânsito em julgado — registados depois
+        // como pagamento avulso na ficha. Pro bono: sem componente financeira.
+      } else if (form.startDate && form.planType === 'installment' && totalContracted > 0 && numParcelas > 0) {
         // valores personalizados (se definidos e a fechar com o total) ou divisão igual
         const rows = (parcelasCustom && parcelasCustom.length === numParcelas && Math.abs(somaParcelas(parcelasCustom) - totalContracted) < 0.005)
           ? parcelasCustom
@@ -392,7 +517,7 @@ export default function NewClient() {
       }
 
       // 3. Criar regras de notificação
-      if (form.reminderChannels !== 'none') {
+      if (!semPlano && form.reminderChannels !== 'none') {
         const channels = form.reminderChannels.split('+');
         for (let idx = 0; idx < channels.length; idx++) {
           const channel = channels[idx];
@@ -423,6 +548,10 @@ export default function NewClient() {
       const symbol = form.country === 'BR' ? 'R$' : '€';
       planPreview = `→ ${n} parcelas de ${symbol}\u00A0${per}, mensais`;
     }
+  } else if (form.planType === 'oficioso') {
+    planPreview = '→ sem valor à partida — honorários fixados e recebidos após o trânsito em julgado; registe com "+ Pagamento" na ficha do cliente';
+  } else if (form.planType === 'probono') {
+    planPreview = '→ atendimento gratuito e voluntário — sem parcelas nem cobranças';
   } else if (form.planType === 'monthly' && form.monthlyValue) {
     const v = parseFloat(form.monthlyValue.toString().replace(',', '.'));
     const symbol = form.country === 'BR' ? 'R$' : '€';
@@ -442,12 +571,13 @@ export default function NewClient() {
 
       <form onSubmit={handleSubmit}>
         <input ref={aiFileRef} type="file" accept="image/png,image/jpeg,image/webp,application/pdf" style={{ display: 'none' }} onChange={aiOnFile} />
+        <LerIAModal open={aiModalOpen} onClose={() => setAiModalOpen(false)} onSubmeter={aiSubmeterLote} />
         <div
           className={'adm-dropzone' + (aiDragOver ? ' over' : '') + (aiBusy ? ' busy' : '')}
           onDragOver={(e) => { e.preventDefault(); setAiDragOver(true); }}
           onDragLeave={() => setAiDragOver(false)}
           onDrop={aiOnDrop}
-          onClick={() => !aiBusy && aiFileRef.current && aiFileRef.current.click()}
+          onClick={() => !aiBusy && setAiModalOpen(true)}
         >
           <div style={{ fontWeight: 600, color: 'var(--forest, #12302a)' }}>
             <span className="adm-dropzone-icon"><IconUpload size={15} /></span> Cadastro rápido com IA
@@ -510,6 +640,21 @@ export default function NewClient() {
         </div>
 
         <div className="adm-form-section-title">{form.personType === 'coletiva' ? 'Dados da empresa' : 'Dados pessoais'}</div>
+        {form.personType === 'singular' && (
+          <PersonPills
+            names={[form.name || 'Pessoa 1', ...people.map((p) => p.name)]}
+            active={activePerson}
+            onSelect={setActivePerson}
+            onAdd={addPerson}
+            disabled={submitting}
+          />
+        )}
+        {form.personType === 'singular' && people.length > 0 && activePerson === 0 && (
+          <div className="adm-field-helper" style={{ margin: '-0.4rem 0 0.8rem' }}>
+            Cliente conjunto: os contactos, a área e o plano financeiro são partilhados; cada pessoa tem os seus dados pessoais (use as pills acima).
+          </div>
+        )}
+        {(form.personType === 'coletiva' || activePerson === 0) && (
         <div className="adm-form-grid">
           <div className="adm-field">
             <label style={invLabel('name')}>{form.personType === 'coletiva' ? 'Denominação da empresa' : 'Nome completo'}</label>
@@ -648,6 +793,31 @@ export default function NewClient() {
             </>
           )}
         </div>
+        )}
+
+        {form.personType === 'singular' && activePerson > 0 && people[activePerson - 1] && (
+          <>
+            <div className="adm-form-grid">
+              <PersonFields
+                value={people[activePerson - 1]}
+                onChange={updatePerson(activePerson - 1)}
+                country={form.country}
+                disabled={submitting}
+              />
+            </div>
+            <div style={{ margin: '0.6rem 0 0.2rem' }}>
+              <button
+                type="button"
+                className="adm-btn adm-btn-ghost adm-btn-sm"
+                style={{ color: '#b00', borderColor: 'rgba(176,0,0,0.35)' }}
+                onClick={() => removePerson(activePerson - 1)}
+                disabled={submitting}
+              >
+                Remover esta pessoa
+              </button>
+            </div>
+          </>
+        )}
 
         {form.personType === 'coletiva' && (
           <>
@@ -812,9 +982,13 @@ export default function NewClient() {
                 options={[
                   { value: 'installment', title: 'Parcelado', desc: 'Montante total dividido em prestações' },
                   { value: 'monthly', title: 'Avença mensal', desc: 'Valor recorrente todos os meses' },
+                  { value: 'oficioso', title: 'Oficioso', desc: 'Nomeação da Ordem — honorários no trânsito' },
+                  { value: 'probono', title: 'Pro bono', desc: 'Atendimento gratuito e voluntário' },
                 ]}
               />
+
             </div>
+            {(form.planType === 'installment' || form.planType === 'monthly') && (
             <div className="adm-field">
               <label style={invLabel('startDate')}>Data de Vencimento</label>
               <DateInput id="f-startDate" value={form.startDate} onChange={update('startDate')} disabled={submitting} style={invStyle('startDate')} />
@@ -825,6 +999,7 @@ export default function NewClient() {
               <DateInput value={form.firstAttendance} onChange={update('firstAttendance')} disabled={submitting} />
               <div className="adm-field-helper">Opcional — quando o cliente foi atendido pela primeira vez</div>
             </div>
+            )}
 
             {form.planType === 'installment' && (
               <>
@@ -855,6 +1030,16 @@ export default function NewClient() {
               </>
             )}
 
+            {(form.planType === 'oficioso' || form.planType === 'probono') && (
+              <div className="adm-field adm-full">
+                <div className="adm-field-helper" style={{ padding: '0.75rem 1rem', background: 'var(--cream, #f5f0e8)', borderRadius: 8, lineHeight: 1.6 }}>
+                  {form.planType === 'oficioso'
+                    ? <>Nomeação pela Ordem dos Advogados: o valor dos honorários não é conhecido à partida e só é recebido após o trânsito em julgado. O cliente é criado sem parcelas — quando receber, registe o valor na ficha do cliente com <strong>+ Pagamento</strong>.</>
+                    : <>Atendimento gratuito e voluntário — este cliente não tem componente financeira: sem parcelas, cobranças ou lembretes.</>}
+                </div>
+              </div>
+            )}
+
             {form.planType === 'monthly' && (
               <div className="adm-field adm-full">
                 <label style={invLabel('monthlyValue')}>Valor mensal</label>
@@ -863,6 +1048,7 @@ export default function NewClient() {
               </div>
             )}
 
+            {(form.planType === 'installment' || form.planType === 'monthly') && (
             <div className="adm-field adm-full">
               <label>Lembrete automático antes do vencimento</label>
               <select
@@ -879,6 +1065,7 @@ export default function NewClient() {
                 <option value="0:none">Não enviar lembrete automático</option>
               </select>
             </div>
+            )}
           </div>
         </div>
         )}
@@ -945,7 +1132,7 @@ export default function NewClient() {
             Cancelar
           </button>
           <button type="submit" className="adm-btn adm-btn-primary" disabled={submitting}>
-            {submitting ? 'A criar…' : 'Criar cliente e gerar parcelas'}
+            {submitting ? 'A criar…' : (form.planType === 'oficioso' || form.planType === 'probono' ? 'Criar cliente' : 'Criar cliente e gerar parcelas')}
           </button>
         </div>
       </form>

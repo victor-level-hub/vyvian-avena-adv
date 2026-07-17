@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { trackEvent } from "../lib/analytics";
 import { Link } from "react-router-dom";
 import { ArrowRight, ChevronDown, MessageCircle } from "lucide-react";
 import ScrollReveal from "../components/ScrollReveal";
@@ -155,6 +156,7 @@ export default function Apoio() {
                 href="https://wa.me/351911831530"
                 target="_blank"
                 rel="noopener noreferrer"
+                onClick={() => trackEvent("whatsapp_click", { origem: "pagina_apoio" })}
                 className="px-8 py-3 border border-gold text-gold font-body text-sm tracking-wide hover:bg-gold hover:text-warmwhite transition-all flex items-center gap-2"
               >
                 <MessageCircle className="w-4 h-4" />

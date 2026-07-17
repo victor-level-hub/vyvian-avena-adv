@@ -1381,3 +1381,70 @@ input.adm-in-stepper::-webkit-inner-spin-button { -webkit-appearance: none; marg
 input, select, textarea, button {
   font-family: 'Arial Unicode MS', Arial, 'Helvetica Neue', sans-serif;
 }
+
+/* ── Fecho dos modais: bolinha com ✕ dourado ──────────────────────────────
+   Padrão de TODOS os modais da Área Privada (src/admin/modal-close.jsx).
+   O cartão do modal tem de ter position: relative. */
+.adm-modal-close {
+  position: absolute;
+  top: 0.85rem;
+  right: 0.85rem;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: rgba(184, 147, 90, 0.12);
+  border: 1px solid rgba(184, 147, 90, 0.45);
+  color: var(--gold, #b8935a);
+  cursor: pointer;
+  z-index: 2;
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+.adm-modal-close:hover:not(:disabled) {
+  background: rgba(184, 147, 90, 0.26);
+  transform: scale(1.08);
+  box-shadow: 0 2px 10px rgba(184, 147, 90, 0.35);
+}
+.adm-modal-close:active:not(:disabled) { transform: scale(0.95); }
+.adm-modal-close:focus-visible { outline: 2px solid var(--gold, #b8935a); outline-offset: 2px; }
+.adm-modal-close:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── Escolha das pessoas incluídas num documento ──────────────────────────
+   Clientes conjuntos (src/admin/people-picker.jsx). */
+.adm-people-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+.adm-person-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.5rem 0.9rem 0.5rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(18, 48, 42, 0.18);
+  background: var(--cream-soft, #faf7f1);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.adm-person-pick:hover { border-color: rgba(184, 147, 90, 0.55); }
+.adm-person-pick.on {
+  border-color: var(--gold, #b8935a);
+  background: rgba(184, 147, 90, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(184, 147, 90, 0.25);
+}
+.adm-person-pick.off { cursor: not-allowed; opacity: 0.6; }
+.adm-person-pick input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--gold, #b8935a);
+  cursor: inherit;
+  margin: 0;
+  flex-shrink: 0;
+}
+.adm-person-pick-txt { display: flex; flex-direction: column; line-height: 1.25; }
+.adm-person-pick-txt strong { font-size: 0.88rem; color: var(--forest, #12302a); }
+.adm-person-pick-txt small { font-size: 0.7rem; color: var(--muted, #666); }

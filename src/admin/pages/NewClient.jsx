@@ -988,7 +988,7 @@ export default function NewClient() {
               />
 
             </div>
-            {(form.planType === 'installment' || form.planType === 'monthly') && (
+            {(form.planType === 'installment' || form.planType === 'monthly') && (<>
             <div className="adm-field">
               <label style={invLabel('startDate')}>Data de Vencimento</label>
               <DateInput id="f-startDate" value={form.startDate} onChange={update('startDate')} disabled={submitting} style={invStyle('startDate')} />
@@ -999,7 +999,7 @@ export default function NewClient() {
               <DateInput value={form.firstAttendance} onChange={update('firstAttendance')} disabled={submitting} />
               <div className="adm-field-helper">Opcional — quando o cliente foi atendido pela primeira vez</div>
             </div>
-            )}
+            </>)}
 
             {form.planType === 'installment' && (
               <>

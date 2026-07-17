@@ -1,8 +1,8 @@
 ---
-titulo: Porque é que um divórcio com bens em Portugal e no Brasil se complica
+titulo: Divórcio com bens em Portugal e no Brasil: porque complica
 descricao: Dois regimes de bens, dois tribunais possíveis, sentenças que precisam de ser reconhecidas no outro país. O mapa do problema, explicado sem juridiquês.
-data: 2026-07-11
-revisto_em: 2026-07-11
+data: 2026-06-30
+revisto_em: 2026-06-30
 validade: estavel
 imagem: /blog/divorcio-portugal-brasil-porque-se-complica.jpg
 imagem_alt: Advogada em reunião com um casal, a rever documentos num escritório com vista para a cidade

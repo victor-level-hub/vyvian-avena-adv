@@ -70,7 +70,9 @@ export default function Blog() {
                   <ArrowRight className="w-[15px] h-[15px] transition-transform duration-300 group-hover:translate-x-1" />
                 </span>
               </div>
-              <div className="overflow-hidden order-1 md:order-2 aspect-[1200/630] md:aspect-auto">
+              {/* A foto do destaque mostra-se por inteiro (object-contain no desktop),
+                  centrada na coluna — sem o recorte que a "quebrava". */}
+              <div className="overflow-hidden order-1 md:order-2 aspect-[1200/630] md:aspect-auto md:flex md:items-center">
                 <img
                   src={destaque.imagem}
                   srcSet={capaSrcSet(destaque.imagem)}
@@ -79,7 +81,7 @@ export default function Blog() {
                   height="630"
                   fetchpriority="high"
                   alt={destaque.imagem_alt || ""}
-                  className="w-full h-full object-cover transition-transform duration-[1200ms] ease-out group-hover:scale-[1.03]"
+                  className="w-full h-full object-cover md:h-auto md:object-contain transition-transform duration-[1200ms] ease-out group-hover:scale-[1.03]"
                 />
               </div>
             </Link>

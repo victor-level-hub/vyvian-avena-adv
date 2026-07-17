@@ -21,11 +21,8 @@ export default function Footer() {
               src="/logo-horizontal-dourado.svg"
               alt="Vyvian Avena — Advogada"
               width="1200" height="383"
-              className="h-10 w-auto mb-5"
+              className="h-10 w-auto mt-8"
             />
-            <p className="text-sm leading-relaxed">
-              Atendimento humanizado e próximo nas áreas de Direito da Família, Civil e Comercial.
-            </p>
           </div>
 
           {/* Links */}

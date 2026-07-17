@@ -2,6 +2,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { clients as clientsApi, installments as installmentsApi, clientLogo } from '../apiClient';
+import { SearchInput } from '../inputs';
+import SelectMenu from '../dropdown';
+import { SkeletonPage } from '../skeletons';
 
 // cache de logos (objectURL) para não refazer o fetch a cada render
 const logoCache = new Map();
@@ -97,6 +100,11 @@ export default function Clients() {
   const [nextByClient, setNextByClient] = useState({}); // { clientId: installment | null }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [page, setPage] = useState(1);
+  const PER_PAGE = 25;
+
+  // volta à 1.ª página sempre que os filtros mudam
+  useEffect(() => { setPage(1); }, [search, areaFilter, countryFilter, payFilter]);
 
   // Sincroniza filtros/ordenação com o URL (sem poluir o histórico)
   useEffect(() => {
@@ -203,7 +211,7 @@ export default function Clients() {
 
   const totalActive = Object.keys(nextByClient).length;
 
-  if (loading) return <div className="adm-empty" style={{ padding: '3rem' }}>A carregar clientes…</div>;
+  if (loading) return <SkeletonPage kpis={0} rows={7} />;
   if (error) return <div className="adm-login-error">{error}</div>;
 
   return (
@@ -221,30 +229,48 @@ export default function Clients() {
       </header>
 
       <div className="adm-filter-bar">
-        <input
-          type="search"
+        <SearchInput
           placeholder="Pesquisar por nome, NIF/CPF ou e-mail…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          style={{ flex: 1, minWidth: 220 }}
         />
-        <select value={areaFilter} onChange={(e) => setAreaFilter(e.target.value)}>
-          <option value="all">Todas as áreas</option>
-          <option value="Família">Família</option>
-          <option value="Cível">Cível</option>
-          <option value="Trabalhista">Trabalhista</option>
-          <option value="Empresarial">Empresarial</option>
-        </select>
-        <select value={countryFilter} onChange={(e) => setCountryFilter(e.target.value)}>
-          <option value="all">Todos os países</option>
-          <option value="PT">Portugal</option>
-          <option value="BR">Brasil</option>
-        </select>
-        <select value={payFilter} onChange={(e) => setPayFilter(e.target.value)}>
-          <option value="all">Todas as situações</option>
-          <option value="late">Em atraso</option>
-          <option value="pending">A vencer</option>
-          <option value="quitado">Quitado</option>
-        </select>
+        <SelectMenu
+          value={areaFilter}
+          onChange={setAreaFilter}
+          ariaLabel="Filtrar por área"
+          options={[
+            { value: 'all', label: 'Todas as áreas' },
+            { value: 'Família', label: 'Família' },
+            { value: 'Cível', label: 'Cível' },
+            { value: 'Trabalhista', label: 'Trabalhista' },
+            { value: 'Empresarial', label: 'Empresarial' },
+            { value: 'Nacionalidade', label: 'Nacionalidade' },
+            { value: 'Administrativo', label: 'Administrativo' },
+            { value: 'Criminal', label: 'Criminal' },
+          ]}
+        />
+        <SelectMenu
+          value={countryFilter}
+          onChange={setCountryFilter}
+          ariaLabel="Filtrar por país"
+          options={[
+            { value: 'all', label: 'Todos os países' },
+            { value: 'PT', label: 'Portugal' },
+            { value: 'BR', label: 'Brasil' },
+          ]}
+        />
+        <SelectMenu
+          value={payFilter}
+          onChange={setPayFilter}
+          ariaLabel="Filtrar por situação"
+          options={[
+            { value: 'all', label: 'Todas as situações' },
+            { value: 'late', label: 'Em atraso' },
+            { value: 'pending', label: 'A vencer' },
+            { value: 'quitado', label: 'Quitado' },
+          ]}
+        />
         {hasFilters && (
           <button type="button" className="adm-btn" onClick={clearFilters}>Limpar filtros</button>
         )}
@@ -270,7 +296,7 @@ export default function Clients() {
             </tr>
           </thead>
           <tbody>
-            {filtered.map((c) => {
+            {filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE).map((c) => {
               const next = nextByClient[c.id];
               return (
                 <tr
@@ -305,6 +331,28 @@ export default function Clients() {
           </tbody>
         </table>
       )}
+
+      {/* Paginação — aparece quando a lista passa de uma página */}
+      {filtered.length > PER_PAGE && (() => {
+        const totalPages = Math.ceil(filtered.length / PER_PAGE);
+        const pages = Array.from({ length: totalPages }, (_, i) => i + 1)
+          .filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1);
+        const withGaps = pages.flatMap((p, i) => (i > 0 && p - pages[i - 1] > 1 ? ['…', p] : [p]));
+        return (
+          <div className="adm-pagination">
+            <button type="button" className="adm-page-btn" disabled={page === 1} onClick={() => setPage(page - 1)} aria-label="Página anterior">‹</button>
+            {withGaps.map((p, i) => p === '…'
+              ? <span key={'g' + i} className="adm-page-info">…</span>
+              : (
+                <button key={p} type="button" className={'adm-page-btn' + (p === page ? ' cur' : '')} onClick={() => setPage(p)}>
+                  {p}
+                </button>
+              ))}
+            <button type="button" className="adm-page-btn" disabled={page === totalPages} onClick={() => setPage(page + 1)} aria-label="Página seguinte">›</button>
+            <span className="adm-page-info">{filtered.length} clientes</span>
+          </div>
+        );
+      })()}
     </>
   );
 }

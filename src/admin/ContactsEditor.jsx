@@ -2,6 +2,8 @@
 // Lista dinâmica de contactos (e-mails ou telefones) com label por entrada.
 // Labels: predefinidas + personalizadas (persistidas em localStorage) + "+ Nova label…".
 import React, { useState } from 'react';
+import { admPrompt } from './dialogs';
+import { IconInput } from './inputs';
 
 const DEFAULT_LABELS = ['Pessoal', 'Empresa', 'Responsável', 'Sócio-gerente', 'Financeiro', 'Trabalho', 'Outro'];
 const LS_KEY = 'vyvian_contact_labels';
@@ -29,10 +31,10 @@ export default function ContactsEditor({ kind, items, onChange, disabled, requir
     onChange(next);
   };
 
-  const handleLabelChange = (idx) => (e) => {
+  const handleLabelChange = (idx) => async (e) => {
     const v = e.target.value;
     if (v === '__nova__') {
-      const nova = (window.prompt('Nome da nova label (ex.: Contabilista, Advogado BR…):') || '').trim();
+      const nova = ((await admPrompt('Nome da nova label (ex.: Contabilista, Advogado BR…):', { title: 'Nova label' })) || '').trim();
       if (nova) {
         saveCustomLabel(nova);
         setCustomLabels(loadCustomLabels());
@@ -65,14 +67,16 @@ export default function ContactsEditor({ kind, items, onChange, disabled, requir
             {allLabels.map((l) => <option key={l} value={l}>{l}</option>)}
             <option value="__nova__">＋ Nova label…</option>
           </select>
-          <input
+          <IconInput
+            icon={isEmail ? 'mail' : 'phone'}
             id={idx === 0 ? inputId : undefined}
             type={isEmail ? 'email' : 'tel'}
             value={it.value}
             onChange={(e) => setItem(idx, { value: e.target.value })}
             placeholder={isEmail ? 'nome@exemplo.pt' : '+351 91 …'}
             disabled={disabled}
-            style={{ flex: 1, ...(invalid && idx === 0 ? { borderColor: '#c00000', boxShadow: '0 0 0 2px rgba(192,0,0,0.14)' } : {}) }}
+            style={{ flex: 1 }}
+            inputStyle={invalid && idx === 0 ? { borderColor: '#c00000', boxShadow: '0 0 0 2px rgba(192,0,0,0.14)' } : undefined}
           />
           {items.length > 1 && (
             <button

@@ -95,10 +95,7 @@ export default function Sobre() {
           <h2 className="font-heading text-3xl md:text-4xl text-forest mb-8">Biografia Profissional</h2>
           <div className="space-y-4 font-body text-forest/70 leading-relaxed">
             <p>
-              Formada em Direito com especialização nas áreas de Família e Civil, a Dra. Vyvian Avena iniciou a sua carreira no Brasil, onde adquiriu uma sólida experiência em processos complexos de Direito de Família, incluindo divórcios, regulação de poder paternal e partilhas patrimoniais.
-            </p>
-            <p>
-              A sua trajetória internacional levou-a a Portugal, onde se inscreveu na Ordem dos Advogados de Portugal sob o número 60987P. Atualmente, dirige um escritório com presença em Setúbal/Grande Lisboa, Aveiro/Porto e Rio de Janeiro, oferecendo assistência jurídica em seis áreas do Direito.
+              Formada em Direito em 2008 pela Universidade Estácio de Sá (Rio de Janeiro) e com Mestrado em Direito, na especialização de Ciências Jurídico-Empresariais, concluído em 2022 na Universidade Lusófona do Porto, a Dra. Vyvian Avena iniciou a sua carreira no Brasil, onde adquiriu uma sólida experiência em processos complexos de Direito de Família, incluindo divórcios, regulação de poder paternal e partilhas patrimoniais.
             </p>
             <p>
               A sua abordagem distingue-se pelo atendimento humanizado, privilegiando a escuta ativa e a construção de soluções que respeitem as necessidades individuais de cada cliente.
@@ -138,15 +135,15 @@ export default function Sobre() {
           <div className="space-y-4 font-body text-forest/70">
             <div className="flex items-start gap-3">
               <div className="w-2 h-2 bg-gold rounded-full mt-2 shrink-0" />
-              <p>Licenciatura em Direito</p>
+              <p>Licenciatura em Direito — Universidade Estácio de Sá, Rio de Janeiro (2008)</p>
             </div>
             <div className="flex items-start gap-3">
               <div className="w-2 h-2 bg-gold rounded-full mt-2 shrink-0" />
-              <p>Especialização em Direito de Família e Menores</p>
+              <p>Mestrado em Direito, especialização em Ciências Jurídico-Empresariais — Universidade Lusófona do Porto (2022)</p>
             </div>
             <div className="flex items-start gap-3">
               <div className="w-2 h-2 bg-gold rounded-full mt-2 shrink-0" />
-              <p>Inscrita na Ordem dos Advogados de Portugal — Cédula 60987P</p>
+              <p>Inscrita na Ordem dos Advogados de Portugal</p>
             </div>
             <div className="flex items-start gap-3">
               <div className="w-2 h-2 bg-gold rounded-full mt-2 shrink-0" />

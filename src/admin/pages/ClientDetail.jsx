@@ -1,15 +1,42 @@
 // src/admin/pages/ClientDetail.jsx
 import React, { useState, useEffect } from 'react';
 import ContactsEditor, { parseContacts, cleanContacts } from '../ContactsEditor';
+import ParcelasEditor, { gerarParcelas, somaParcelas, parseValor, fmtValor } from '../ParcelasEditor';
+import { MoneyInput, StepperInput } from '../inputs';
+import SlidingTabs from '../tabs';
+import { admToast } from '../toasts';
+import DateInput from '../datepicker';
+import { IconMail, IconGear } from '../icons';
+import { SkeletonPage } from '../skeletons';
 import AddressEditor, { EMPTY_ADDRESS, composeAddress, hasAddress, parseAddressParts } from '../AddressEditor';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { clients as clientsApi, installments as installmentsApi, recibos as recibosApi, procuracoes as procApi, planos as planosApi, uploadTokens as utApi, clientDocs as docsApi, clientLogo, calendar as calendarApi, notifications as notifApi } from '../apiClient';
 import { IconPhone, IconBuilding, IconCamera, IconDoc, IconUpload } from '../icons';
+import { admAlert, admConfirm } from '../dialogs';
 
 function fmtMoney(amount, currency = 'EUR') {
   const symbol = currency === 'BRL' ? 'R$' : '€';
   const n = Number(amount || 0);
   return symbol + '\u00A0' + n.toLocaleString('pt-PT', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+// Documentos anexáveis por parcela (botões Emitir/Ver na tabela do plano)
+const DOC_TIPOS = [
+  ['fatura', 'Fatura'],
+  ['recibo', 'Recibo'],
+  ['fatura-recibo', 'Fatura-Recibo'],
+];
+
+function addMonthsStr(dateStr, months) {
+  const d = new Date(dateStr);
+  d.setMonth(d.getMonth() + months);
+  return d.toISOString().slice(0, 10);
+}
+
+function fmtDocStamp(iso) {
+  const d = new Date(iso);
+  return d.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) + ' - ' +
+         d.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
 }
 
 function fmtDate(dateStr) {
@@ -24,8 +51,24 @@ function daysUntil(dateStr) {
   return Math.round((new Date(dateStr) - today) / (1000 * 60 * 60 * 24));
 }
 
-function StatusBadge({ installment }) {
-  if (installment.status === 'paid') return <span className="adm-badge adm-badge-paid">Pago</span>;
+function StatusBadge({ installment, onUnmark }) {
+  if (installment.status === 'paid') {
+    if (!onUnmark) return <span className="adm-badge adm-badge-paid">Pago</span>;
+    // clicável: permite desmarcar um "pago" indevido (volta a pendente)
+    return (
+      <span
+        className="adm-badge adm-badge-paid"
+        role="button"
+        tabIndex={0}
+        data-tip="Clique para desmarcar — a parcela volta a pendente (os documentos mantêm-se)"
+        style={{ cursor: 'pointer' }}
+        onClick={() => onUnmark(installment)}
+        onKeyDown={(e) => { if (e.key === 'Enter') onUnmark(installment); }}
+      >
+        Pago
+      </span>
+    );
+  }
   if (installment.status === 'late') {
     const days = Math.abs(daysUntil(installment.due_date));
     return <span className="adm-badge adm-badge-late">{days}d atraso</span>;
@@ -36,6 +79,78 @@ function StatusBadge({ installment }) {
   return <span className="adm-badge adm-badge-pending">Pendente</span>;
 }
 
+// Processos do cliente: abas laterais com o nº do processo; painel com área e resumo.
+// Lê a lista JSON (client.processes); clientes antigos caem no processo único legado.
+function ProcessosCard({ client }) {
+  const [active, setActive] = React.useState(0);
+  let processos = [];
+  try { processos = JSON.parse(client.processes || 'null') || []; } catch { processos = []; }
+  if (!processos.length) {
+    const m = (client.notes || '').match(/Processo:\s*(.+)/);
+    if (client.process_summary || m || client.practice_area) {
+      processos = [{ ref: m ? m[1].trim() : '', area: client.practice_area || '', resumo: client.process_summary || '' }];
+    }
+  }
+  if (!processos.length) return null;
+  const sel = processos[Math.min(active, processos.length - 1)];
+  return (
+    <>
+      <div className="adm-card-title" style={{ marginTop: '1.5rem' }}>
+        {processos.length > 1 ? 'Processos' : 'Processo'}
+      </div>
+      <div style={{ display: 'flex', gap: '1.25rem', alignItems: 'stretch' }}>
+        {/* Abas laterais com o número/referência de cada processo */}
+        <div style={{ flex: '0 0 200px', display: 'flex', flexDirection: 'column', gap: '0.35rem', borderRight: '1px solid rgba(0,0,0,0.1)', paddingRight: '1rem' }}>
+          {processos.map((p, idx) => {
+            const isActive = idx === Math.min(active, processos.length - 1);
+            return (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => setActive(idx)}
+                style={{
+                  textAlign: 'left', cursor: 'pointer', borderRadius: 6, padding: '0.55rem 0.7rem',
+                  border: isActive ? '1px solid var(--gold, #b8935a)' : '1px solid transparent',
+                  borderLeft: isActive ? '3px solid var(--gold, #b8935a)' : '3px solid transparent',
+                  background: isActive ? 'rgba(184,147,90,0.10)' : 'none',
+                  fontFamily: 'var(--sans)',
+                }}
+              >
+                <div style={{ fontWeight: 600, fontSize: '0.82rem', color: 'var(--forest, #12302a)', overflowWrap: 'anywhere' }}>
+                  {p.ref || `Processo ${idx + 1}`}
+                </div>
+                {p.area && <div style={{ fontSize: '0.7rem', color: 'var(--muted, #777)', marginTop: 2 }}>{p.area}</div>}
+              </button>
+            );
+          })}
+        </div>
+        {/* Painel do processo selecionado */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', marginBottom: '0.7rem' }}>
+            {sel.ref && (
+              <div>
+                <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted, #777)' }}>Processo</div>
+                <div style={{ fontWeight: 600, color: 'var(--forest, #12302a)' }}>{sel.ref}</div>
+              </div>
+            )}
+            {sel.area && (
+              <div>
+                <div style={{ fontSize: '0.68rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--muted, #777)' }}>Área</div>
+                <div style={{ fontWeight: 600, color: 'var(--forest, #12302a)' }}>{sel.area}</div>
+              </div>
+            )}
+          </div>
+          {sel.resumo ? (
+            <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.65, margin: 0 }}>{sel.resumo}</p>
+          ) : (
+            <div className="adm-empty" style={{ padding: '1rem 0' }}>Sem resumo para este processo.</div>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 export default function ClientDetail() {
   const { clientId } = useParams();
   const [activeTab, setActiveTab] = useState('plan');
@@ -44,7 +159,11 @@ export default function ClientDetail() {
   const [error, setError] = useState(null);
   const [markingPaid, setMarkingPaid] = useState(null);
   const [reciboInfo, setReciboInfo] = useState({}); // { installmentId: {exists, filename} }
+  const [planEdit, setPlanEdit] = useState(false);   // modal "Editar plano"
+  const [planForm, setPlanForm] = useState(null);
+  const [planSaveBusy, setPlanSaveBusy] = useState(false);
   const [reciboBusy, setReciboBusy] = useState(null);
+  const [dropTarget, setDropTarget] = useState(null); // "instId|tipo" do botão Anexar sob drag
   const [sendBusy, setSendBusy] = useState(null);
   const [planPdfBusy, setPlanPdfBusy] = useState(false);
   const [planSendBusy, setPlanSendBusy] = useState(false);
@@ -211,11 +330,11 @@ export default function ClientDetail() {
     try {
       const res = await clientsApi.get(clientId);
       setData(res);
-      // carregar estado dos RV das parcelas pagas
-      const paidIds = (res.installments || []).filter((i) => i.status === 'paid').map((i) => i.id);
+      // carregar estado dos documentos (recibo / fatura-recibo / fatura) de todas as parcelas
+      const ids = (res.installments || []).map((i) => i.id);
       const infos = {};
-      await Promise.all(paidIds.map(async (id) => {
-        try { infos[id] = await recibosApi.info(id); } catch { infos[id] = { exists: false }; }
+      await Promise.all(ids.map(async (id) => {
+        try { infos[id] = (await recibosApi.infoAll(id)).docs || {}; } catch { infos[id] = {}; }
       }));
       setReciboInfo(infos);
     } catch (err) {
@@ -265,6 +384,7 @@ export default function ClientDetail() {
       if (f.paid) await installmentsApi.markPaid(id, f.paid_date);
       setPayOpen(false);
       await loadData();
+      admToast('Pagamento avulso registado');
     } catch (err) {
       setPayErr(err.message || 'Falhou o registo do pagamento.');
     } finally {
@@ -293,15 +413,15 @@ export default function ClientDetail() {
     try {
       await notifApi.updateRule(rule.id, { enabled: rule.enabled ? 0 : 1 });
       setCliRules(cliRules.map((r) => (r.id === rule.id ? { ...r, enabled: rule.enabled ? 0 : 1 } : r)));
-    } catch (err) { alert('Erro: ' + err.message); }
+    } catch (err) { admAlert('Erro: ' + err.message); }
   };
 
   const deleteCliRule = async (rule) => {
-    if (!window.confirm('Remover este lembrete?')) return;
+    if (!await admConfirm('Remover este lembrete?')) return;
     try {
       await notifApi.removeRule(rule.id);
       setCliRules(cliRules.filter((r) => r.id !== rule.id));
-    } catch (err) { alert('Erro: ' + err.message); }
+    } catch (err) { admAlert('Erro: ' + err.message); }
   };
 
   const createCliRule = async () => {
@@ -318,7 +438,7 @@ export default function ClientDetail() {
       await notifApi.createRule(payload);
       setCliRules(null); // força reload
       setNewRule({ channel: 'email', days_before: 3, template_id: '' });
-    } catch (err) { alert('Erro: ' + err.message); }
+    } catch (err) { admAlert('Erro: ' + err.message); }
     finally { setRuleBusy(false); }
   };
 
@@ -351,77 +471,138 @@ export default function ClientDetail() {
     e.target.value = '';
     if (!file) return;
     if (!['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'].includes(file.type)) {
-      alert('Tipo não suportado. Use PNG, JPEG, WEBP ou SVG.');
+      admAlert('Tipo não suportado. Use PNG, JPEG, WEBP ou SVG.');
       return;
     }
     setLogoBusy(true);
     try { await clientLogo.upload(clientId, file); await loadData(); }
-    catch (err) { alert('Erro ao carregar logo: ' + err.message); }
+    catch (err) { admAlert('Erro ao carregar logo: ' + err.message); }
     finally { setLogoBusy(false); }
   };
 
   const handleLogoRemove = async () => {
-    if (!confirm('Remover a logo do cliente?')) return;
+    if (!await admConfirm('Remover a logo do cliente?')) return;
     setLogoBusy(true);
     try { await clientLogo.remove(clientId); await loadData(); }
-    catch (err) { alert('Erro: ' + err.message); }
+    catch (err) { admAlert('Erro: ' + err.message); }
     finally { setLogoBusy(false); }
   };
 
+  // Desmarcar um "pago" indevido: volta a pendente, mantém documentos anexados
+  const handleUnmarkPaid = async (inst) => {
+    if (!await admConfirm(
+      `Desmarcar a parcela ${inst.installment_number}/${inst.total_installments} como paga? Volta a "pendente" — os documentos anexados mantêm-se.`,
+      { okLabel: 'Desmarcar' }
+    )) return;
+    try {
+      await installmentsApi.update(inst.id, { status: 'pending', paid_date: null });
+      await loadData();
+      admToast('Parcela desmarcada — voltou a pendente', { kind: 'info' });
+    } catch (err) {
+      admAlert('Erro: ' + err.message);
+    }
+  };
+
   const handleMarkPaid = async (installmentId) => {
-    if (!confirm('Marcar esta parcela como paga (hoje)?')) return;
+    if (!await admConfirm('Marcar esta parcela como paga (hoje)?')) return;
     setMarkingPaid(installmentId);
     try {
       const today = new Date().toISOString().slice(0, 10);
       await installmentsApi.markPaid(installmentId, today);
       await loadData();
+      admToast('Parcela marcada como paga');
     } catch (err) {
-      alert('Erro: ' + err.message);
+      admAlert('Erro: ' + err.message);
     } finally {
       setMarkingPaid(null);
     }
   };
 
-  // Anexar RV: aciona o input de ficheiro escondido
-  const triggerAttach = (installmentId) => {
-    pendingUploadId.current = installmentId;
+  // Anexar documento (recibo | fatura-recibo | fatura): aciona o input de ficheiro escondido
+  const triggerAttach = (installmentId, tipo = 'recibo') => {
+    pendingUploadId.current = { id: installmentId, tipo };
     if (fileInputRef.current) { fileInputRef.current.value = ''; fileInputRef.current.click(); }
   };
 
   const handleFileChosen = async (e) => {
     const file = e.target.files && e.target.files[0];
-    const installmentId = pendingUploadId.current;
-    if (!file || !installmentId) return;
-    if (file.type !== 'application/pdf') { alert('Por favor selecione um ficheiro PDF.'); return; }
+    const pending = pendingUploadId.current;
+    if (!file || !pending) return;
+    const { id: installmentId, tipo } = typeof pending === 'object' ? pending : { id: pending, tipo: 'recibo' };
+    await doUploadDoc(installmentId, tipo, file);
+  };
+
+  // Carrega um documento (via seletor de ficheiro OU arrastado para o botão Anexar)
+  const doUploadDoc = async (installmentId, tipo, file) => {
+    if (file.type !== 'application/pdf') { admAlert('Por favor selecione um ficheiro PDF.'); return; }
     setReciboBusy(installmentId);
     try {
-      await recibosApi.upload(installmentId, file);
-      const info = await recibosApi.info(installmentId);
-      setReciboInfo((prev) => ({ ...prev, [installmentId]: info }));
+      await recibosApi.upload(installmentId, file, tipo);
+      // Anexar Recibo ou Fatura-Recibo considera a parcela como paga (Fatura não)
+      const inst = (data?.installments || []).find((x) => x.id === installmentId);
+      const tipoLabel = (DOC_TIPOS.find(([t]) => t === tipo) || [null, 'Documento'])[1];
+      if ((tipo === 'recibo' || tipo === 'fatura-recibo') && inst && inst.status !== 'paid') {
+        await installmentsApi.markPaid(installmentId, new Date().toISOString().slice(0, 10));
+        await loadData(); // recarrega parcelas + estado dos documentos
+        admToast(`${tipoLabel} anexado — parcela marcada como paga`);
+      } else {
+        const info = (await recibosApi.infoAll(installmentId)).docs || {};
+        setReciboInfo((prev) => ({ ...prev, [installmentId]: info }));
+        admToast(`${tipoLabel} anexado`);
+      }
     } catch (err) {
-      alert('Não foi possível anexar o Recibo Verde: ' + err.message);
+      admAlert('Não foi possível anexar o documento: ' + err.message);
     } finally {
       setReciboBusy(null);
       pendingUploadId.current = null;
     }
   };
 
-  const handleViewRecibo = async (installmentId) => {
+  const handleViewRecibo = async (installmentId, tipo = 'recibo') => {
     try {
-      await recibosApi.openInNewTab(installmentId);
+      await recibosApi.openInNewTab(installmentId, tipo);
     } catch (err) {
-      alert('Não foi possível abrir o Recibo Verde: ' + err.message);
+      admAlert('Não foi possível abrir o documento: ' + err.message);
+    }
+  };
+
+  // Remover um documento anexado; se deixar de haver Recibo/Fatura-Recibo,
+  // a parcela paga volta a pendente.
+  const handleRemoveParcelaDoc = async (inst, tipo, label) => {
+    const comprova = tipo === 'recibo' || tipo === 'fatura-recibo';
+    if (!await admConfirm(
+      `Remover o documento "${label}" anexado à parcela ${inst.installment_number}/${inst.total_installments}?` +
+      (comprova && inst.status === 'paid' ? ' Se não restar Recibo nem Fatura-Recibo, a parcela volta a pendente.' : ''),
+      { okLabel: 'Remover', danger: true }
+    )) return;
+    setReciboBusy(inst.id);
+    try {
+      await recibosApi.remove(inst.id, tipo);
+      const info = (await recibosApi.infoAll(inst.id)).docs || {};
+      setReciboInfo((prev) => ({ ...prev, [inst.id]: info }));
+      const aindaComprovada = info['recibo']?.exists || info['fatura-recibo']?.exists;
+      if (inst.status === 'paid' && comprova && !aindaComprovada) {
+        await installmentsApi.update(inst.id, { status: 'pending', paid_date: null });
+        await loadData();
+        admToast(`${label} removido — a parcela voltou a pendente`, { kind: 'info' });
+      } else {
+        admToast(`${label} removido`, { kind: 'info' });
+      }
+    } catch (err) {
+      admAlert('Não foi possível remover o documento: ' + err.message);
+    } finally {
+      setReciboBusy(null);
     }
   };
 
   const handleRemoveRecibo = async (installmentId) => {
-    if (!confirm('Remover o Recibo Verde anexado a esta parcela?')) return;
+    if (!await admConfirm('Remover o Recibo Verde anexado a esta parcela?')) return;
     setReciboBusy(installmentId);
     try {
       await recibosApi.remove(installmentId);
       setReciboInfo((prev) => ({ ...prev, [installmentId]: { exists: false } }));
     } catch (err) {
-      alert('Não foi possível remover: ' + err.message);
+      admAlert('Não foi possível remover: ' + err.message);
     } finally {
       setReciboBusy(null);
     }
@@ -431,12 +612,172 @@ export default function ClientDetail() {
     setSendBusy(installmentId);
     try {
       const r = await recibosApi.sendToClient(installmentId);
-      if (r.skipped) alert('Envio por email ainda não configurado (falta a chave Resend).');
-      else alert('Recibo Verde enviado por email para ' + r.sent_to + '.');
+      if (r.skipped) admAlert('Envio por email ainda não configurado (falta a chave Resend).');
+      else admAlert('Recibo Verde enviado por email para ' + r.sent_to + '.');
     } catch (err) {
-      alert('Não foi possível enviar: ' + err.message);
+      admAlert('Não foi possível enviar: ' + err.message);
     } finally {
       setSendBusy(null);
+    }
+  };
+
+  // ── Editar plano de pagamento (cliente já criado) ─────────────
+  // A lista inclui TODAS as parcelas: as pagas primeiro (editáveis, para
+  // corrigir o valor pago) e depois as novas. A soma de todas tem de fechar
+  // com o total contratado.
+  const paidRowsFromData = () => (data?.installments || [])
+    .filter((i) => i.status === 'paid')
+    .sort((a, b) => (a.installment_number || 0) - (b.installment_number || 0))
+    .map((i, idx) => ({
+      n: idx + 1, id: i.id, paid: true,
+      due_date: (i.due_date || '').slice(0, 10),
+      amount: Number(i.amount).toFixed(2),
+    }));
+
+  const regenPlanParcelas = (pf) => {
+    if (pf.planType !== 'installment') return { ...pf, parcelas: null };
+    const paidRows = paidRowsFromData();
+    const paidSum = Math.round(paidRows.reduce((s, r) => s + parseValor(r.amount), 0) * 100) / 100;
+    const total = parseValor(pf.totalValue);
+    const n = parseInt(pf.installments, 10) || 0;
+    if (pf.startDate && total > 0 && n > paidRows.length) {
+      const restante = Math.round((total - paidSum) * 100) / 100;
+      return { ...pf, parcelas: [...paidRows, ...gerarParcelas(restante, n - paidRows.length, pf.startDate, paidRows.length + 1)] };
+    }
+    if (paidRows.length && n === paidRows.length) return { ...pf, parcelas: paidRows };
+    return { ...pf, parcelas: paidRows.length ? paidRows : null };
+  };
+
+  const updPlanField = (key) => (e) => {
+    const value = e.target.value;
+    setPlanForm((pf) => {
+      const next = { ...pf, [key]: value };
+      if (next.planType !== 'installment') return { ...next, parcelas: null };
+      // sem lista ainda (ou mudança de tipo de plano) → gerar de raiz
+      if (key === 'planType' || !pf.parcelas || !pf.parcelas.length) return regenPlanParcelas(next);
+      if (key === 'installments') {
+        // mudar a QUANTIDADE não mexe nos valores já definidos:
+        // as pagas ficam sempre; acrescenta linhas novas no fim (com o valor
+        // da última) ou retira novas do fim
+        const paidRows = pf.parcelas.filter((r) => r.paid);
+        const novas = pf.parcelas.filter((r) => !r.paid);
+        const alvo = Math.max(0, (parseInt(value, 10) || 0) - paidRows.length);
+        let rows = novas.slice(0, alvo);
+        while (rows.length < alvo) {
+          const last = rows[rows.length - 1] || novas[novas.length - 1] || paidRows[paidRows.length - 1];
+          rows = [...rows, {
+            n: 0, // renumerado abaixo
+            due_date: last ? addMonthsStr(last.due_date, 1) : next.startDate,
+            amount: last ? last.amount : '0.00',
+          }];
+        }
+        const todas = [...paidRows, ...rows].map((r, i) => ({ ...r, n: i + 1 }));
+        return { ...next, parcelas: todas.length ? todas : null };
+      }
+      if (key === 'startDate' && value) {
+        // nova data de vencimento: redata as parcelas NOVAS (mensal),
+        // mantém valores; as pagas mantêm as suas datas
+        let k = 0;
+        return { ...next, parcelas: pf.parcelas.map((r) => (r.paid ? r : { ...r, due_date: addMonthsStr(value, k++) })) };
+      }
+      // totalValue: mantém a lista — a barra da soma mostra a diferença a acertar
+      return next;
+    });
+  };
+
+  const openPlanEdit = () => {
+    const c = data?.client || {};
+    const insts = data?.installments || [];
+    const monthly = !c.honorarios_total;
+    setPlanForm(regenPlanParcelas({
+      planType: monthly ? 'monthly' : 'installment',
+      startDate: (c.contract_start_date || '').slice(0, 10),
+      totalValue: c.honorarios_total || '',
+      installments: c.honorarios_parcelas || '',
+      monthlyValue: monthly ? (insts[0]?.amount || '') : '',
+      parcelas: null,
+    }));
+    setPlanEdit(true);
+  };
+
+  const handleSavePlan = async () => {
+    const pf = planForm;
+    const isInst = pf.planType === 'installment';
+    const total = parseFloat(String(pf.totalValue).replace(',', '.')) || 0;
+    const nParc = parseInt(pf.installments, 10) || 0;
+    const mensal = parseFloat(String(pf.monthlyValue).replace(',', '.')) || 0;
+    if (!pf.startDate) { admAlert('Indique a Data de Vencimento (1.ª parcela).'); return; }
+    if (isInst && (total <= 0 || nParc <= 0)) { admAlert('Indique o valor total contratado e o número de parcelas.'); return; }
+    if (!isInst && mensal <= 0) { admAlert('Indique o valor mensal da avença.'); return; }
+
+    const insts = data?.installments || [];
+    const unpaid = insts.filter((i) => i.status !== 'paid');
+    const paidCount = insts.length - unpaid.length;
+    if (isInst && paidCount > nParc) { admAlert(`Já existem ${paidCount} parcelas pagas — o número de parcelas não pode ser inferior.`); return; }
+    // a lista inclui as pagas (editáveis) + as novas
+    const rows = isInst ? (pf.parcelas || []) : [];
+    const paidRows = rows.filter((r) => r.paid);
+    const newRows = rows.filter((r) => !r.paid);
+    if (isInst) {
+      if (rows.length !== nParc) { admAlert('A lista de parcelas não corresponde ao número de parcelas indicado.'); return; }
+      if (rows.some((r) => !r.due_date || parseValor(r.amount) <= 0)) { admAlert('Todas as parcelas precisam de data e de um valor superior a zero.'); return; }
+      const soma = somaParcelas(rows);
+      if (Math.abs(total - soma) >= 0.005) {
+        admAlert(`A soma das parcelas (${fmtValor(soma, (data?.client?.country === 'BR') ? 'BRL' : 'EUR')}) não fecha com o total contratado (${fmtValor(total, (data?.client?.country === 'BR') ? 'BRL' : 'EUR')}). Ajuste os valores até a soma ficar a verde.`);
+        return;
+      }
+    }
+    if (insts.length > 0 && !(await admConfirm(
+      `As ${unpaid.length} parcelas por pagar serão substituídas pelo novo plano.` +
+      (paidCount ? ` As ${paidCount} pagas mantêm o estado de pagas (valores e datas atualizados conforme a lista).` : '') + ' Continuar?',
+      { okLabel: 'Aplicar novo plano' }
+    ))) return;
+
+    setPlanSaveBusy(true);
+    try {
+      const curr = (data?.client?.country === 'BR') ? 'BRL' : 'EUR';
+      await clientsApi.update(clientId, {
+        honorarios_total: isInst ? total : 0,
+        honorarios_parcelas: isInst ? nParc : 0,
+        contract_start_date: pf.startDate,
+      });
+      // parcelas pagas: atualiza valor/data/numeração (mantêm o estado de pagas e os documentos)
+      for (const r of paidRows) {
+        await installmentsApi.update(r.id, {
+          amount: parseValor(r.amount),
+          due_date: r.due_date,
+          installment_number: r.n,
+          total_installments: isInst ? nParc : paidCount + 12,
+        });
+      }
+      for (const i of unpaid) await installmentsApi.remove(i.id);
+      const stamp = Date.now().toString(36);
+      const toCreate = [];
+      if (isInst) {
+        for (const r of newRows) {
+          toCreate.push({
+            id: `${clientId}-p${r.n}-${stamp}`, client_id: clientId,
+            installment_number: r.n, total_installments: nParc,
+            amount: parseValor(r.amount), currency: curr, due_date: r.due_date,
+          });
+        }
+      } else {
+        for (let k = 0; k < 12; k++) {
+          toCreate.push({
+            id: `${clientId}-m${paidCount + k + 1}-${stamp}`, client_id: clientId,
+            installment_number: paidCount + k + 1, total_installments: paidCount + 12,
+            amount: mensal, currency: curr, due_date: addMonthsStr(pf.startDate, k),
+          });
+        }
+      }
+      for (const inst of toCreate) await installmentsApi.create(inst);
+      setPlanEdit(false);
+      await loadData();
+      admToast('Plano de pagamento atualizado');
+    } catch (err) {
+      admAlert('Erro ao guardar o plano: ' + err.message);
+    } finally {
+      setPlanSaveBusy(false);
     }
   };
 
@@ -503,7 +844,7 @@ export default function ClientDetail() {
       setPlanMsg({ type: 'error', text: 'Cliente sem email registado. Adicione um email para enviar o plano.' });
       return;
     }
-    if (!window.confirm(`Enviar o plano de pagamento para ${client.email}?`)) return;
+    if (!await admConfirm(`Enviar o plano de pagamento para ${client.email}?`)) return;
     setPlanSendBusy(true);
     setPlanMsg(null);
     try {
@@ -536,6 +877,8 @@ export default function ClientDetail() {
       mother_name: client.mother_name || '',
       process_summary: client.process_summary || '',
       practice_area: client.practice_area || '',
+      contract_start_date: client.contract_start_date || '',
+      first_attendance_date: client.first_attendance_date || '',
       address: client.address || '',
       nationality: client.nationality || '',
       marital_status: client.marital_status || '',
@@ -571,12 +914,15 @@ export default function ClientDetail() {
         rep_address: editForm.person_type === 'coletiva' && hasAddress(editForm.repAddrParts) ? composeAddress(editForm.repAddrParts) : null,
         rep_address_parts: editForm.person_type === 'coletiva' && hasAddress(editForm.repAddrParts) ? JSON.stringify(editForm.repAddrParts) : null,
         filiation: [editForm.father_name, editForm.mother_name].filter(Boolean).join(' e ') || editForm.filiation || null,
+        contract_start_date: editForm.contract_start_date || null,
+        first_attendance_date: editForm.first_attendance_date || null,
       };
       delete payload.addrParts;
       delete payload.repAddrParts;
       await clientsApi.update(client.id, payload);
       setEditing(false);
       await loadData();
+      admToast('Ficha do cliente guardada');
     } catch (err) {
       setEditError(err.message || 'Falha ao guardar.');
     } finally {
@@ -614,7 +960,7 @@ export default function ClientDetail() {
         setProcOverrides({});
       }
     } catch (e) {
-      alert('Erro a carregar modelo: ' + e.message);
+      admAlert('Erro a carregar modelo: ' + e.message);
     } finally {
       setProcBusy(false);
     }
@@ -632,7 +978,7 @@ export default function ClientDetail() {
         data: procData,
       });
     } catch (e) {
-      alert('Erro a gerar procuração: ' + e.message);
+      admAlert('Erro a gerar procuração: ' + e.message);
     } finally {
       setProcBusy(false);
     }
@@ -658,30 +1004,30 @@ export default function ClientDetail() {
       try { await navigator.clipboard.writeText(link); setCopied(r.token); setTimeout(() => setCopied(null), 2500); } catch {}
       setInstructions('');
       await loadDocsAndTokens();
-      alert('Link gerado e copiado para o seu clipboard:\n\n' + link);
+      admAlert('Link gerado e copiado para o seu clipboard:\n\n' + link);
     } catch (e) {
-      alert('Erro a gerar link: ' + e.message);
+      admAlert('Erro a gerar link: ' + e.message);
     } finally { setTokenBusy(false); }
   };
 
   const handleCopyLink = async (token) => {
     const link = `${window.location.origin}/upload/${token}`;
-    try { await navigator.clipboard.writeText(link); setCopied(token); setTimeout(() => setCopied(null), 2500); } catch { alert(link); }
+    try { await navigator.clipboard.writeText(link); setCopied(token); setTimeout(() => setCopied(null), 2500); } catch { admAlert(link); }
   };
 
   const handleRevokeToken = async (token) => {
-    if (!confirm('Revogar este link? O cliente deixará de poder enviar documentos por ele.')) return;
+    if (!await admConfirm('Revogar este link? O cliente deixará de poder enviar documentos por ele.')) return;
     try { await utApi.revoke(token); await loadDocsAndTokens(); }
-    catch (e) { alert('Erro: ' + e.message); }
+    catch (e) { admAlert('Erro: ' + e.message); }
   };
 
   const handleRemoveDoc = async (docId, filename) => {
-    if (!confirm(`Apagar "${filename}"? Esta ação é irreversível.`)) return;
+    if (!await admConfirm(`Apagar "${filename}"? Esta ação é irreversível.`)) return;
     try { await docsApi.remove(docId); await loadDocsAndTokens(); }
-    catch (e) { alert('Erro: ' + e.message); }
+    catch (e) { admAlert('Erro: ' + e.message); }
   };
 
-  if (loading) return <div className="adm-empty" style={{ padding: '3rem' }}>A carregar cliente…</div>;
+  if (loading) return <SkeletonPage kpis={4} rows={5} />;
   if (error) return <div className="adm-login-error">{error}</div>;
   if (!data?.client) {
     return <div className="adm-empty">Cliente não encontrado. <Link to="/admin/clientes">Voltar à lista</Link></div>;
@@ -729,6 +1075,7 @@ export default function ClientDetail() {
 
       {editing && editForm && (
         <div
+          className="adm-overlay"
           onMouseDown={(e) => { if (e.target === e.currentTarget && !editBusy) setEditing(false); }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '3rem 1rem', zIndex: 1000, overflowY: 'auto' }}
         >
@@ -788,7 +1135,17 @@ export default function ClientDetail() {
                   <option value="Trabalhista">Trabalhista</option>
                   <option value="Empresarial">Empresarial</option>
                   <option value="Nacionalidade">Nacionalidade</option>
+                  <option value="Administrativo">Administrativo</option>
+                  <option value="Criminal">Criminal</option>
                 </select>
+              </label>
+              <label className="adm-field">
+                <span>Data do 1.º atendimento</span>
+                <input type="date" value={editForm.first_attendance_date} onChange={editField('first_attendance_date')} disabled={editBusy} />
+              </label>
+              <label className="adm-field">
+                <span>Data de Vencimento (1.ª parcela)</span>
+                <input type="date" value={editForm.contract_start_date} onChange={editField('contract_start_date')} disabled={editBusy} />
               </label>
 
               <div style={{ gridColumn: '1 / -1', fontWeight: 600, color: 'var(--forest, #12302a)', borderBottom: '1px solid rgba(0,0,0,0.1)', paddingBottom: '0.3rem', marginTop: '0.3rem' }}>
@@ -904,6 +1261,7 @@ export default function ClientDetail() {
       {/* ── Modal: pagamento avulso ─────────────────────────────────────── */}
       {payOpen && payForm && (
         <div
+          className="adm-overlay"
           onMouseDown={(e) => { if (e.target === e.currentTarget && !payBusy) setPayOpen(false); }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '3rem 1rem', zIndex: 1000, overflowY: 'auto' }}
         >
@@ -993,6 +1351,7 @@ export default function ClientDetail() {
       {/* ── Modal: eliminar cliente (confirmação pelo nome) ────────────── */}
       {delOpen && (
         <div
+          className="adm-overlay"
           onMouseDown={(e) => { if (e.target === e.currentTarget && !delBusy) setDelOpen(false); }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.65)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '4rem 1rem', zIndex: 1100, overflowY: 'auto' }}
         >
@@ -1059,7 +1418,7 @@ export default function ClientDetail() {
               <span key={'p' + i}><IconPhone /> {c.value}{c.label && c.label !== 'Pessoal' ? ` (${c.label})` : ''}</span>
             ))}
             {parseContacts(client.emails, client.email).filter((c) => c.value).map((c, i) => (
-              <span key={'e' + i}>✉ {c.value}{c.label && c.label !== 'Pessoal' ? ` (${c.label})` : ''}</span>
+              <span key={'e' + i}><IconMail size={12} /> {c.value}{c.label && c.label !== 'Pessoal' ? ` (${c.label})` : ''}</span>
             ))}
             {client.identification && (
               <span>{client.person_type === 'coletiva' ? (client.country === 'BR' ? 'CNPJ' : 'NIPC') : (client.country === 'BR' ? 'CPF' : 'NIF')} {client.identification}</span>
@@ -1112,8 +1471,8 @@ export default function ClientDetail() {
         )}
       </div>
 
-      <div className="adm-tabs">
-        {[
+      <SlidingTabs
+        items={[
           { id: 'plan', label: 'Plano de pagamento' },
           { id: 'summary', label: 'Resumo' },
           { id: 'comms', label: 'Comunicações' },
@@ -1121,22 +1480,19 @@ export default function ClientDetail() {
           { id: 'docs', label: 'Documentos' },
           { id: 'procuracoes', label: 'Procurações' },
           { id: 'notes', label: 'Notas' },
-        ].map((t) => (
-          <button
-            key={t.id}
-            className={'adm-tab' + (activeTab === t.id ? ' active' : '')}
-            onClick={() => setActiveTab(t.id)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
+        ]}
+        active={activeTab}
+        onChange={setActiveTab}
+        variant="underline"
+        style={{ flexWrap: 'wrap' }}
+      />
 
       {activeTab === 'plan' && (
         <>
           <div className="adm-plan-actions">
             <button
               className="adm-btn"
+              data-tip="Gera o PDF do plano de pagamento no formato padrão"
               onClick={handleGeneratePlanPdf}
               disabled={planPdfBusy || installments.length === 0}
             >
@@ -1144,11 +1500,18 @@ export default function ClientDetail() {
             </button>
             <button
               className="adm-btn adm-btn-gold"
+              data-tip={client.email ? `Envia o PDF do plano para ${client.email}` : 'Cliente sem e-mail registado'}
               onClick={handleSendPlan}
               disabled={planSendBusy || installments.length === 0}
-              title={client.email ? `Enviar para ${client.email}` : 'Cliente sem email'}
             >
-              {planSendBusy ? 'A enviar…' : '✉ Enviar ao cliente'}
+              {planSendBusy ? 'A enviar…' : <><IconMail size={13} /> Enviar ao cliente</>}
+            </button>
+            <button
+              className="adm-btn"
+              data-tip="Alterar valor total, n.º de parcelas, datas e valores individuais — as pagas mantêm-se"
+              onClick={openPlanEdit}
+            >
+              <IconGear size={13} /> Editar plano
             </button>
             {planMsg && (
               <span className={planMsg.type === 'ok' ? 'adm-plan-msg-ok' : 'adm-plan-msg-error'}>
@@ -1156,6 +1519,111 @@ export default function ClientDetail() {
               </span>
             )}
           </div>
+          {planEdit && planForm && (
+            <div
+              className="adm-overlay"
+              onMouseDown={(e) => { if (e.target === e.currentTarget && !planSaveBusy) setPlanEdit(false); }}
+              style={{
+                position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.55)', zIndex: 1500,
+                display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '12vh 1rem 2rem', overflowY: 'auto',
+              }}
+            >
+              <div style={{
+                background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 580,
+                padding: '1.6rem 1.7rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', borderTop: '3px solid var(--gold, #b8935a)',
+              }}>
+                <h2 style={{ margin: '0 0 1rem', fontFamily: 'var(--serif)', fontSize: '1.2rem', color: 'var(--forest, #12302a)' }}>
+                  Editar plano de pagamento
+                </h2>
+                <div className="adm-form-grid">
+                  <div className="adm-field">
+                    <label>Tipo de plano</label>
+                    <select value={planForm.planType} onChange={updPlanField('planType')} disabled={planSaveBusy}>
+                      <option value="installment">Parcelado (montante dividido)</option>
+                      <option value="monthly">Avença mensal (recorrente)</option>
+                    </select>
+                  </div>
+                  <div className="adm-field">
+                    <label>Data de Vencimento</label>
+                    <DateInput value={planForm.startDate} onChange={updPlanField('startDate')} disabled={planSaveBusy} />
+                    <div className="adm-field-helper">1.ª parcela nova — as seguintes vencem mensalmente</div>
+                  </div>
+                  {planForm.planType === 'installment' ? (
+                    <>
+                      <div className="adm-field">
+                        <label>Valor total contratado</label>
+                        <MoneyInput currency={(data?.client?.country === 'BR') ? 'BRL' : 'EUR'} value={planForm.totalValue} onChange={updPlanField('totalValue')} placeholder="3120" disabled={planSaveBusy} />
+                      </div>
+                      <div className="adm-field">
+                        <label>Número de parcelas</label>
+                        <StepperInput min={1} value={planForm.installments} onChange={updPlanField('installments')} placeholder="6" disabled={planSaveBusy} />
+                      </div>
+                      {planForm.parcelas && planForm.parcelas.length > 0 && (() => {
+                        const nPagas = planForm.parcelas.filter((r) => r.paid).length;
+                        const curr = (data?.client?.country === 'BR') ? 'BRL' : 'EUR';
+                        return (
+                          <div className="adm-field adm-full">
+                            <label>Valores das parcelas</label>
+                            <ParcelasEditor
+                              rows={planForm.parcelas}
+                              onChange={(rows) => setPlanForm({ ...planForm, parcelas: rows })}
+                              currency={curr}
+                              targetTotal={parseValor(planForm.totalValue)}
+                              baseLabel={nPagas ? `${nPagas} parcela(s) paga(s) incluídas na lista — pode corrigir o valor/data pago(a); mantêm o estado de pagas` : null}
+                              disabled={planSaveBusy}
+                              onRemove={(idx) => {
+                                // eliminar uma parcela nova (ex.: cliente adiantou valores) — renumera todas
+                                const novo = planForm.parcelas
+                                  .filter((_, i) => i !== idx)
+                                  .map((r, i) => ({ ...r, n: i + 1 }));
+                                setPlanForm({ ...planForm, parcelas: novo, installments: String(novo.length) });
+                              }}
+                              onUnmark={async (idx) => {
+                                // desmarcar uma parcela paga a partir do editor
+                                const r = planForm.parcelas[idx];
+                                if (!r || !r.paid) return;
+                                if (!await admConfirm(
+                                  `Desmarcar a Parcela ${r.n} como paga? Volta a "pendente" — os documentos anexados mantêm-se.`,
+                                  { okLabel: 'Desmarcar' }
+                                )) return;
+                                try {
+                                  await installmentsApi.update(r.id, { status: 'pending', paid_date: null });
+                                  await loadData();
+                                  setPlanForm((pf) => ({
+                                    ...pf,
+                                    parcelas: pf.parcelas.map((x, i2) => (i2 === idx ? { ...x, paid: false, id: undefined } : x)),
+                                  }));
+                                  admToast('Parcela desmarcada — voltou a pendente', { kind: 'info' });
+                                } catch (err) {
+                                  admAlert('Erro: ' + err.message);
+                                }
+                              }}
+                            />
+                            <div className="adm-field-helper">Pode ajustar o valor e a data de cada parcela (incluindo as pagas), ou eliminar parcelas novas (✕) se o cliente adiantou valores — a soma de todas tem de fechar com o total contratado</div>
+                          </div>
+                        );
+                      })()}
+                    </>
+                  ) : (
+                    <div className="adm-field adm-full">
+                      <label>Valor mensal</label>
+                      <MoneyInput currency={(data?.client?.country === 'BR') ? 'BRL' : 'EUR'} value={planForm.monthlyValue} onChange={(e) => setPlanForm({ ...planForm, monthlyValue: e.target.value })} placeholder="450" disabled={planSaveBusy} />
+                      <div className="adm-field-helper">Cria as próximas 12 mensalidades a partir da Data de Vencimento</div>
+                    </div>
+                  )}
+                </div>
+                <div style={{ fontFamily: 'var(--sans)', fontSize: '0.76rem', color: 'var(--muted, #777)', marginTop: '0.6rem' }}>
+                  As parcelas por pagar são substituídas pelo novo plano; as pagas mantêm o estado de pagas e os documentos — o valor/data podem ser corrigidos na lista.
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.6rem', marginTop: '1.2rem' }}>
+                  <button type="button" className="adm-btn" onClick={() => setPlanEdit(false)} disabled={planSaveBusy}>Cancelar</button>
+                  <button type="button" className="adm-btn adm-btn-gold" onClick={handleSavePlan} disabled={planSaveBusy}>
+                    {planSaveBusy ? 'A guardar…' : 'Guardar e gerar parcelas'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
           <div className="adm-plan-summary">
             <div className="adm-plan-item">
               <div className="adm-plan-item-label">
@@ -1216,40 +1684,71 @@ export default function ClientDetail() {
                     <td><strong>{fmtDate(i.due_date)}</strong></td>
                     <td className="adm-text-right adm-val">{fmtMoney(i.amount, i.currency)}</td>
                     <td>{i.paid_date ? fmtDate(i.paid_date) : '—'}</td>
-                    <td><StatusBadge installment={i} /></td>
+                    <td><StatusBadge installment={i} onUnmark={handleUnmarkPaid} /></td>
                     <td>
-                      {i.status === 'paid' ? (
-                        <>
-                          {reciboInfo[i.id]?.exists ? (
-                            <>
-                              <a href="#" style={{ fontSize: '0.75rem' }} onClick={(e) => { e.preventDefault(); handleViewRecibo(i.id); }}>
-                                Ver RV
-                              </a>
-                              <a href="#" style={{ fontSize: '0.75rem', marginLeft: '0.75rem' }} onClick={(e) => { e.preventDefault(); if (reciboBusy !== i.id) triggerAttach(i.id); }}>
-                                {reciboBusy === i.id ? 'A processar…' : 'Substituir'}
-                              </a>
-                              <a href="#" style={{ fontSize: '0.75rem', marginLeft: '0.75rem' }} onClick={(e) => { e.preventDefault(); if (sendBusy !== i.id) handleSendRecibo(i.id); }}>
-                                {sendBusy === i.id ? 'A enviar…' : 'Enviar'}
-                              </a>
-                              <a href="#" style={{ fontSize: '0.75rem', marginLeft: '0.75rem', color: 'var(--late, #b00)' }} onClick={(e) => { e.preventDefault(); if (reciboBusy !== i.id) handleRemoveRecibo(i.id); }}>
-                                Remover
-                              </a>
-                            </>
+                      <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                        {DOC_TIPOS.map(([tipo, label]) => {
+                          const doc = reciboInfo[i.id]?.[tipo];
+                          const busy = reciboBusy === i.id;
+                          return doc?.exists ? (
+                            <span key={tipo} style={{ display: 'inline-flex', alignItems: 'stretch' }}>
+                              <button
+                                type="button"
+                                className="adm-btn"
+                                data-tip={`Anexado a ${doc.uploaded_at ? fmtDocStamp(doc.uploaded_at) : '—'} — clique para abrir noutro separador`}
+                                style={{
+                                  fontSize: '0.7rem', padding: '0.28rem 0.7rem', lineHeight: 1.25,
+                                  background: 'var(--forest, #12302a)', borderColor: 'var(--forest, #12302a)', color: '#fff',
+                                }}
+                                onClick={() => handleViewRecibo(i.id, tipo)}
+                              >
+                                <span style={{ display: 'block' }}>Ver {label}</span>
+                                {doc.uploaded_at && (
+                                  <span style={{ display: 'block', fontSize: '0.56rem', opacity: 0.8, fontWeight: 400 }}>
+                                    {fmtDocStamp(doc.uploaded_at)}
+                                  </span>
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                className="adm-btn"
+                                data-tip={`Remover ${label} anexado${tipo !== 'fatura' ? ' — sem Recibo/Fatura-Recibo a parcela volta a pendente' : ''}`}
+                                disabled={busy}
+                                onClick={() => handleRemoveParcelaDoc(i, tipo, label)}
+                                style={{
+                                  fontSize: '0.72rem', padding: '0.28rem 0.45rem', marginLeft: -1,
+                                  color: '#b00000', borderColor: 'rgba(176,0,0,0.35)', lineHeight: 1,
+                                }}
+                                aria-label={`Remover ${label}`}
+                              >
+                                ✕
+                              </button>
+                            </span>
                           ) : (
-                            <a href="#" style={{ fontSize: '0.75rem' }} onClick={(e) => { e.preventDefault(); if (reciboBusy !== i.id) triggerAttach(i.id); }}>
-                              {reciboBusy === i.id ? 'A anexar…' : '+ Anexar Recibo Verde'}
-                            </a>
-                          )}
-                        </>
-                      ) : (
-                        <a
-                          href="#"
-                          style={{ fontSize: '0.75rem' }}
-                          onClick={(e) => { e.preventDefault(); handleMarkPaid(i.id); }}
-                        >
-                          {markingPaid === i.id ? 'A marcar…' : 'Marcar pago'}
-                        </a>
-                      )}
+                            <button
+                              key={tipo}
+                              type="button"
+                              className={'adm-btn' + (dropTarget === `${i.id}|${tipo}` ? ' adm-drop-target' : '')}
+                              data-tip={tipo === 'fatura'
+                                ? 'Anexar PDF da fatura (não marca a parcela como paga) — clique ou arraste o PDF para aqui'
+                                : `Anexar PDF — marca a parcela como paga. Clique ou arraste o PDF para aqui`}
+                              style={{ fontSize: '0.7rem', padding: '0.32rem 0.7rem', whiteSpace: 'nowrap' }}
+                              disabled={busy}
+                              onClick={() => triggerAttach(i.id, tipo)}
+                              onDragOver={(e) => { e.preventDefault(); setDropTarget(`${i.id}|${tipo}`); }}
+                              onDragLeave={() => setDropTarget(null)}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                setDropTarget(null);
+                                const f = e.dataTransfer.files && e.dataTransfer.files[0];
+                                if (f && !busy) doUploadDoc(i.id, tipo, f);
+                              }}
+                            >
+                              {busy ? 'A anexar…' : `Anexar ${label}`}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -1263,7 +1762,7 @@ export default function ClientDetail() {
         <div className="adm-card">
           <div className="adm-card-title">Resumo</div>
           <p style={{ marginBottom: '0.5rem' }}>
-            <strong>{client.name}</strong> é cliente desde {fmtDate(client.contract_start_date)},
+            <strong>{client.name}</strong> é cliente desde {fmtDate(client.first_attendance_date || client.contract_start_date)},
             na área de <strong>{client.practice_area || 'geral'}</strong>.
           </p>
           <p>
@@ -1276,15 +1775,7 @@ export default function ClientDetail() {
               Lembretes configurados: {data.rules.map(r => `${r.days_before}d antes via ${r.channel}`).join(', ')}.
             </p>
           )}
-          {client.process_summary && (
-            <>
-              <div className="adm-card-title" style={{ marginTop: '1.5rem' }}>Resumo do processo</div>
-              <p style={{ whiteSpace: 'pre-wrap', lineHeight: 1.65 }}>{client.process_summary}</p>
-              <div style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>
-                Gerado pela IA a partir dos documentos do cadastro · editável em "Editar"
-              </div>
-            </>
-          )}
+          <ProcessosCard client={client} />
         </div>
       )}
 
@@ -1493,7 +1984,7 @@ export default function ClientDetail() {
                     <td>{(d.size_bytes / 1024).toFixed(0)} KB</td>
                     <td>{new Date(d.uploaded_at).toLocaleString('pt-PT')}</td>
                     <td style={{ textAlign: 'right' }}>
-                      <a href="#" style={{ fontSize: '0.75rem' }} onClick={(e) => { e.preventDefault(); docsApi.openInNewTab(d.id).catch((err) => alert(err.message)); }}>Abrir</a>
+                      <a href="#" style={{ fontSize: '0.75rem' }} onClick={(e) => { e.preventDefault(); docsApi.openInNewTab(d.id).catch((err) => admAlert(err.message)); }}>Abrir</a>
                       <a href="#" style={{ fontSize: '0.75rem', marginLeft: '0.75rem', color: '#b00' }} onClick={(e) => { e.preventDefault(); handleRemoveDoc(d.id, d.filename); }}>Remover</a>
                     </td>
                   </tr>

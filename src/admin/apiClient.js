@@ -123,7 +123,8 @@ export const notifications = {
 
 // ============ DASHBOARD ============
 export const dashboard = {
-  get: () => request('/api/dashboard'),
+  // days: janela (em dias) dos próximos vencimentos — default 30 no worker
+  get: (days) => request('/api/dashboard' + (days ? `?upcoming_days=${encodeURIComponent(days)}` : '')),
 };
 
 // ============ RECIBOS VERDES (arquivo por parcela) ============
@@ -131,14 +132,17 @@ export const recibos = {
   // Metadados: { exists, size, uploaded_at, filename }
   info: (installmentId) => request(`/api/recibos/${installmentId}?info=true`),
 
-  // Upload do RV (PDF) anexado pela utilizadora. file = File do <input type=file>.
-  async upload(installmentId, file) {
+  // Metadados dos 3 tipos de documento de uma vez: { docs: { recibo, 'fatura-recibo', fatura } }
+  infoAll: (installmentId) => request(`/api/recibos/${installmentId}?info=all`),
+
+  // Upload do documento (PDF) anexado pela utilizadora. tipo: recibo | fatura-recibo | fatura.
+  async upload(installmentId, file, tipo = 'recibo') {
     const token = getToken();
-    const res = await fetch(`/api/recibos/${installmentId}`, {
+    const res = await fetch(`/api/recibos/${installmentId}?tipo=${encodeURIComponent(tipo)}`, {
       method: 'PUT',
       headers: {
         'Content-Type': 'application/pdf',
-        'X-Filename': file.name || 'recibo-verde.pdf',
+        'X-Filename': file.name || `${tipo}.pdf`,
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: file,
@@ -151,12 +155,12 @@ export const recibos = {
     return res.json();
   },
 
-  // Abre o RV anexado numa nova aba (com Bearer token, à prova de popup-blocker).
-  async openInNewTab(installmentId) {
+  // Abre o documento anexado numa nova aba (com Bearer token, à prova de popup-blocker).
+  async openInNewTab(installmentId, tipo = 'recibo') {
     const tab = window.open('', '_blank');
     try {
       const token = getToken();
-      const res = await fetch(`/api/recibos/${installmentId}`, {
+      const res = await fetch(`/api/recibos/${installmentId}?tipo=${encodeURIComponent(tipo)}`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       if (!res.ok) {
@@ -176,8 +180,8 @@ export const recibos = {
     }
   },
 
-  // Remove o RV anexado.
-  remove: (installmentId) => request(`/api/recibos/${installmentId}`, { method: 'DELETE' }),
+  // Remove o documento anexado.
+  remove: (installmentId, tipo = 'recibo') => request(`/api/recibos/${installmentId}?tipo=${encodeURIComponent(tipo)}`, { method: 'DELETE' }),
 
   // Envia o RV anexado ao cliente por email. Devolve {ok|skipped|error}.
   sendToClient: (installmentId) => request(`/api/recibos/${installmentId}/send`, { method: 'POST' }),

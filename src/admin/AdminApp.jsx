@@ -11,6 +11,9 @@ import NewClient from './pages/NewClient';
 import Calendar from './pages/Calendar';
 import Installments from './pages/Installments';
 import Notifications from './pages/Notifications';
+import { DialogHost } from './dialogs';
+import { ToastHost } from './toasts';
+import CommandPalette from './cmdk';
 import './admin.css';
 
 // ===== Auth gate =====
@@ -24,11 +27,13 @@ function ProtectedRoute({ children }) {
 
 // ===== Layout para páginas autenticadas =====
 function AuthenticatedLayout({ children }) {
+  const location = useLocation();
   return (
     <div className="adm-root">
       <div className="adm-layout">
         <Sidebar />
-        <main className="adm-main">{children}</main>
+        {/* key na rota: reanima a entrada (fade + subida) a cada mudança de página */}
+        <main key={location.pathname} className="adm-main adm-page-anim">{children}</main>
       </div>
     </div>
   );
@@ -37,6 +42,10 @@ function AuthenticatedLayout({ children }) {
 // ===== Routing principal =====
 export default function AdminApp() {
   return (
+    <>
+    <DialogHost />
+    <ToastHost />
+    <CommandPalette />
     <Routes>
       {/* Login — sem layout */}
       <Route path="login" element={<Login />} />
@@ -103,5 +112,6 @@ export default function AdminApp() {
       <Route path="" element={<Navigate to="/admin/painel" replace />} />
       <Route path="*" element={<Navigate to="/admin/painel" replace />} />
     </Routes>
+    </>
   );
 }

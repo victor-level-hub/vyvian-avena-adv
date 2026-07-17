@@ -7,6 +7,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { installments as installmentsApi, calendar as calendarApi } from '../apiClient';
 import { IconUser, IconFolder, IconFilter, IconSearch } from '../icons';
+import { admAlert } from '../dialogs';
+import { SkeletonPage } from '../skeletons';
 
 const MONTHS_PT = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -338,8 +340,8 @@ export default function Calendar() {
 
   const saveEvent = async () => {
     const f = evModal.form;
-    if (!f.title.trim() || !f.start_date || !f.type_id) { alert('Título, tipo e data inicial são obrigatórios.'); return; }
-    if (f.end_date && f.end_date < f.start_date) { alert('A data final não pode ser anterior à inicial.'); return; }
+    if (!f.title.trim() || !f.start_date || !f.type_id) { admAlert('Título, tipo e data inicial são obrigatórios.'); return; }
+    if (f.end_date && f.end_date < f.start_date) { admAlert('A data final não pode ser anterior à inicial.'); return; }
     setBusy(true);
     try {
       const payload = {
@@ -352,26 +354,26 @@ export default function Calendar() {
       else await calendarApi.updateEvent(evModal.id, payload);
       await loadCalendar();
       setEvModal(null);
-    } catch (err) { alert('Erro: ' + err.message); }
+    } catch (err) { admAlert('Erro: ' + err.message); }
     finally { setBusy(false); }
   };
 
   const deleteEvent = async (ev) => {
     if (!confirm(`Apagar o evento "${ev.title}"?`)) return;
     try { await calendarApi.deleteEvent(ev.id); await loadCalendar(); }
-    catch (err) { alert('Erro: ' + err.message); }
+    catch (err) { admAlert('Erro: ' + err.message); }
   };
 
   // ── CRUD tipos
   const saveType = async () => {
-    if (!typeForm.label.trim()) { alert('A label é obrigatória.'); return; }
+    if (!typeForm.label.trim()) { admAlert('A label é obrigatória.'); return; }
     setBusy(true);
     try {
       if (typeForm.mode === 'create') await calendarApi.createType({ label: typeForm.label, color: typeForm.color, description: typeForm.description });
       else await calendarApi.updateType(typeForm.id, { label: typeForm.label, color: typeForm.color, description: typeForm.description });
       await loadCalendar();
       setTypeForm(null);
-    } catch (err) { alert('Erro: ' + err.message); }
+    } catch (err) { admAlert('Erro: ' + err.message); }
     finally { setBusy(false); }
   };
 
@@ -381,7 +383,7 @@ export default function Calendar() {
       await calendarApi.deleteType(typeDeleting.id, strategy);
       await loadCalendar();
       setTypeDeleting(null);
-    } catch (err) { alert('Erro: ' + err.message); }
+    } catch (err) { admAlert('Erro: ' + err.message); }
     finally { setBusy(false); }
   };
 
@@ -404,7 +406,7 @@ export default function Calendar() {
     return items.sort((a, b) => a.key.localeCompare(b.key));
   }, [view, visibleEvents, visibleInstallments, monthKeyPrefix, currentDate]);
 
-  if (loading) return <div className="adm-empty" style={{ padding: '3rem' }}>A carregar calendário…</div>;
+  if (loading) return <SkeletonPage kpis={0} rows={6} />;
   if (error) return <div className="adm-login-error">{error}</div>;
 
   const activeTypes = types.filter(isVisible);

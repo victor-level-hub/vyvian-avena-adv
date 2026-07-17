@@ -25,15 +25,19 @@ export async function handleDashboard(request, env, path, session) {
     GROUP BY currency
   `).all();
 
-  // Próximos vencimentos
+  // Próximos vencimentos — janela configurável (?upcoming_days=N, default 30, máx. 365)
+  const url = new URL(request.url);
+  const rawDays = parseInt(url.searchParams.get('upcoming_days'), 10);
+  const upcomingDays = Number.isFinite(rawDays) ? Math.min(Math.max(rawDays, 1), 365) : 30;
   const upcoming = await env.DB.prepare(`
     SELECT i.*, c.name as client_name, c.country as client_country
     FROM installments i
     JOIN clients c ON c.id = i.client_id
     WHERE i.status IN ('pending', 'due_today', 'late')
+      AND date(i.due_date) <= date('now', ?)
     ORDER BY i.due_date ASC
-    LIMIT 6
-  `).all();
+    LIMIT 30
+  `).bind(`+${upcomingDays} days`).all();
 
   // Alertas: parcelas atrasadas
   const alerts = await env.DB.prepare(`

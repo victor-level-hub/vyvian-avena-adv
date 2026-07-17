@@ -1,17 +1,19 @@
 ---
-titulo: Responsabilidades parentais quando os pais vivem em países diferentes
+titulo: Responsabilidades parentais entre Portugal e Brasil
 descricao: Um progenitor em Portugal, outro no Brasil, e uma criança no meio. As perguntas que a distância levanta, e a que ordem convém respondê-las.
-data: 2026-07-11
-revisto_em: 2026-07-11
+data: 2026-06-11
+revisto_em: 2026-06-11
 validade: estavel
 imagem: /blog/responsabilidades-parentais-pais-em-paises-diferentes.jpg
-imagem_alt: Dois pontos ligados por um arco dourado sobre uma linha horizontal
+imagem_alt: Criança mostra os trabalhos da escola ao pai por videochamada, à mesa da sala
 area: familia
 ---
 
 Quando um casal com filhos se separa e um dos progenitores vive — ou passa a viver — no outro lado do Atlântico, a regulação das responsabilidades parentais deixa de ser apenas uma questão de calendários e passa a ser uma questão de **geografia jurídica**: dois sistemas, dois tribunais possíveis, e uma criança cuja vida tem de continuar coerente entre os dois.
 
 Este artigo explica a estrutura do problema. Não indica prazos nem procedimentos concretos — dependem do caso e mudam com o tempo — mas ajuda a perceber porque é que estas situações exigem mais planeamento do que uma regulação comum, e onde estão as decisões que realmente importam.
+
+<img src="/blog/responsabilidades-reencontro.webp" alt="Pai ajoelhado de braços abertos recebe o filho que corre para ele num aeroporto" width="1376" height="768" loading="lazy" />
 
 ## A primeira pergunta não é "quem fica com a criança"
 
@@ -25,6 +27,8 @@ Este é o ponto mais delicado, e onde os erros de boa-fé custam mais caro. Leva
 
 Portugal e Brasil estão ambos vinculados a instrumentos internacionais nesta matéria. O que importa reter não é o detalhe técnico, é o princípio: **a mudança de país de uma criança é uma decisão dos dois progenitores ou de um tribunal — nunca de um só.** Quem tem boas razões para mudar deve tratá-las pela via certa, antes de partir; fazer primeiro e regularizar depois é a ordem que mais destrói posições, mesmo as justas.
 
+<img src="/blog/responsabilidades-viagem.webp" alt="Mala de criança pronta junto à porta de casa, com mochila, ursinho de peluche e passaporte" width="1376" height="768" loading="lazy" />
+
 > Se está a ponderar mudar-se com o seu filho para o outro país, ou se o outro progenitor o fez sem o seu acordo, procure aconselhamento **antes** de qualquer passo. Nestas situações, a ordem dos atos vale tanto como os atos.
 
 ## Um acordo à distância tem de ser desenhado para a distância
@@ -34,6 +38,8 @@ Um regime de convívios entre pais que vivem a vinte minutos um do outro não se
 **Os períodos** tendem a ser menos frequentes e mais longos — férias escolares, épocas festivas alternadas — em vez do ritmo semanal.
 
 **O contacto à distância** (chamadas, vídeo) deixa de ser um extra e passa a ser uma parte estruturante do regime, que vale a pena regular com o mesmo cuidado que os convívios presenciais.
+
+<img src="/blog/responsabilidades-videochamada.webp" alt="Criança mostra os trabalhos da escola ao pai por videochamada, à mesa da sala" width="1376" height="768" loading="lazy" />
 
 **As viagens** levantam questões próprias: quem acompanha, quem custeia, que autorizações de saída do país são necessárias e como se emitem — um ponto onde os dois países têm exigências formais próprias.
 
@@ -46,6 +52,8 @@ Um regime de convívios entre pais que vivem a vinte minutos um do outro não se
 Fixar a pensão é metade do problema; a outra metade é **fazê-la funcionar através da fronteira**: moedas diferentes, custos de transferência, e a pergunta que ninguém quer fazer mas todos devem — *e se deixar de ser paga, como se cobra num país uma obrigação fixada no outro?*
 
 Existem mecanismos de cooperação internacional para isso. O que interessa reter ao nível do desenho: um acordo bem pensado antecipa a moeda, a forma de atualização e a via de pagamento, para que a execução — se um dia for precisa — não comece do zero.
+
+<img src="/blog/responsabilidades-reuniao.webp" alt="Advogada em reunião com a cliente, com o outro progenitor presente por videochamada" width="1376" height="768" loading="lazy" />
 
 ## O que levar deste artigo
 

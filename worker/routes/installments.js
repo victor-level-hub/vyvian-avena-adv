@@ -36,7 +36,7 @@ async function listInstallments(request, env) {
   const year = url.searchParams.get('year');
 
   let sql = `
-    SELECT i.*, c.name as client_name, c.country as client_country
+    SELECT i.*, c.name as client_name, c.country as client_country, c.phone as client_phone, c.email as client_email
     FROM installments i
     JOIN clients c ON c.id = i.client_id
     WHERE 1=1
@@ -58,7 +58,7 @@ async function upcoming(request, env) {
   const days = parseInt(url.searchParams.get('days') || '30', 10);
 
   const result = await env.DB.prepare(`
-    SELECT i.*, c.name as client_name, c.country as client_country
+    SELECT i.*, c.name as client_name, c.country as client_country, c.phone as client_phone, c.email as client_email
     FROM installments i
     JOIN clients c ON c.id = i.client_id
     WHERE i.status IN ('pending', 'due_today', 'late')
@@ -101,7 +101,7 @@ async function updateInstallment(request, env, id) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Invalid JSON', 400); }
 
-  const allowed = ['status', 'paid_date', 'payment_method', 'amount', 'due_date', 'notes', 'receipt_path'];
+  const allowed = ['status', 'paid_date', 'payment_method', 'amount', 'due_date', 'notes', 'receipt_path', 'wa_sent_at', 'installment_number', 'total_installments'];
   const updates = [];
   const params = [];
 

@@ -4,6 +4,9 @@
 // cliente (ClientDetail → separador Notificações).
 import React, { useState, useEffect } from 'react';
 import { notifications as notifApi } from '../apiClient';
+import { IconMail, IconPhone } from '../icons';
+import { SkeletonPage } from '../skeletons';
+import { admToast } from '../toasts';
 
 const ALERTAS = [
   { type: 'vence_hoje', titulo: 'Pagamento vence hoje', desc: 'Um resumo dos pagamentos de clientes que vencem no próprio dia.' },
@@ -73,6 +76,7 @@ export default function Notifications() {
       setDirty(false);
       setSavedMsg(true);
       setTimeout(() => setSavedMsg(false), 2500);
+      admToast('Preferências de alertas guardadas');
     } catch (err) {
       setError(err.message);
     } finally {
@@ -80,7 +84,7 @@ export default function Notifications() {
     }
   };
 
-  if (loading) return <div className="adm-empty" style={{ padding: '3rem' }}>A carregar…</div>;
+  if (loading) return <SkeletonPage kpis={0} rows={4} />;
 
   return (
     <>
@@ -168,7 +172,7 @@ export default function Notifications() {
           <div className="adm-card-title">Últimos alertas enviados</div>
           {log.map((l, i) => (
             <div key={i} className="adm-notif-row">
-              <div className="adm-notif-icon">{l.channel === 'email' ? '@' : 'W'}</div>
+              <div className="adm-notif-icon">{l.channel === 'email' ? <IconMail size={13} /> : <IconPhone size={13} />}</div>
               <div style={{ flex: 1 }}>
                 <div className="adm-notif-title">
                   {(ALERTAS.find((a) => a.type === l.alert_type) || {}).titulo || l.alert_type}

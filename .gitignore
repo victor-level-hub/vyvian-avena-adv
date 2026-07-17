@@ -6,3 +6,6 @@ dist
 SEGREDOS.md
 dist-ssr
 .dev.vars
+cloudflare-token*.txt
+_deploy_snapshot.tgz
+_to_delete/

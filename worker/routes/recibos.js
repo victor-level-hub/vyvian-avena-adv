@@ -14,6 +14,15 @@ import { sendEmail } from "../lib/senders.js";
 const CORS = { "Access-Control-Allow-Origin": "*" };
 const MAX_BYTES = 10 * 1024 * 1024; // 10 MB
 
+// Tipos de documento por parcela. "recibo" usa a chave R2 antiga (retrocompatível
+// com os Recibos Verdes já anexados); os restantes têm sufixo próprio.
+const TIPOS = ["recibo", "fatura-recibo", "fatura"];
+
+function tipoFromRequest(request) {
+  const t = new URL(request.url).searchParams.get("tipo");
+  return TIPOS.includes(t) ? t : "recibo";
+}
+
 export async function handleRecibos(request, env, path, session) {
   const segments = path.split("/").filter(Boolean); // ['api','recibos',':id','send'?]
   const installmentId = segments[2];
@@ -27,7 +36,7 @@ export async function handleRecibos(request, env, path, session) {
   switch (request.method) {
     case "GET":    return getRecibo(request, env, installmentId);
     case "PUT":    return uploadRecibo(request, env, installmentId);
-    case "DELETE": return deleteRecibo(env, installmentId);
+    case "DELETE": return deleteRecibo(request, env, installmentId);
     default:       return jsonError("Method not allowed", 405);
   }
 }
@@ -44,8 +53,10 @@ async function loadData(env, installmentId) {
   return { installment, client };
 }
 
-function r2Key(clientId, installmentId) {
-  return `recibos/${clientId}/${installmentId}.pdf`;
+function r2Key(clientId, installmentId, tipo = "recibo") {
+  return tipo === "recibo"
+    ? `recibos/${clientId}/${installmentId}.pdf`
+    : `recibos/${clientId}/${installmentId}-${tipo}.pdf`;
 }
 
 // ── Upload do RV (PDF) ──────────────────────────────
@@ -67,26 +78,50 @@ async function uploadRecibo(request, env, installmentId) {
   const magic = String.fromCharCode(...head);
   if (!magic.startsWith("%PDF")) return jsonError("O ficheiro n\u00e3o \u00e9 um PDF v\u00e1lido.", 415);
 
-  const key = r2Key(client.id, installment.id);
+  const tipo = tipoFromRequest(request);
+  const key = r2Key(client.id, installment.id, tipo);
   await env.RECIBOS.put(key, buf, {
     httpMetadata: { contentType: "application/pdf" },
-    customMetadata: { uploaded_at: new Date().toISOString(), original_name: request.headers.get("x-filename") || "recibo-verde.pdf" },
+    customMetadata: { uploaded_at: new Date().toISOString(), tipo, original_name: request.headers.get("x-filename") || `${tipo}.pdf` },
   });
-  await env.DB.prepare(
-    "UPDATE installments SET receipt_path = ?, updated_at = datetime('now') WHERE id = ?"
-  ).bind(key, installment.id).run().catch(() => {});
+  if (tipo === "recibo") {
+    await env.DB.prepare(
+      "UPDATE installments SET receipt_path = ?, updated_at = datetime('now') WHERE id = ?"
+    ).bind(key, installment.id).run().catch(() => {});
+  }
 
-  return jsonResponse({ ok: true, installment_id: installment.id, r2_key: key, size: buf.byteLength });
+  return jsonResponse({ ok: true, installment_id: installment.id, tipo, r2_key: key, size: buf.byteLength });
 }
 
 // ── Servir / metadados ──────────────────────────────
 async function getRecibo(request, env, installmentId) {
   const url = new URL(request.url);
-  const infoOnly = url.searchParams.get("info") === "true";
+  const info = url.searchParams.get("info");
+  const infoOnly = info === "true";
+  const tipo = tipoFromRequest(request);
 
   const { installment, client, error } = await loadData(env, installmentId);
   if (error) return error;
-  const key = installment.receipt_path || r2Key(client.id, installment.id);
+  const key = tipo === "recibo"
+    ? (installment.receipt_path || r2Key(client.id, installment.id, "recibo"))
+    : r2Key(client.id, installment.id, tipo);
+
+  // info=all -> metadados dos 3 tipos de uma vez { docs: { recibo: {...}, ... } }
+  if (info === "all") {
+    const docs = {};
+    for (const t of TIPOS) {
+      const k = t === "recibo"
+        ? (installment.receipt_path || r2Key(client.id, installment.id, "recibo"))
+        : r2Key(client.id, installment.id, t);
+      let d = { exists: false };
+      if (env.RECIBOS) {
+        const head = await env.RECIBOS.head(k).catch(() => null);
+        if (head) d = { exists: true, size: head.size, uploaded_at: head.customMetadata?.uploaded_at || null, filename: head.customMetadata?.original_name || null };
+      }
+      docs[t] = d;
+    }
+    return jsonResponse({ installment_id: installment.id, client_id: client.id, docs });
+  }
 
   if (infoOnly) {
     let exists = false, size = null, uploaded_at = null, filename = null;
@@ -99,12 +134,12 @@ async function getRecibo(request, env, installmentId) {
 
   if (!env.RECIBOS) return jsonError("Armazenamento R2 indispon\u00edvel", 500);
   const obj = await env.RECIBOS.get(key).catch(() => null);
-  if (!obj) return jsonError("Nenhum Recibo Verde anexado a esta parcela.", 404);
+  if (!obj) return jsonError("Nenhum documento deste tipo anexado a esta parcela.", 404);
 
   return new Response(obj.body, {
     headers: {
       "Content-Type": "application/pdf",
-      "Content-Disposition": `inline; filename="recibo-verde-${installment.id}.pdf"`,
+      "Content-Disposition": `inline; filename="${tipo}-${installment.id}.pdf"`,
       "Cache-Control": "private, max-age=300",
       ...CORS,
     },
@@ -112,14 +147,19 @@ async function getRecibo(request, env, installmentId) {
 }
 
 // ── Remover ─────────────────────────────────────────
-async function deleteRecibo(env, installmentId) {
+async function deleteRecibo(request, env, installmentId) {
   const { installment, error } = await loadData(env, installmentId);
   if (error) return error;
-  const key = installment.receipt_path || r2Key(installment.client_id, installment.id);
+  const tipo = tipoFromRequest(request);
+  const key = tipo === "recibo"
+    ? (installment.receipt_path || r2Key(installment.client_id, installment.id, "recibo"))
+    : r2Key(installment.client_id, installment.id, tipo);
   if (env.RECIBOS) await env.RECIBOS.delete(key).catch(() => {});
-  await env.DB.prepare(
-    "UPDATE installments SET receipt_path = NULL, updated_at = datetime('now') WHERE id = ?"
-  ).bind(installmentId).run();
+  if (tipo === "recibo") {
+    await env.DB.prepare(
+      "UPDATE installments SET receipt_path = NULL, updated_at = datetime('now') WHERE id = ?"
+    ).bind(installmentId).run();
+  }
   return jsonResponse({ ok: true, deleted: key });
 }
 

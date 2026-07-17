@@ -4,7 +4,12 @@ import { useNavigate } from 'react-router-dom';
 import { clients as clientsApi, installments as installmentsApi, notifications as notifApi } from '../apiClient';
 import { IconDoc } from '../icons';
 import ContactsEditor, { cleanContacts } from '../ContactsEditor';
+import ParcelasEditor, { gerarParcelas, somaParcelas, parseValor, fmtValor } from '../ParcelasEditor';
 import AddressEditor, { EMPTY_ADDRESS, composeAddress, hasAddress } from '../AddressEditor';
+import { MoneyInput, StepperInput, TagsInput, RadioCards } from '../inputs';
+import SlidingTabs from '../tabs';
+import DateInput from '../datepicker';
+import { IconUpload, IconPencil, IconRotate } from '../icons';
 
 function makeId(name) {
   return name
@@ -26,7 +31,7 @@ export default function NewClient() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
   const [tab, setTab] = useState('cliente'); // 'cliente' | 'processo' | 'financeiro'
-  const [invalid, setInvalid] = useState({}); // { name, email, phone, startDate, totalValue, installments, monthlyValue }
+  const [invalid, setInvalid] = useState({}); // { name, startDate, totalValue, installments, monthlyValue }
   const [aiBusy, setAiBusy] = useState(false);
   const [aiMsg, setAiMsg] = useState(null);
   const [aiDragOver, setAiDragOver] = useState(false);
@@ -50,6 +55,7 @@ export default function NewClient() {
     father: '',
     mother: '',
     nationality: '',
+    nationalities: [''],
     maritalStatus: '',
     rg: '',
     birthDate: '',
@@ -57,12 +63,12 @@ export default function NewClient() {
     docType: '',
     docNumber: '',
     docValidity: '',
+    documents: [{ docType: '', docNumber: '', docValidity: '' }],
     niss: '',
     filiation: '',
-    area: 'Família',
-    process: '',
-    processSummary: '',
+    processos: [{ ref: '', area: 'Família', resumo: '' }],
     planType: 'installment',
+    firstAttendance: '',
     startDate: '',
     totalValue: '',
     installments: '',
@@ -71,10 +77,37 @@ export default function NewClient() {
     reminderChannels: 'email+whatsapp',
   });
 
+  // parcelas com valores personalizados (null = divisão igual automática)
+  const [parcelasCustom, setParcelasCustom] = useState(null);
+  const [parcelasModal, setParcelasModal] = useState(false);
+  const [parcelasDraft, setParcelasDraft] = useState([]);
+
   const update = (key) => (e) => {
     setForm({ ...form, [key]: e.target.value });
     if (invalid[key]) setInvalid((inv) => ({ ...inv, [key]: false }));
+    // mudar os parâmetros do plano invalida a personalização das parcelas
+    if (['totalValue', 'installments', 'startDate', 'planType'].includes(key)) setParcelasCustom(null);
   };
+
+  const abrirParcelasModal = () => {
+    const total = parseValor(form.totalValue);
+    const n = parseInt(form.installments, 10) || 0;
+    if (!form.startDate || total <= 0 || n <= 0) return;
+    setParcelasDraft(parcelasCustom ? parcelasCustom.map((r) => ({ ...r })) : gerarParcelas(total, n, form.startDate));
+    setParcelasModal(true);
+  };
+
+  // ── editores de listas (nacionalidades, documentos, processos)
+  const updList = (key, idx, patch) => setForm((f) => ({
+    ...f,
+    [key]: f[key].map((it, i) => (i === idx ? (typeof patch === 'object' ? { ...it, ...patch } : patch) : it)),
+  }));
+  const addList = (key, empty) => setForm((f) => ({ ...f, [key]: [...f[key], empty] }));
+  const rmList = (key, idx) => setForm((f) => ({ ...f, [key]: f[key].filter((_, i) => i !== idx) }));
+  const rmBtnStyle = { background: 'none', border: 'none', cursor: 'pointer', color: '#b00', fontSize: '1rem', padding: '0 0.25rem' };
+  const addBtnStyle = { background: 'none', border: '1px dashed rgba(0,0,0,0.25)', borderRadius: 4, padding: '0.3rem 0.75rem', cursor: 'pointer', fontSize: '0.8rem', color: 'var(--muted, #666)' };
+  // traço vertical entre campos do mesmo documento
+  const vSep = { borderLeft: '1px solid rgba(0,0,0,0.22)', paddingLeft: '0.75rem' };
 
   // mudar o tipo de cliente ajusta as labels default dos contactos ainda vazios
   const updatePersonType = (e) => {
@@ -122,8 +155,11 @@ export default function NewClient() {
         headers: {
           'Content-Type': file.type,
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          // envia o resumo atual para a IA melhorar (em vez de substituir às cegas)
-          ...(form.processSummary ? { 'X-Resumo-Atual': encodeURIComponent(form.processSummary.slice(0, 4000)) } : {}),
+          // envia os processos já registados: a IA decide se o documento pertence a um
+          // existente (melhora esse resumo) ou é um processo novo (cria resumo à parte)
+          ...(form.processos.some((p) => p.ref || p.resumo)
+            ? { 'X-Processos': encodeURIComponent(JSON.stringify(form.processos.map((p) => ({ ref: p.ref, area: p.area, resumo: (p.resumo || '').slice(0, 1500) })))) }
+            : {}),
         },
         body: file,
       });
@@ -169,14 +205,51 @@ export default function NewClient() {
       set('docNumber', f.doc_number);
       set('docValidity', f.doc_validity);
       set('niss', f.niss);
+      // sincronizar com os editores múltiplos (só preenche o que estiver vazio)
+      const nats = [...merge.nationalities];
+      if (f.nationality && !nats[0]) nats[0] = String(f.nationality);
+      merge.nationalities = nats;
+      const docs = merge.documents.map((d) => ({ ...d }));
+      if (docs[0] && !docs[0].docType && f.doc_type) docs[0].docType = String(f.doc_type);
+      if (docs[0] && !docs[0].docNumber && f.doc_number) docs[0].docNumber = String(f.doc_number);
+      if (docs[0] && !docs[0].docValidity && f.doc_validity) docs[0].docValidity = String(f.doc_validity);
+      merge.documents = docs;
       if (f.country && (f.country === 'PT' || f.country === 'BR')) merge.country = f.country;
-      // resumo do processo: a IA já devolve a versão fundida com o resumo anterior
-      const summaryUpdated = !!(f.process_summary && f.process_summary !== form.processSummary);
-      if (f.process_summary) merge.processSummary = String(f.process_summary);
+      // processos: a IA indica se o documento pertence a um processo existente
+      // (process_match = índice) ou é um processo NOVO (process_match = null)
+      const AREAS_VALIDAS = ['Família', 'Cível', 'Trabalhista', 'Empresarial', 'Nacionalidade', 'Administrativo', 'Criminal'];
+      const procs = merge.processos.map((p) => ({ ...p }));
+      let procMsg = '';
+      if (f.process_summary) {
+        const mi = Number.isInteger(f.process_match) && f.process_match >= 0 && f.process_match < procs.length
+          ? f.process_match : null;
+        if (mi !== null) {
+          // documento de um processo já registado -> melhora esse resumo
+          procs[mi].resumo = String(f.process_summary);
+          if (!procs[mi].ref && f.process_ref) procs[mi].ref = String(f.process_ref);
+          procMsg = ` · resumo do Processo ${mi + 1} atualizado`;
+        } else {
+          // processo novo -> ocupa o primeiro cartão vazio ou cria um novo
+          const novo = {
+            ref: f.process_ref ? String(f.process_ref) : '',
+            area: f.practice_area && AREAS_VALIDAS.includes(f.practice_area) ? f.practice_area : 'Família',
+            resumo: String(f.process_summary),
+          };
+          const emptyIdx = procs.findIndex((p) => !p.ref.trim() && !p.resumo.trim());
+          if (emptyIdx !== -1) {
+            procs[emptyIdx] = { ...procs[emptyIdx], ...novo };
+            procMsg = ' · resumo do processo criado (ver aba Dados do Processo)';
+          } else {
+            procs.push(novo);
+            procMsg = ` · novo processo detetado e adicionado (Processo ${procs.length})`;
+          }
+        }
+      }
+      merge.processos = procs;
       setForm(merge);
       const filled = Object.keys(f).filter((k) => f[k]).length;
       const u = data.usage || {};
-      setAiMsg({ kind: 'ok', text: `Documento lido — ${filled} campos preenchidos${summaryUpdated ? ' · resumo do processo atualizado (ver aba Dados do Processo)' : ''}. Reveja antes de guardar. (uso: ${u.input_tokens||0} entrada, ${u.output_tokens||0} saída)` });
+      setAiMsg({ kind: 'ok', text: `Documento lido — ${filled} campos preenchidos${procMsg}. Reveja antes de guardar. (uso: ${u.input_tokens||0} entrada, ${u.output_tokens||0} saída)` });
     } catch (err) {
       setAiMsg({ kind: 'err', text: 'Erro: ' + err.message });
     } finally {
@@ -199,37 +272,11 @@ export default function NewClient() {
     e.preventDefault();
     setError(null);
 
-    // validação manual (os campos obrigatórios podem estar em abas escondidas)
+    // Sem campos obrigatórios: o formulário guarda com o que estiver preenchido.
+    // As parcelas só são geradas quando houver data de vencimento e valores válidos.
     const emailList = cleanContacts(form.emails);
     const phoneList = cleanContacts(form.phones);
-    const inv = {};
-    if (!form.name.trim()) inv.name = true;
-    if (emailList.length === 0) inv.email = true;
-    if (phoneList.length === 0) inv.phone = true;
-    if (!form.startDate) inv.startDate = true;
-    if (form.planType === 'installment') {
-      if (!form.totalValue) inv.totalValue = true;
-      if (!form.installments) inv.installments = true;
-    }
-    if (form.planType === 'monthly' && !form.monthlyValue) inv.monthlyValue = true;
-    setInvalid(inv);
-
-    // primeiro campo em falta ganha o scroll + cursor
-    const FIELD_META = [
-      ['name', 'cliente', 'f-name'],
-      ['email', 'cliente', 'f-email'],
-      ['phone', 'cliente', 'f-phone'],
-      ['startDate', 'financeiro', 'f-startDate'],
-      ['totalValue', 'financeiro', 'f-totalValue'],
-      ['installments', 'financeiro', 'f-installments'],
-      ['monthlyValue', 'financeiro', 'f-monthlyValue'],
-    ];
-    const first = FIELD_META.find(([k]) => inv[k]);
-    if (first) {
-      setError('Faltam campos obrigatórios (assinalados a vermelho).');
-      focusField(first[1], first[2]);
-      return;
-    }
+    setInvalid({});
     setSubmitting(true);
 
     try {
@@ -238,18 +285,25 @@ export default function NewClient() {
 
       // 1. Criar cliente
       const totalContracted = form.planType === 'installment'
-        ? parseFloat(form.totalValue.toString().replace(',', '.'))
+        ? (parseFloat(form.totalValue.toString().replace(',', '.')) || 0)
         : 0;
       const numParcelas = form.planType === 'installment'
-        ? parseInt(form.installments, 10)
+        ? (parseInt(form.installments, 10) || 0)
         : 0;
 
       const isColetiva = form.personType === 'coletiva';
+      // listas limpas (nacionalidades/documentos são da pessoa singular; coletiva usa os campos do responsável)
+      const natList = !isColetiva ? form.nationalities.map((n) => n.trim()).filter(Boolean) : [];
+      const docList = !isColetiva ? form.documents.filter((d) => d.docType || d.docNumber || d.docValidity) : [];
+      const procList = form.processos
+        .filter((p) => p.ref.trim() || p.resumo.trim())
+        .map((p) => ({ ref: p.ref.trim(), area: p.area, resumo: p.resumo }));
+      const proc0 = form.processos[0] || { ref: '', area: 'Família', resumo: '' };
       await clientsApi.create({
         id: clientId,
         name: form.name,
-        email: emailList[0].value,
-        phone: phoneList[0].value,
+        email: emailList[0]?.value || null,
+        phone: phoneList[0]?.value || null,
         emails: JSON.stringify(emailList),
         phones: JSON.stringify(phoneList),
         country: form.country,
@@ -266,52 +320,62 @@ export default function NewClient() {
         address_parts: hasAddress(form.addrParts) ? JSON.stringify(form.addrParts) : null,
         father_name: form.father || null,
         mother_name: form.mother || null,
-        nationality: form.nationality || null,
+        nationality: (natList[0] || form.nationality) || null,
+        nationalities: natList.length ? JSON.stringify(natList) : null,
         marital_status: form.maritalStatus || null,
         rg: form.country === 'BR' ? (form.rg || null) : null,
         birth_date: form.birthDate || null,
         birth_place: form.birthPlace || null,
-        doc_type: form.docType || null,
-        doc_number: form.docNumber || null,
-        doc_validity: form.docValidity || null,
+        doc_type: (!isColetiva ? docList[0]?.docType : form.docType) || null,
+        doc_number: (!isColetiva ? docList[0]?.docNumber : form.docNumber) || null,
+        doc_validity: (!isColetiva ? docList[0]?.docValidity : form.docValidity) || null,
+        documents: docList.length ? JSON.stringify(docList) : null,
         niss: form.niss || null,
         filiation: [form.father, form.mother].filter(Boolean).join(' e ') || form.filiation || null,
-        practice_area: form.area,
-        process_summary: form.processSummary || null,
-        notes: form.process ? `Processo: ${form.process}` : '',
+        practice_area: proc0.area,
+        process_summary: proc0.resumo || null,
+        notes: proc0.ref ? `Processo: ${proc0.ref}` : '',
+        processes: procList.length ? JSON.stringify(procList) : null,
         honorarios_total: totalContracted,
         honorarios_parcelas: numParcelas,
-        contract_start_date: form.startDate,
+        contract_start_date: form.startDate || null,
+        first_attendance_date: form.firstAttendance || null,
       });
 
-      // 2. Gerar parcelas
+      // 2. Gerar parcelas — só quando há data de vencimento e valores válidos.
+      //    Sem esses dados, o cliente é criado sem plano (pode ser preenchido depois).
       let installmentsToCreate = [];
-      if (form.planType === 'installment') {
-        const per = totalContracted / numParcelas;
-        for (let n = 1; n <= numParcelas; n++) {
+      if (form.startDate && form.planType === 'installment' && totalContracted > 0 && numParcelas > 0) {
+        // valores personalizados (se definidos e a fechar com o total) ou divisão igual
+        const rows = (parcelasCustom && parcelasCustom.length === numParcelas && Math.abs(somaParcelas(parcelasCustom) - totalContracted) < 0.005)
+          ? parcelasCustom
+          : gerarParcelas(totalContracted, numParcelas, form.startDate);
+        for (const r of rows) {
           installmentsToCreate.push({
-            id: `${clientId}-p${n}`,
+            id: `${clientId}-p${r.n}`,
             client_id: clientId,
-            installment_number: n,
+            installment_number: r.n,
             total_installments: numParcelas,
-            amount: Math.round(per * 100) / 100,
+            amount: parseValor(r.amount),
             currency,
-            due_date: addMonths(form.startDate, n - 1),
+            due_date: r.due_date,
           });
         }
-      } else {
+      } else if (form.startDate && form.planType === 'monthly') {
         // Avença: cria 12 primeiras parcelas
-        const monthlyValue = parseFloat(form.monthlyValue.toString().replace(',', '.'));
-        for (let n = 1; n <= 12; n++) {
-          installmentsToCreate.push({
-            id: `${clientId}-m${n}`,
-            client_id: clientId,
-            installment_number: n,
-            total_installments: 12,
-            amount: monthlyValue,
-            currency,
-            due_date: addMonths(form.startDate, n - 1),
-          });
+        const monthlyValue = parseFloat(form.monthlyValue.toString().replace(',', '.')) || 0;
+        if (monthlyValue > 0) {
+          for (let n = 1; n <= 12; n++) {
+            installmentsToCreate.push({
+              id: `${clientId}-m${n}`,
+              client_id: clientId,
+              installment_number: n,
+              total_installments: 12,
+              amount: monthlyValue,
+              currency,
+              due_date: addMonths(form.startDate, n - 1),
+            });
+          }
         }
       }
 
@@ -379,24 +443,14 @@ export default function NewClient() {
       <form onSubmit={handleSubmit}>
         <input ref={aiFileRef} type="file" accept="image/png,image/jpeg,image/webp,application/pdf" style={{ display: 'none' }} onChange={aiOnFile} />
         <div
+          className={'adm-dropzone' + (aiDragOver ? ' over' : '') + (aiBusy ? ' busy' : '')}
           onDragOver={(e) => { e.preventDefault(); setAiDragOver(true); }}
           onDragLeave={() => setAiDragOver(false)}
           onDrop={aiOnDrop}
           onClick={() => !aiBusy && aiFileRef.current && aiFileRef.current.click()}
-          style={{
-            border: `2px dashed ${aiDragOver ? 'var(--gold, #b8935a)' : 'rgba(0,0,0,0.18)'}`,
-            background: aiDragOver ? 'rgba(184,147,90,0.08)' : 'var(--cream, #f5f0e8)',
-            borderRadius: 8,
-            padding: '1.25rem',
-            textAlign: 'center',
-            cursor: aiBusy ? 'wait' : 'pointer',
-            marginBottom: '1.25rem',
-            opacity: aiBusy ? 0.7 : 1,
-            transition: 'background 0.15s, border-color 0.15s',
-          }}
         >
           <div style={{ fontWeight: 600, color: 'var(--forest, #12302a)' }}>
-            <IconDoc /> Cadastro rápido com IA
+            <span className="adm-dropzone-icon"><IconUpload size={15} /></span> Cadastro rápido com IA
           </div>
           <div style={{ fontSize: '0.85rem', color: 'var(--muted)', marginTop: '0.35rem' }}>
             Arraste aqui (ou clique para escolher) o documento do cliente — Título de Residência, Cartão de Cidadão, Passaporte, RG, ou uma procuração/certidão da empresa.
@@ -405,6 +459,7 @@ export default function NewClient() {
           <div style={{ fontSize: '0.75rem', color: 'var(--muted)', marginTop: '0.35rem' }}>
             PNG, JPEG, WEBP ou PDF · até 8 MB
           </div>
+          {aiBusy && <span className="adm-dropzone-bar" aria-hidden="true" />}
           {aiMsg && (
             <div style={{
               marginTop: '0.75rem',
@@ -419,34 +474,22 @@ export default function NewClient() {
           )}
         </div>
 
-        {/* Abas */}
-        <div style={{ display: 'flex', gap: '0.25rem', borderBottom: '1px solid rgba(0,0,0,0.12)', marginBottom: '1.25rem' }}>
-          {[['cliente', 'Dados do Cliente'], ['processo', 'Dados do Processo'], ['financeiro', 'Dados Financeiros']].map(([key, label]) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setTab(key)}
-              style={{
-                background: 'none',
-                border: 'none',
-                borderBottom: tab === key ? '2px solid var(--gold, #b8935a)' : '2px solid transparent',
-                color: tab === key ? 'var(--forest, #12302a)' : 'var(--muted, #777)',
-                fontWeight: tab === key ? 600 : 400,
-                padding: '0.6rem 1rem',
-                cursor: 'pointer',
-                fontSize: '0.95rem',
-                marginBottom: '-1px',
-              }}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
+        {/* Abas — indicador dourado desliza até à ativa */}
+        <SlidingTabs
+          items={[
+            { id: 'cliente', label: 'Dados do Cliente' },
+            { id: 'processo', label: 'Dados do Processo' },
+            { id: 'financeiro', label: 'Dados Financeiros' },
+          ]}
+          active={tab}
+          onChange={setTab}
+          variant="underline"
+        />
 
         {tab === 'cliente' && (<>
         <div className="adm-form-grid">
           <div className="adm-field">
-            <label>Tipo de cliente *</label>
+            <label>Tipo de cliente</label>
             <select value={form.personType} onChange={updatePersonType} disabled={submitting}>
               <option value="singular">Pessoa singular</option>
               <option value="coletiva">Pessoa coletiva (empresa)</option>
@@ -454,17 +497,22 @@ export default function NewClient() {
           </div>
           <div className="adm-field">
             <label>Jurisdição</label>
-            <select value={form.country} onChange={update('country')} disabled={submitting}>
-              <option value="PT">Portugal · € EUR</option>
-              <option value="BR">Brasil · R$ BRL</option>
-            </select>
+            <RadioCards
+              value={form.country}
+              onChange={(v) => update('country')({ target: { value: v } })}
+              disabled={submitting}
+              options={[
+                { value: 'PT', title: 'Portugal', desc: 'Faturação em € EUR' },
+                { value: 'BR', title: 'Brasil', desc: 'Faturação em R$ BRL' },
+              ]}
+            />
           </div>
         </div>
 
         <div className="adm-form-section-title">{form.personType === 'coletiva' ? 'Dados da empresa' : 'Dados pessoais'}</div>
         <div className="adm-form-grid">
           <div className="adm-field">
-            <label style={invLabel('name')}>{form.personType === 'coletiva' ? 'Denominação da empresa *' : 'Nome completo *'}</label>
+            <label style={invLabel('name')}>{form.personType === 'coletiva' ? 'Denominação da empresa' : 'Nome completo'}</label>
             <input id="f-name" type="text" value={form.name} onChange={update('name')} disabled={submitting} style={invStyle('name')} />
           </div>
           <div className="adm-field">
@@ -477,10 +525,23 @@ export default function NewClient() {
               <input type="text" value={form.duns} onChange={update('duns')} placeholder="449683786" disabled={submitting} />
             </div>
           )}
-          <div className="adm-field">
-            <label>{form.personType === 'coletiva' ? 'Nacionalidade da empresa' : 'Nacionalidade'}</label>
-            <input type="text" value={form.nationality} onChange={update('nationality')} placeholder={form.country === 'BR' ? 'brasileira' : 'portuguesa'} disabled={submitting} />
-          </div>
+          {form.personType === 'coletiva' ? (
+            <div className="adm-field">
+              <label>Nacionalidade da empresa</label>
+              <input type="text" value={form.nationality} onChange={update('nationality')} placeholder={form.country === 'BR' ? 'brasileira' : 'portuguesa'} disabled={submitting} />
+            </div>
+          ) : (
+            <div className="adm-field">
+              <label>Nacionalidade{form.nationalities.filter(Boolean).length > 1 ? 's' : ''}</label>
+              <TagsInput
+                tags={form.nationalities.filter(Boolean)}
+                onChange={(tags) => setForm((f) => ({ ...f, nationalities: tags.length ? tags : [''] }))}
+                placeholder={form.country === 'BR' ? 'brasileira (Enter adiciona)' : 'portuguesa (Enter adiciona)'}
+                disabled={submitting}
+              />
+              <div className="adm-field-helper">Escreva e prima Enter — pode adicionar várias</div>
+            </div>
+          )}
           {form.personType === 'singular' && (
             <>
               <div className="adm-field">
@@ -496,7 +557,7 @@ export default function NewClient() {
               </div>
               <div className="adm-field">
                 <label>Data de nascimento</label>
-                <input type="date" value={form.birthDate} onChange={update('birthDate')} disabled={submitting} />
+                <DateInput value={form.birthDate} onChange={update('birthDate')} disabled={submitting} />
               </div>
               <div className="adm-field">
                 <label>Naturalidade</label>
@@ -504,8 +565,8 @@ export default function NewClient() {
               </div>
             </>
           )}
-          <ContactsEditor kind="email" items={form.emails} onChange={(v) => { setForm({ ...form, emails: v }); if (invalid.email) setInvalid((i) => ({ ...i, email: false })); }} disabled={submitting} requiredFirst invalid={invalid.email} inputId="f-email" />
-          <ContactsEditor kind="phone" items={form.phones} onChange={(v) => { setForm({ ...form, phones: v }); if (invalid.phone) setInvalid((i) => ({ ...i, phone: false })); }} disabled={submitting} requiredFirst invalid={invalid.phone} inputId="f-phone" />
+          <ContactsEditor kind="email" items={form.emails} onChange={(v) => setForm({ ...form, emails: v })} disabled={submitting} inputId="f-email" />
+          <ContactsEditor kind="phone" items={form.phones} onChange={(v) => setForm({ ...form, phones: v })} disabled={submitting} inputId="f-phone" />
           {form.personType === 'coletiva' && (
             <div className="adm-field adm-full" style={{ marginTop: '-0.5rem' }}>
               <div className="adm-field-helper">Use as labels para distinguir os contactos da empresa e do responsável.</div>
@@ -520,24 +581,49 @@ export default function NewClient() {
 
           {form.personType === 'singular' && (
             <>
-              {/* Documento de identificação — necessário para procurações */}
-              <div className="adm-field">
-                <label>Tipo de documento</label>
-                <select value={form.docType} onChange={update('docType')} disabled={submitting}>
-                  <option value="">—</option>
-                  <option value="Título de Residência">Título de Residência</option>
-                  <option value="Cartão de Cidadão">Cartão de Cidadão</option>
-                  <option value="Passaporte">Passaporte</option>
-                  <option value="BI/RG">BI / RG</option>
-                </select>
-              </div>
-              <div className="adm-field">
-                <label>Nº do documento</label>
-                <input type="text" value={form.docNumber} onChange={update('docNumber')} placeholder="Ex.: X6D997798" disabled={submitting} />
-              </div>
-              <div className="adm-field">
-                <label>Validade do documento</label>
-                <input type="date" value={form.docValidity} onChange={update('docValidity')} disabled={submitting} />
+              {/* Documentos de identificação — necessários para procurações. Cada linha: tipo | número | validade */}
+              <div className="adm-field adm-full">
+                <label>Documento{form.documents.length > 1 ? 's' : ''} de identificação</label>
+                {form.documents.map((d, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem', alignItems: 'center' }}>
+                    {/* grupo acoplado tipo | número | validade (padrão "input with start select") */}
+                    <div className="adm-input-group" style={{ flex: 1, flexWrap: 'wrap' }}>
+                      <select
+                        value={d.docType}
+                        onChange={(e) => updList('documents', idx, { docType: e.target.value })}
+                        disabled={submitting}
+                        style={{ flex: '0 0 32%', minWidth: 170 }}
+                      >
+                        <option value="">— tipo —</option>
+                        <option value="Título de Residência">Título de Residência</option>
+                        <option value="Cartão de Cidadão">Cartão de Cidadão</option>
+                        <option value="Passaporte">Passaporte</option>
+                        <option value="BI/RG">BI / RG</option>
+                      </select>
+                      <input
+                        type="text"
+                        value={d.docNumber}
+                        onChange={(e) => updList('documents', idx, { docNumber: e.target.value })}
+                        placeholder="Nº do documento (ex.: X6D997798)"
+                        disabled={submitting}
+                        style={{ flex: 1, minWidth: 160 }}
+                      />
+                      <DateInput
+                        value={d.docValidity}
+                        onChange={(e) => updList('documents', idx, { docValidity: e.target.value })}
+                        disabled={submitting}
+                        placeholder="validade"
+                        style={{ flex: '0 0 160px', width: 'auto' }}
+                      />
+                    </div>
+                    {form.documents.length > 1 && (
+                      <button type="button" onClick={() => rmList('documents', idx)} disabled={submitting} title="Remover documento" style={rmBtnStyle}>✕</button>
+                    )}
+                  </div>
+                ))}
+                <button type="button" onClick={() => addList('documents', { docType: '', docNumber: '', docValidity: '' })} disabled={submitting} style={addBtnStyle}>
+                  ＋ adicionar documento
+                </button>
               </div>
               {form.country === 'BR' && (
                 <div className="adm-field">
@@ -596,7 +682,7 @@ export default function NewClient() {
               </div>
               <div className="adm-field">
                 <label>Data de nascimento</label>
-                <input type="date" value={form.birthDate} onChange={update('birthDate')} disabled={submitting} />
+                <DateInput value={form.birthDate} onChange={update('birthDate')} disabled={submitting} />
               </div>
               <div className="adm-field">
                 <label>Naturalidade</label>
@@ -651,70 +737,128 @@ export default function NewClient() {
         </>)}
 
         {tab === 'processo' && (<>
-        <div className="adm-form-section-title">Dados do Processo</div>
-        <div className="adm-form-grid">
-          <div className="adm-field">
-            <label>Área de atuação</label>
-            <select value={form.area} onChange={update('area')} disabled={submitting}>
-              <option>Família</option>
-              <option>Cível</option>
-              <option>Trabalhista</option>
-              <option>Empresarial</option>
-            </select>
+        <div className="adm-form-section-title">Dados do{form.processos.length > 1 ? 's' : ''} Processo{form.processos.length > 1 ? 's' : ''}</div>
+        {form.processos.map((p, idx) => (
+          <div
+            key={idx}
+            style={{
+              border: '1px solid rgba(0,0,0,0.1)', borderLeft: '3px solid var(--gold, #b8935a)',
+              borderRadius: 6, padding: '1rem 1.1rem', marginBottom: '1rem', background: 'rgba(255,255,255,0.45)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.6rem' }}>
+              <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--forest, #12302a)' }}>
+                Processo {idx + 1}{p.ref ? ` · ${p.ref}` : ''}
+              </div>
+              {form.processos.length > 1 && (
+                <button type="button" onClick={() => rmList('processos', idx)} disabled={submitting} title="Remover processo" style={rmBtnStyle}>✕</button>
+              )}
+            </div>
+            <div className="adm-form-grid">
+              <div className="adm-field">
+                <label>Processo / referência interna</label>
+                <input
+                  type="text"
+                  value={p.ref}
+                  onChange={(e) => updList('processos', idx, { ref: e.target.value })}
+                  placeholder="Ex.: 1289/26 · Divórcio consensual"
+                  disabled={submitting}
+                />
+              </div>
+              <div className="adm-field">
+                <label>Área de atuação</label>
+                <select value={p.area} onChange={(e) => updList('processos', idx, { area: e.target.value })} disabled={submitting}>
+                  <option>Família</option>
+                  <option>Cível</option>
+                  <option>Trabalhista</option>
+                  <option>Empresarial</option>
+                  <option>Nacionalidade</option>
+                  <option>Administrativo</option>
+                  <option>Criminal</option>
+                </select>
+              </div>
+              <div className="adm-field adm-full">
+                <label>Resumo do processo</label>
+                <textarea
+                  rows={idx === 0 ? 9 : 6}
+                  value={p.resumo}
+                  onChange={(e) => updList('processos', idx, { resumo: e.target.value })}
+                  placeholder={idx === 0
+                    ? 'Arraste documentos do caso (e-mails, participações de sinistro, contratos…) na caixa de IA acima — o resumo é criado automaticamente e melhorado a cada documento novo. Também pode escrever ou editar à mão.'
+                    : 'Resumo deste processo (escrito à mão).'}
+                  disabled={submitting}
+                  style={{ resize: 'vertical', width: '100%', fontFamily: "'Arial Unicode MS', Arial, 'Helvetica Neue', sans-serif", fontSize: '0.9rem', lineHeight: 1.55, padding: '0.6rem 0.75rem' }}
+                />
+                {idx === 0 && <div className="adm-field-helper">Gerado pela IA a partir dos documentos · sempre editável · reveja antes de guardar</div>}
+              </div>
+            </div>
           </div>
-          <div className="adm-field">
-            <label>Processo / referência interna</label>
-            <input type="text" value={form.process} onChange={update('process')} placeholder="Ex.: 1289/26 · Divórcio consensual" disabled={submitting} />
-          </div>
-          <div className="adm-field adm-full">
-            <label>Resumo do processo</label>
-            <textarea
-              rows={9}
-              value={form.processSummary}
-              onChange={update('processSummary')}
-              placeholder="Arraste documentos do caso (e-mails, participações de sinistro, contratos…) na caixa de IA acima — o resumo é criado automaticamente e melhorado a cada documento novo. Também pode escrever ou editar à mão."
-              disabled={submitting}
-              style={{ resize: 'vertical', width: '100%', fontFamily: "'Arial Unicode MS', Arial, 'Helvetica Neue', sans-serif", fontSize: '0.9rem', lineHeight: 1.55, padding: '0.6rem 0.75rem' }}
-            />
-            <div className="adm-field-helper">Gerado pela IA a partir dos documentos · sempre editável · reveja antes de guardar</div>
-          </div>
-        </div>
+        ))}
+        <button type="button" onClick={() => addList('processos', { ref: '', area: 'Família', resumo: '' })} disabled={submitting} style={addBtnStyle}>
+          ＋ adicionar processo
+        </button>
         </>)}
 
         {tab === 'financeiro' && (
         <div className="adm-form-section">
           <div className="adm-form-section-title">Plano financeiro</div>
           <div className="adm-form-grid">
-            <div className="adm-field">
-              <label>Tipo de plano *</label>
-              <select value={form.planType} onChange={update('planType')} disabled={submitting}>
-                <option value="installment">Parcelado (montante dividido)</option>
-                <option value="monthly">Avença mensal (recorrente)</option>
-              </select>
+            <div className="adm-field adm-full">
+              <label>Tipo de plano</label>
+              <RadioCards
+                value={form.planType}
+                onChange={(v) => update('planType')({ target: { value: v } })}
+                disabled={submitting}
+                options={[
+                  { value: 'installment', title: 'Parcelado', desc: 'Montante total dividido em prestações' },
+                  { value: 'monthly', title: 'Avença mensal', desc: 'Valor recorrente todos os meses' },
+                ]}
+              />
             </div>
             <div className="adm-field">
-              <label style={invLabel('startDate')}>Data da primeira cobrança *</label>
-              <input id="f-startDate" type="date" value={form.startDate} onChange={update('startDate')} disabled={submitting} style={invStyle('startDate')} />
+              <label style={invLabel('startDate')}>Data de Vencimento</label>
+              <DateInput id="f-startDate" value={form.startDate} onChange={update('startDate')} disabled={submitting} style={invStyle('startDate')} />
+              <div className="adm-field-helper">1.ª parcela — as seguintes vencem mensalmente a partir desta data</div>
+            </div>
+            <div className="adm-field">
+              <label>Data do 1.º atendimento</label>
+              <DateInput value={form.firstAttendance} onChange={update('firstAttendance')} disabled={submitting} />
+              <div className="adm-field-helper">Opcional — quando o cliente foi atendido pela primeira vez</div>
             </div>
 
             {form.planType === 'installment' && (
               <>
                 <div className="adm-field">
-                  <label style={invLabel('totalValue')}>Valor total contratado *</label>
-                  <input id="f-totalValue" type="text" value={form.totalValue} onChange={update('totalValue')} placeholder="3120" disabled={submitting} style={invStyle('totalValue')} />
+                  <label style={invLabel('totalValue')}>Valor total contratado</label>
+                  <MoneyInput id="f-totalValue" currency={form.country === 'BR' ? 'BRL' : 'EUR'} value={form.totalValue} onChange={update('totalValue')} placeholder="3120" disabled={submitting} style={invStyle('totalValue')} />
                 </div>
                 <div className="adm-field">
-                  <label style={invLabel('installments')}>Número de parcelas *</label>
-                  <input id="f-installments" type="number" min="1" value={form.installments} onChange={update('installments')} placeholder="6" disabled={submitting} style={invStyle('installments')} />
-                  {planPreview && <div className="adm-field-helper">{planPreview}</div>}
+                  <label style={invLabel('installments')}>Número de parcelas</label>
+                  <StepperInput id="f-installments" min={1} value={form.installments} onChange={update('installments')} placeholder="6" disabled={submitting} style={invStyle('installments')} />
+                  {planPreview && !parcelasCustom && <div className="adm-field-helper">{planPreview}</div>}
+                  {parcelasCustom && (
+                    <div className="adm-field-helper" style={{ color: '#1f7a43', fontWeight: 600 }}>
+                      → valores personalizados definidos ✓ (última: {fmtValor(parseValor(parcelasCustom[parcelasCustom.length - 1].amount), form.country === 'BR' ? 'BRL' : 'EUR')})
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    className="adm-btn"
+                    data-tip="Definir um valor e uma data diferentes para cada parcela (ex.: 12× €50 + 1× €60)"
+                    style={{ marginTop: '0.5rem', fontSize: '0.72rem', padding: '0.3rem 0.75rem' }}
+                    disabled={submitting || !form.startDate || parseValor(form.totalValue) <= 0 || (parseInt(form.installments, 10) || 0) <= 0}
+                    onClick={abrirParcelasModal}
+                  >
+                    <IconPencil size={12} /> Ajustar valores das parcelas
+                  </button>
                 </div>
               </>
             )}
 
             {form.planType === 'monthly' && (
               <div className="adm-field adm-full">
-                <label style={invLabel('monthlyValue')}>Valor mensal *</label>
-                <input id="f-monthlyValue" type="text" value={form.monthlyValue} onChange={update('monthlyValue')} placeholder="450" disabled={submitting} style={invStyle('monthlyValue')} />
+                <label style={invLabel('monthlyValue')}>Valor mensal</label>
+                <MoneyInput id="f-monthlyValue" currency={form.country === 'BR' ? 'BRL' : 'EUR'} value={form.monthlyValue} onChange={update('monthlyValue')} placeholder="450" disabled={submitting} style={invStyle('monthlyValue')} />
                 {planPreview && <div className="adm-field-helper">{planPreview}</div>}
               </div>
             )}
@@ -737,6 +881,63 @@ export default function NewClient() {
             </div>
           </div>
         </div>
+        )}
+
+        {/* Modal: ajustar valores individuais das parcelas */}
+        {parcelasModal && (
+          <div
+            className="adm-overlay"
+            onMouseDown={(e) => { if (e.target === e.currentTarget) setParcelasModal(false); }}
+            style={{
+              position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.55)', zIndex: 1500,
+              display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '8vh 1rem 2rem', overflowY: 'auto',
+            }}
+          >
+            <div style={{
+              background: 'var(--bg, #faf8f4)', borderRadius: 10, width: '100%', maxWidth: 560,
+              padding: '1.6rem 1.7rem', boxShadow: '0 20px 60px rgba(0,0,0,0.3)', borderTop: '3px solid var(--gold, #b8935a)',
+            }}>
+              <h2 style={{ margin: '0 0 0.3rem', fontFamily: 'var(--serif)', fontSize: '1.2rem', color: 'var(--forest, #12302a)' }}>
+                Ajustar valores das parcelas
+              </h2>
+              <div style={{ fontFamily: 'var(--sans)', fontSize: '0.78rem', color: 'var(--muted, #777)', marginBottom: '0.9rem' }}>
+                Edite o valor (e a data, se necessário) de cada parcela. A soma tem de fechar com o valor total contratado para aplicar.
+              </div>
+              <ParcelasEditor
+                rows={parcelasDraft}
+                onChange={setParcelasDraft}
+                currency={form.country === 'BR' ? 'BRL' : 'EUR'}
+                targetTotal={parseValor(form.totalValue)}
+                onRemove={(idx) => setParcelasDraft((rows) => rows.filter((_, i) => i !== idx).map((r, i) => ({ ...r, n: i + 1 })))}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.6rem', marginTop: '1.1rem' }}>
+                <button
+                  type="button"
+                  className="adm-btn"
+                  onClick={() => setParcelasDraft(gerarParcelas(parseValor(form.totalValue), parseInt(form.installments, 10) || 0, form.startDate))}
+                >
+                  <IconRotate size={12} /> Repor divisão igual
+                </button>
+                <span style={{ display: 'inline-flex', gap: '0.6rem' }}>
+                  <button type="button" className="adm-btn" onClick={() => setParcelasModal(false)}>Cancelar</button>
+                  <button
+                    type="button"
+                    className="adm-btn adm-btn-gold"
+                    disabled={Math.abs(somaParcelas(parcelasDraft) - parseValor(form.totalValue)) >= 0.005}
+                    title={Math.abs(somaParcelas(parcelasDraft) - parseValor(form.totalValue)) >= 0.005 ? 'A soma das parcelas tem de ser igual ao valor total' : ''}
+                    onClick={() => {
+                      setParcelasCustom(parcelasDraft.map((r) => ({ ...r })));
+                      // se foram eliminadas parcelas no modal, sincroniza o n.º de parcelas do formulário
+                      setForm((f) => ({ ...f, installments: String(parcelasDraft.length) }));
+                      setParcelasModal(false);
+                    }}
+                  >
+                    Aplicar
+                  </button>
+                </span>
+              </div>
+            </div>
+          </div>
         )}
 
         <div className="adm-form-actions">

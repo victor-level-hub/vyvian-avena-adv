@@ -80,25 +80,26 @@ async function createClient(request, env) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Invalid JSON', 400); }
 
-  const { id, name, email, phone, country, identification, practice_area, notes, honorarios_total, honorarios_parcelas, contract_start_date, address, nationality, marital_status, rg, birth_date, birth_place, doc_type, doc_number, doc_validity, niss, filiation, person_type, rep_name, rep_role, duns, process_summary, emails, phones, rep_nif, rep_nationality, rep_address, address_parts, rep_address_parts, father_name, mother_name } = body || {};
+  const { id, name, email, phone, country, identification, practice_area, notes, honorarios_total, honorarios_parcelas, contract_start_date, first_attendance_date, address, nationality, marital_status, rg, birth_date, birth_place, doc_type, doc_number, doc_validity, niss, filiation, person_type, rep_name, rep_role, duns, process_summary, emails, phones, rep_nif, rep_nationality, rep_address, address_parts, rep_address_parts, father_name, mother_name, nationalities, documents, processes } = body || {};
   if (!id || !name || !country) {
     return jsonError('id, name e country são obrigatórios', 400);
   }
 
   try {
     await env.DB.prepare(`
-      INSERT INTO clients (id, name, email, phone, country, identification, practice_area, status, notes, honorarios_total, honorarios_parcelas, contract_start_date, address, nationality, marital_status, rg, birth_date, birth_place, doc_type, doc_number, doc_validity, niss, filiation, person_type, rep_name, rep_role, duns, process_summary, emails, phones, rep_nif, rep_nationality, rep_address, address_parts, rep_address_parts, father_name, mother_name)
-      VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO clients (id, name, email, phone, country, identification, practice_area, status, notes, honorarios_total, honorarios_parcelas, contract_start_date, first_attendance_date, address, nationality, marital_status, rg, birth_date, birth_place, doc_type, doc_number, doc_validity, niss, filiation, person_type, rep_name, rep_role, duns, process_summary, emails, phones, rep_nif, rep_nationality, rep_address, address_parts, rep_address_parts, father_name, mother_name, nationalities, documents, processes)
+      VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
       id, name, email || null, phone || null, country,
       identification || null, practice_area || null, notes || '',
-      honorarios_total || 0, honorarios_parcelas || 0, contract_start_date || null,
+      honorarios_total || 0, honorarios_parcelas || 0, contract_start_date || null, first_attendance_date || null,
       address || null, nationality || null, marital_status || null, rg || null,
       birth_date || null, birth_place || null, doc_type || null, doc_number || null, doc_validity || null, niss || null, filiation || null,
       person_type === 'coletiva' ? 'coletiva' : 'singular', rep_name || null, rep_role || null, duns || null, process_summary || null,
       serializeContacts(emails), serializeContacts(phones),
       rep_nif || null, rep_nationality || null, rep_address || null,
-      serializeContacts(address_parts), serializeContacts(rep_address_parts), father_name || null, mother_name || null
+      serializeContacts(address_parts), serializeContacts(rep_address_parts), father_name || null, mother_name || null,
+      serializeContacts(nationalities), serializeContacts(documents), serializeContacts(processes)
     ).run();
   } catch (err) {
     if (err.message?.includes('UNIQUE')) return jsonError('Já existe cliente com esse ID', 409);
@@ -112,13 +113,13 @@ async function updateClient(request, env, clientId) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Invalid JSON', 400); }
 
-  const allowed = ['name', 'email', 'phone', 'country', 'identification', 'practice_area', 'status', 'notes', 'honorarios_total', 'honorarios_parcelas', 'contract_start_date', 'address', 'nationality', 'marital_status', 'rg', 'birth_date', 'birth_place', 'doc_type', 'doc_number', 'doc_validity', 'niss', 'filiation', 'person_type', 'rep_name', 'rep_role', 'duns', 'process_summary', 'emails', 'phones', 'rep_nif', 'rep_nationality', 'rep_address', 'address_parts', 'rep_address_parts', 'father_name', 'mother_name'];
+  const allowed = ['name', 'email', 'phone', 'country', 'identification', 'practice_area', 'status', 'notes', 'honorarios_total', 'honorarios_parcelas', 'contract_start_date', 'first_attendance_date', 'address', 'nationality', 'marital_status', 'rg', 'birth_date', 'birth_place', 'doc_type', 'doc_number', 'doc_validity', 'niss', 'filiation', 'person_type', 'rep_name', 'rep_role', 'duns', 'process_summary', 'emails', 'phones', 'rep_nif', 'rep_nationality', 'rep_address', 'address_parts', 'rep_address_parts', 'father_name', 'mother_name', 'nationalities', 'documents', 'processes'];
   const updates = [];
   const params = [];
   for (const key of allowed) {
     if (body[key] !== undefined) {
       updates.push(`${key} = ?`);
-      params.push(['emails', 'phones', 'address_parts', 'rep_address_parts'].includes(key) ? serializeContacts(body[key]) : body[key]);
+      params.push(['emails', 'phones', 'address_parts', 'rep_address_parts', 'nationalities', 'documents', 'processes'].includes(key) ? serializeContacts(body[key]) : body[key]);
     }
   }
   if (updates.length === 0) return jsonError('Nenhum campo para atualizar', 400);

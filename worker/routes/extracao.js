@@ -35,7 +35,10 @@ const SCHEMA = `{
   "country": "PT" | "BR" | null,
   "email": "string ou null (e-mail do CLIENTE — pessoa ou empresa)",
   "phone": "string ou null (telefone do CLIENTE, com indicativo se visível)",
-  "process_summary": "string ou null (resumo do processo/caso jurídico, se o documento contiver essa informação)"
+  "process_summary": "string ou null (resumo do processo/caso jurídico, se o documento contiver essa informação)",
+  "process_ref": "string ou null (número/referência do processo, se visível — ex.: '1102202200157325', '1289/26')",
+  "process_match": "número ou null (índice do processo EXISTENTE a que este documento pertence — só quando a NOTA final listar processos; caso contrário null)",
+  "practice_area": "Família" | "Cível" | "Trabalhista" | "Empresarial" | "Nacionalidade" | "Administrativo" | "Criminal" | null
 }`;
 
 const PROMPT =
@@ -60,7 +63,19 @@ Regras:
 - "doc_type": escolhe a etiqueta mais próxima da lista; "Título de Residência" para títulos portugueses para estrangeiros.
 - "email"/"phone": APENAS os contactos do próprio CLIENTE (a pessoa ou a empresa cliente do escritório). Num e-mail ou carta há contactos de várias partes — IGNORA os de advogados (ex.: domínios @adv.oa.pt), peritos, seguradoras, tribunais e outros terceiros. Se não conseguires distinguir com confiança, devolve null.
 - "process_summary": se o documento contiver informação sobre o caso/processo (factos, datas, partes, valores, pedidos), escreve um resumo objetivo em português (5-10 frases, prosa corrida, sem markdown) útil para um advogado: o que aconteceu, quando, quem está envolvido, valores em causa, estado atual e próximos passos se visíveis. Documentos de identificação puros => null. Inclui referências de processo/apólice/sinistro se visíveis.
+- "practice_area": classifica a área de atuação do caso a partir do conteúdo do documento, escolhendo APENAS uma das etiquetas da lista. Exemplos: divórcio, partilhas, responsabilidades parentais => "Família"; processos do Instituto da Segurança Social, reversão fiscal, contencioso com entidades públicas, licenciamentos => "Administrativo"; contratos, responsabilidade civil, sinistros, cobranças => "Cível"; despedimento, contrato de trabalho => "Trabalhista"; sociedades, quotas, insolvência de empresas => "Empresarial"; nacionalidade portuguesa, vistos, residência => "Nacionalidade"; crimes, queixas-crime, defesa penal => "Criminal". Documentos de identificação puros ou casos ambíguos => null.
 - Não incluas comentários nem campos extra. SÓ o objeto JSON.`;
+
+// Instrução extra quando o cadastro já tem processos: a IA decide se o documento
+// pertence a um processo existente (funde o resumo) ou é um processo NOVO.
+const PROCESSOS_NOTE = (lista) =>
+`\n\nNOTA: o cliente já tem ${lista.length} processo(s) registado(s) no cadastro:
+${lista.map((p, i) => `[${i}] ref: ${p.ref || "(sem ref)"} · área: ${p.area || "?"} · resumo: ${p.resumo ? p.resumo.slice(0, 900) : "(vazio)"}`).join("\n")}
+
+Decide a que processo pertence este documento:
+- Se pertencer a um processo EXISTENTE (mesmo número de processo, ou mesmas partes e assunto), devolve "process_match" com o índice desse processo e, em "process_summary", uma versão MELHORADA que integre o resumo existente com os factos novos (sem perder informação, sem duplicar, prosa corrida).
+- Se for um processo DIFERENTE dos listados (número novo, assunto distinto), devolve "process_match": null, "process_ref" com o número/referência se visível, "practice_area" com a área desse novo caso, e em "process_summary" um resumo APENAS deste novo processo.
+- Se o documento não contiver informação de processo (ex.: documento de identificação puro), devolve "process_match": null e "process_summary": null.`;
 
 // Instrução extra quando já existe um resumo do processo: fundir em vez de substituir.
 const MERGE_NOTE = (atual) =>
@@ -93,13 +108,24 @@ export async function handleExtracao(request, env, path, session) {
   for (let i = 0; i < u8.length; i += 0x8000) bin += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
   const b64 = btoa(bin);
 
-  // resumo do processo já existente (opcional) — enviado pelo frontend para melhoria incremental
-  let resumoAtual = "";
-  const rh = request.headers.get("x-resumo-atual");
-  if (rh) {
-    try { resumoAtual = decodeURIComponent(rh).slice(0, 6000); } catch { resumoAtual = ""; }
+  // contexto dos processos já registados (opcional) — enviado pelo frontend.
+  // X-Processos: JSON [{ref, area, resumo}] url-encoded -> a IA decide se o documento
+  // pertence a um processo existente ou é novo. X-Resumo-Atual mantém-se por retrocompatibilidade.
+  let extraNote = "";
+  const ph = request.headers.get("x-processos");
+  if (ph) {
+    try {
+      const lista = JSON.parse(decodeURIComponent(ph));
+      if (Array.isArray(lista) && lista.length) extraNote = PROCESSOS_NOTE(lista.slice(0, 10));
+    } catch { extraNote = ""; }
   }
-  const promptFinal = resumoAtual ? PROMPT + MERGE_NOTE(resumoAtual) : PROMPT;
+  if (!extraNote) {
+    const rh = request.headers.get("x-resumo-atual");
+    if (rh) {
+      try { extraNote = MERGE_NOTE(decodeURIComponent(rh).slice(0, 6000)); } catch { extraNote = ""; }
+    }
+  }
+  const promptFinal = PROMPT + extraNote;
 
   const body = {
     contents: [{

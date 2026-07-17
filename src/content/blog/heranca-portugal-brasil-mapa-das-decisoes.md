@@ -1,8 +1,8 @@
 ---
-titulo: Herança com bens em Portugal e no Brasil, o mapa das decisões
+titulo: Herança em Portugal e no Brasil: o mapa das decisões
 descricao: Quando a família e o património estão repartidos pelos dois países, a sucessão levanta perguntas que não existem numa herança comum. As decisões, por ordem.
-data: 2026-07-11
-revisto_em: 2026-07-11
+data: 2026-07-08
+revisto_em: 2026-07-08
 validade: estavel
 imagem: /blog/heranca-portugal-brasil-mapa-das-decisoes.jpg
 imagem_alt: Advogada em reunião com uma família de três gerações, a explicar documentos numa mesa de reuniões

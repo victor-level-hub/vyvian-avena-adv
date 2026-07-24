@@ -4,6 +4,7 @@
 // Idempotente no dia: não reenvia o mesmo canal/parcela duas vezes na mesma data.
 import { sendEmail, sendWhatsApp, renderTemplate } from "./lib/senders.js";
 import { runOwnerDailyAlerts } from "./lib/owner_alerts.js";
+import { syncInstagram } from "./lib/instagram.js"; // Fase B: estatísticas do Instagram
 
 function fmtMoney(amount, currency) {
   const n = Math.round(Number(amount || 0) * 100) / 100;
@@ -110,6 +111,24 @@ export async function runDailyCron(env, ctx) {
   } catch (e) {
     console.error("owner alerts:", e);
     summary.owner_alerts = { error: String(e).slice(0, 200) };
+  }
+
+  // Limpeza de privacidade (Fase A): apaga hashes de visitantes com mais de 35 dias.
+  try {
+    const pr = await env.DB.prepare(
+      `DELETE FROM site_visitors_daily WHERE day < date('now', '-35 days')`
+    ).run();
+    summary.visitors_pruned = pr.meta.changes || 0;
+  } catch (e) {
+    summary.visitors_pruned = 0;
+  }
+
+  // Fase B: sincroniza seguidores e engajamento das publicações do Instagram.
+  try {
+    summary.instagram = await syncInstagram(env);
+  } catch (e) {
+    console.error("ig sync:", e);
+    summary.instagram = { error: String(e && e.message || e).slice(0, 200) };
   }
 
   return summary;

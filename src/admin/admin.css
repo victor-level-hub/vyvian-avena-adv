@@ -1448,3 +1448,180 @@ input, select, textarea, button {
 .adm-person-pick-txt { display: flex; flex-direction: column; line-height: 1.25; }
 .adm-person-pick-txt strong { font-size: 0.88rem; color: var(--forest, #12302a); }
 .adm-person-pick-txt small { font-size: 0.7rem; color: var(--muted, #666); }
+
+/* ============ ESTATÍSTICAS (Fase A — acessos ao site) ============ */
+.adm-stat-legend {
+  font-family: var(--sans);
+  font-size: 0.7rem;
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 400;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+.adm-stat-legend-dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--forest); display: inline-block;
+}
+.adm-stat-chart-wrap { position: relative; margin-top: 0.4rem; }
+.adm-stat-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+.adm-stat-axis {
+  fill: var(--muted);
+  font-family: var(--sans);
+  font-size: 10px;
+}
+.adm-stat-tip {
+  position: absolute;
+  transform: translate(-50%, calc(-100% - 12px));
+  background: var(--forest);
+  color: var(--cream);
+  padding: 0.4rem 0.65rem;
+  font-size: 0.74rem;
+  white-space: nowrap;
+  border-radius: 6px;
+  box-shadow: var(--shadow-soft);
+  pointer-events: none;
+  z-index: 3;
+}
+.adm-stat-tip strong { color: #fff; font-weight: 600; }
+.adm-stat-tip-label {
+  display: block;
+  color: var(--gold-soft);
+  font-size: 0.66rem;
+  margin-top: 0.1rem;
+}
+.adm-stat-note {
+  margin-top: 0.9rem;
+  padding: 0.7rem 0.9rem;
+  background: var(--cream-soft);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+/* No cabeçalho da página, as pills do período à direita do título */
+.adm-page-header .adm-stabs-pills { margin-left: auto; }
+
+/* Abas de secção (Instagram / Site) */
+.adm-stat-sectiontabs { margin-bottom: 1.5rem; }
+/* Barra com as pills de período (1/7/15/30) dentro da aba Site */
+.adm-stat-toolbar { display: flex; justify-content: flex-end; align-items: center; margin-bottom: 1.25rem; }
+
+/* Placeholder "em breve" (aba Instagram — Fase B) */
+.adm-stat-coming {
+  text-align: center;
+  padding: 3rem 1.5rem 3.25rem;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--gold);
+}
+.adm-stat-coming-icon {
+  width: 56px; height: 56px; margin: 0 auto 1.1rem;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--gold); background: var(--cream-soft);
+  border: 1px solid var(--line); border-radius: 16px;
+}
+.adm-stat-coming-badge {
+  display: inline-block; margin-bottom: 0.9rem;
+  font-size: 0.64rem; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--gold-deep); border: 1px solid var(--gold-soft);
+  padding: 0.25rem 0.75rem; border-radius: 999px;
+}
+.adm-stat-coming h3 { font-family: var(--serif); font-size: 1.35rem; color: var(--forest); margin-bottom: 0.55rem; }
+.adm-stat-coming p { color: var(--muted); font-size: 0.86rem; max-width: 470px; margin: 0 auto; line-height: 1.65; }
+
+/* "Atualizado a DD/MM" à esquerda da barra de período (aba Instagram) */
+.adm-stat-updated {
+  margin-right: auto;
+  font-size: 0.72rem;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+}
+
+/* Grelha das últimas publicações do Instagram */
+.adm-ig-posts {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.9rem;
+  margin-top: 0.4rem;
+}
+.adm-ig-post {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  text-decoration: none;
+  color: inherit;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+.adm-ig-post:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(18, 48, 42, 0.10);
+  border-color: var(--gold-soft);
+}
+.adm-ig-thumb {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  background: var(--cream-soft);
+  overflow: hidden;
+}
+.adm-ig-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.adm-ig-thumb-ph {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold);
+}
+.adm-ig-badge {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  font-size: 0.6rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(18, 48, 42, 0.82);
+  color: #fff;
+  padding: 0.15rem 0.45rem;
+  border-radius: 999px;
+}
+.adm-ig-body {
+  padding: 0.6rem 0.7rem 0.7rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  flex: 1;
+}
+.adm-ig-date { font-size: 0.68rem; color: var(--muted); letter-spacing: 0.02em; }
+.adm-ig-caption {
+  font-size: 0.76rem;
+  color: var(--ink);
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.adm-ig-eng {
+  margin-top: auto;
+  padding-top: 0.35rem;
+  display: flex;
+  gap: 0.9rem;
+  font-size: 0.76rem;
+  color: var(--forest);
+  font-weight: 600;
+}
+.adm-ig-eng span { display: inline-flex; align-items: center; gap: 0.28rem; }
+.adm-ig-eng svg { color: var(--gold-deep); }

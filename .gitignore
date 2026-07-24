@@ -11,3 +11,9 @@ cloudflare-token*.txt
 .claude/settings.local.json
 _deploy_snapshot.tgz
 _to_delete/
+
+# tokens / segredos locais (nunca versionar)
+instagram-token.txt
+tokens.txt
+token-neutralizado.txt
+fase-b-instagram.zip

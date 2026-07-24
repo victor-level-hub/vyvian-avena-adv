@@ -16,6 +16,9 @@ import { runDailyCron } from './cron.js'; // Fase 2
 import { jsonError, jsonResponse } from './lib/response.js';
 import { requireAuth } from './lib/auth.js';
 import { ROTAS_PUBLICAS } from './rotas-publicas.js';
+import { handleStats } from './routes/stats.js'; // Fase A: estatísticas (acessos ao site)
+import { isValidHit, recordVisit } from './lib/visits.js'; // Fase A: contador de visitas (beacon)
+import { syncInstagram } from './lib/instagram.js'; // Fase B: sync do Instagram (cron + trigger manual)
 
 /**
  * Rotas do site que nao sao paginas publicas indexaveis e nao devem ser
@@ -69,6 +72,44 @@ export default {
     // === ROTAS API ===
     if (path.startsWith('/api/')) {
       try {
+        // NOVO (Fase A): beacon público de contagem de acessos — sem auth, fire-and-forget.
+        // O site dispara POST /api/hit a cada page view (ver src/lib/analytics.js).
+        if (path === '/api/hit') {
+          if (isValidHit(request)) ctx.waitUntil(recordVisit(request, env));
+          return new Response(null, {
+            status: 204,
+            headers: { 'Access-Control-Allow-Origin': request.headers.get('Origin') || '*' },
+          });
+        }
+
+        // NOVO (Fase B): miniatura de uma publicação do Instagram, servida do R2.
+        // Conteúdo já público no Instagram; sem auth para funcionar em <img src>
+        // (a Área Privada autentica por Bearer, que uma tag <img> não envia).
+        if (path.startsWith('/api/ig/thumb/')) {
+          const id = path.slice('/api/ig/thumb/'.length).replace(/[^0-9]/g, '');
+          if (!id) return jsonError('Not found', 404);
+          const obj = await env.RECIBOS.get('ig/thumbs/' + id + '.jpg');
+          if (!obj) return jsonError('Not found', 404);
+          return new Response(obj.body, {
+            headers: {
+              'Content-Type': (obj.httpMetadata && obj.httpMetadata.contentType) || 'image/jpeg',
+              'Cache-Control': 'public, max-age=86400',
+              'Access-Control-Allow-Origin': '*',
+            },
+          });
+        }
+
+        // NOVO (Fase B): sincronização manual do Instagram — protegida por chave própria
+        // (cabeçalho X-IG-Sync-Key). Idempotente e sem efeitos colaterais: apenas recolhe
+        // seguidores/posts. Permite semear ou forçar uma atualização sem esperar pelo cron.
+        if (path === '/api/stats/instagram/sync' && request.method === 'POST') {
+          if (!env.IG_SYNC_KEY || request.headers.get('X-IG-Sync-Key') !== env.IG_SYNC_KEY) {
+            return jsonError('Forbidden', 403);
+          }
+          const r = await syncInstagram(env);
+          return jsonResponse({ ok: true, ...r });
+        }
+
         // Rotas públicas (auth)
         if (path.startsWith('/api/auth/')) {
           return await handleAuth(request, env, path);
@@ -96,6 +137,10 @@ export default {
         }
         if (path.startsWith('/api/dashboard')) {
           return await handleDashboard(request, env, path, session);
+        }
+        // NOVO (Fase A): estatísticas — acessos ao site
+        if (path.startsWith('/api/stats')) {
+          return await handleStats(request, env, path, session);
         }
 
         // NOVO (Fase 3): recibos PDF

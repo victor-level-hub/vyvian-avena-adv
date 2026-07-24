@@ -112,5 +112,15 @@ export async function runDailyCron(env, ctx) {
     summary.owner_alerts = { error: String(e).slice(0, 200) };
   }
 
+  // Limpeza de privacidade (Fase A): apaga hashes de visitantes com mais de 35 dias.
+  try {
+    const pr = await env.DB.prepare(
+      `DELETE FROM site_visitors_daily WHERE day < date('now', '-35 days')`
+    ).run();
+    summary.visitors_pruned = pr.meta.changes || 0;
+  } catch (e) {
+    summary.visitors_pruned = 0;
+  }
+
   return summary;
 }

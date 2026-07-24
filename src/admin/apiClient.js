@@ -127,6 +127,12 @@ export const dashboard = {
   get: (days) => request('/api/dashboard' + (days ? `?upcoming_days=${encodeURIComponent(days)}` : '')),
 };
 
+// ============ ESTATÍSTICAS ============
+export const stats = {
+  // range: '1d' | '7d' | '15d' | '30d' — acessos ao site
+  site: (range = '7d') => request(`/api/stats/site?range=${encodeURIComponent(range)}`),
+};
+
 // ============ RECIBOS VERDES (arquivo por parcela) ============
 export const recibos = {
   // Metadados: { exists, size, uploaded_at, filename }

@@ -103,3 +103,17 @@ export const IconDownload = (p) => (
 export const IconCheck = (p) => (
   <Svg {...p}><path d="M20 6 9 17l-5-5" /></Svg>
 );
+
+export const IconChart = (p) => (
+  <Svg {...p}><path d="M3 3v18h18" /><path d="M18 17V9" /><path d="M13 17V5" /><path d="M8 17v-3" /></Svg>
+);
+
+// Nós ligados — leitura de "redes sociais / partilha" (sem uso atual; a sidebar passou ao IconInstagram).
+export const IconShare = (p) => (
+  <Svg {...p}><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><path d="M8.59 13.51l6.83 3.98M15.41 6.51l-6.82 3.98" /></Svg>
+);
+
+// Glifo do Instagram — traço no padrão do site (sidebar de Estatísticas + aba/placeholder da secção Instagram).
+export const IconInstagram = (p) => (
+  <Svg {...p}><rect x="2" y="2" width="20" height="20" rx="5" ry="5" /><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" /><path d="M17.5 6.5h.01" /></Svg>
+);

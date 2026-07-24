@@ -16,6 +16,8 @@ import { runDailyCron } from './cron.js'; // Fase 2
 import { jsonError, jsonResponse } from './lib/response.js';
 import { requireAuth } from './lib/auth.js';
 import { ROTAS_PUBLICAS } from './rotas-publicas.js';
+import { handleStats } from './routes/stats.js'; // Fase A: estatísticas (acessos ao site)
+import { isValidHit, recordVisit } from './lib/visits.js'; // Fase A: contador de visitas (beacon)
 
 /**
  * Rotas do site que nao sao paginas publicas indexaveis e nao devem ser
@@ -69,6 +71,16 @@ export default {
     // === ROTAS API ===
     if (path.startsWith('/api/')) {
       try {
+        // NOVO (Fase A): beacon público de contagem de acessos — sem auth, fire-and-forget.
+        // O site dispara POST /api/hit a cada page view (ver src/lib/analytics.js).
+        if (path === '/api/hit') {
+          if (isValidHit(request)) ctx.waitUntil(recordVisit(request, env));
+          return new Response(null, {
+            status: 204,
+            headers: { 'Access-Control-Allow-Origin': request.headers.get('Origin') || '*' },
+          });
+        }
+
         // Rotas públicas (auth)
         if (path.startsWith('/api/auth/')) {
           return await handleAuth(request, env, path);
@@ -96,6 +108,10 @@ export default {
         }
         if (path.startsWith('/api/dashboard')) {
           return await handleDashboard(request, env, path, session);
+        }
+        // NOVO (Fase A): estatísticas — acessos ao site
+        if (path.startsWith('/api/stats')) {
+          return await handleStats(request, env, path, session);
         }
 
         // NOVO (Fase 3): recibos PDF

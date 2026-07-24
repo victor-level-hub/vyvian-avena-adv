@@ -4,13 +4,14 @@ import Navbar from "./Navbar";
 import Footer from "./Footer";
 import WhatsAppButton from "./WhatsAppButton";
 import CookieBanner from "./CookieBanner";
-import { trackPageView } from "../lib/analytics";
+import { trackPageView, trackHit } from "../lib/analytics";
 
 export default function Layout({ children }) {
   // GA4: page_view por rota (SPA). Só o site público — o admin não passa por aqui.
   const { pathname } = useLocation();
   useEffect(() => {
-    trackPageView(pathname);
+    trackPageView(pathname);   // GA4 (só com consentimento estatístico)
+    trackHit();                // contador 1st-party, sem cookies (Fase A)
   }, [pathname]);
 
   // Esconder badge do Base44 caso esteja presente

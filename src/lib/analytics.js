@@ -95,3 +95,19 @@ export function trackPageView(path) {
     page_title: document.title,
   });
 }
+
+// Contador de acessos próprio (1st-party, sem cookies) — beacon para /api/hit.
+// Independente do consentimento: NADA é guardado no dispositivo (sem cookie nem
+// localStorage), apenas um POST fire-and-forget que o servidor agrega de forma
+// anónima (ver worker/lib/visits.js). Alimenta a página "Estatísticas" da Área Privada.
+export function trackHit() {
+  try {
+    if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+      navigator.sendBeacon("/api/hit");
+      return;
+    }
+  } catch {}
+  try {
+    fetch("/api/hit", { method: "POST", keepalive: true, cache: "no-store" }).catch(() => {});
+  } catch {}
+}

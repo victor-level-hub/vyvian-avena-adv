@@ -255,7 +255,11 @@ export default function ArticleStudio({ articleId, onClose }) {
 // ---------------------------------------------------------- Pré-visualização
 
 function PreviewBlogue({ titulo, descricao, area, markdown, capaUrl, onClose }) {
-  const html = useMemo(() => marked.parse(markdown || ''), [markdown]);
+  // Rede de segurança: artigos gerados antes da limpeza no Worker podem ainda trazer
+  // tags de citação da pesquisa web (<cite index="…">), que o browser mostraria em itálico.
+  const html = useMemo(() => marked.parse(
+    (markdown || '').replace(/<\/?(?:cite|ref|citation|source)\b[^>]*>/gi, '')
+  ), [markdown]);
   const hoje = new Date().toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric' });
 
   return (

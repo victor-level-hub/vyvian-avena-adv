@@ -105,6 +105,21 @@ function extractJson(raw) {
   throw new Error("JSON incompleto na resposta");
 }
 
+// Os modelos com pesquisa web devolvem por vezes o texto embrulhado em tags de citação
+// (<cite index="2-10">…</cite>, <ref>…</ref>) ou com marcas [1]/[2-3] no fim das frases.
+// O editor (TipTap) descarta-as em silêncio, mas a pré-visualização e o blogue renderiam
+// HTML cru — o <cite> aparece em itálico. Limpamos sempre antes de guardar.
+export function limparCitacoes(s) {
+  if (typeof s !== "string") return s;
+  return s
+    .replace(/<\/?(?:cite|ref|citation|source)\b[^>]*>/gi, "")
+    .replace(/(?<=\S)[ \t]*\[\d+(?:[-–,]\s*\d+)*\](?=[\s.,;:!?)]|$)/g, "")
+    .replace(/[ \t]+([.,;:!?])/g, "$1")
+    .replace(/[ \t]{2,}/g, " ")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
 const hostDe = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
 
 // Contexto fixo da Dra. para os prompts.
@@ -225,9 +240,9 @@ Exatamente 10 objetos, ordenados por score descendente.`;
       `INSERT INTO insight_topics (batch_id, titulo, resumo, justificacao, area, score, fontes) VALUES (?,?,?,?,?,?,?)`
     ).bind(
       batchId,
-      String(t.titulo || "").slice(0, 200),
-      String(t.resumo || "").slice(0, 1000),
-      String(t.justificacao || "").slice(0, 600),
+      limparCitacoes(String(t.titulo || "")).slice(0, 200),
+      limparCitacoes(String(t.resumo || "")).slice(0, 1000),
+      limparCitacoes(String(t.justificacao || "")).slice(0, 600),
       String(t.area || "").slice(0, 30) || null,
       Number.isFinite(+t.score) ? Math.max(0, Math.min(100, Math.round(+t.score))) : null,
       JSON.stringify(Array.isArray(t.fontes) ? t.fontes.slice(0, 8) : []),
@@ -328,9 +343,10 @@ Responde EXCLUSIVAMENTE com JSON válido:
 
   const ins = await env.DB.prepare(
     `INSERT INTO insight_articles (topic_id, titulo, descricao, area, idioma, markdown) VALUES (?,?,?,?,?,?)`
-  ).bind(topic.id, String(art.titulo).slice(0, 120), String(art.descricao || "").slice(0, 300),
+  ).bind(topic.id, limparCitacoes(String(art.titulo)).slice(0, 120),
+         limparCitacoes(String(art.descricao || "")).slice(0, 300),
          String(art.area || topic.area || "").slice(0, 30) || null,
-         art.idioma === "pt-BR" ? "pt-BR" : "pt-PT", String(art.markdown)).run();
+         art.idioma === "pt-BR" ? "pt-BR" : "pt-PT", limparCitacoes(String(art.markdown))).run();
   await env.DB.prepare(`UPDATE insight_topics SET estado='artigo_gerado' WHERE id = ?`).bind(topic.id).run();
 
   return getArticle(env, ins.meta.last_row_id);

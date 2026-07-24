@@ -133,6 +133,35 @@ export const stats = {
   site: (range = '7d') => request(`/api/stats/site?range=${encodeURIComponent(range)}`),
 };
 
+// ============ INSIGHTS (Redes Sociais → Insights) ============
+export const insights = {
+  // Pesquisa 10 novos temas (demora ~1-2 min — a IA pesquisa na web).
+  refresh: (existingTitles = []) =>
+    request('/api/insights/refresh', { method: 'POST', body: { existing_titles: existingTitles } }),
+  topics: () => request('/api/insights/topics'),
+
+  generateArticle: (topicId) => request('/api/insights/articles', { method: 'POST', body: { topic_id: topicId } }),
+  getArticle: (id) => request(`/api/insights/articles/${id}`),
+  saveArticle: (id, data) => request(`/api/insights/articles/${id}`, { method: 'PATCH', body: data }),
+
+  // Gera 4 opções de imagem (Gemini; fallback Recraft). Repetir = gerar todas de novo.
+  generateImages: (articleId) => request(`/api/insights/articles/${articleId}/images`, { method: 'POST', body: {} }),
+  chooseImage: (articleId, imageId) =>
+    request(`/api/insights/articles/${articleId}/escolher-imagem`, { method: 'POST', body: { image_id: imageId } }),
+  // URL autenticada não existe — buscar como blob com o Bearer:
+  async imageUrl(imageId) {
+    const token = getToken();
+    const res = await fetch(`/api/insights/images/${imageId}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) return null;
+    return URL.createObjectURL(await res.blob());
+  },
+
+  sources: () => request('/api/insights/sources'),
+  addSource: (url) => request('/api/insights/sources', { method: 'POST', body: { url } }),
+  updateSource: (id, data) => request(`/api/insights/sources/${id}`, { method: 'PATCH', body: data }),
+  removeSource: (id) => request(`/api/insights/sources/${id}`, { method: 'DELETE' }),
+};
+
 // ============ RECIBOS VERDES (arquivo por parcela) ============
 export const recibos = {
   // Metadados: { exists, size, uploaded_at, filename }

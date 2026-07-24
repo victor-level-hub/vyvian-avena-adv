@@ -1,15 +1,18 @@
 // src/admin/pages/Statistics.jsx
-// Estatísticas das Redes Sociais — Área Privada.
-// Duas secções (abas): "Instagram" (Fase B — em breve) e "Site" (Fase A — acessos, no ar).
+// Redes Sociais — Área Privada.
+// Três secções (abas): "Instagram" (Fase B — em breve), "Site" (Fase A — acessos,
+// no ar) e "Insights" (sugestões de temas + artigos IA + fontes).
 import React, { useEffect, useRef, useState } from 'react';
 import { stats as statsApi } from '../apiClient';
 import { CountUp } from '../numbers';
 import SlidingTabs from '../tabs';
 import { IconInstagram } from '../icons';
+import InsightsSection from '../insights/InsightsSection';
 
 const SECTIONS = [
   { id: 'instagram', label: 'Instagram' },
   { id: 'site', label: 'Site' },
+  { id: 'insights', label: 'Insights' },
 ];
 
 const RANGES = [
@@ -33,9 +36,13 @@ export default function Statistics() {
     <>
       <header className="adm-page-header">
         <div>
-          <h1>Estatísticas das Redes Sociais</h1>
+          <h1>Redes Sociais</h1>
           <div className="adm-sub">
-            {section === 'site' ? 'Acessos ao site · vyavenaadv.com' : 'Instagram · @vyvianavenaadv'}
+            {section === 'site'
+              ? 'Acessos ao site · vyavenaadv.com'
+              : section === 'insights'
+                ? 'Insights · temas com potencial de engajamento e artigos para o blogue'
+                : 'Instagram · @vyvianavenaadv'}
           </div>
         </div>
       </header>
@@ -48,7 +55,7 @@ export default function Statistics() {
         variant="underline"
       />
 
-      {section === 'site' ? <SiteSection /> : <InstagramSection />}
+      {section === 'site' ? <SiteSection /> : section === 'insights' ? <InsightsSection /> : <InstagramSection />}
     </>
   );
 }

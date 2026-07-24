@@ -11,3 +11,6 @@ cloudflare-token*.txt
 .claude/settings.local.json
 _deploy_snapshot.tgz
 _to_delete/
+tokens.txt
+instagram-token.txt
+*.key

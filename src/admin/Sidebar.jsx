@@ -13,7 +13,7 @@ const NAV_ITEMS = [
   { to: '/admin/parcelas', label: 'Parcelas', Icon: IconCoins },
   { to: '/admin/calendario', label: 'Calendário', Icon: IconCalendar },
   { to: '/admin/notificacoes', label: 'Notificações', Icon: IconBell },
-  { to: '/admin/estatisticas', label: 'Estatísticas', Icon: IconInstagram },
+  { to: '/admin/estatisticas', label: 'Redes Sociais', Icon: IconInstagram },
 ];
 
 export default function Sidebar() {

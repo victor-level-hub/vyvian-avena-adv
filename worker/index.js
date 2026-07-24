@@ -17,6 +17,7 @@ import { jsonError, jsonResponse } from './lib/response.js';
 import { requireAuth } from './lib/auth.js';
 import { ROTAS_PUBLICAS } from './rotas-publicas.js';
 import { handleStats } from './routes/stats.js'; // Fase A: estatísticas (acessos ao site)
+import { handleInsights } from './routes/insights.js'; // Insights: temas, artigos IA, imagens, fontes
 import { isValidHit, recordVisit } from './lib/visits.js'; // Fase A: contador de visitas (beacon)
 
 /**
@@ -112,6 +113,10 @@ export default {
         // NOVO (Fase A): estatísticas — acessos ao site
         if (path.startsWith('/api/stats')) {
           return await handleStats(request, env, path, session);
+        }
+        // NOVO: Insights (Redes Sociais) — sugestões de temas, artigos IA, imagens e fontes
+        if (path.startsWith('/api/insights')) {
+          return await handleInsights(request, env, path, session);
         }
 
         // NOVO (Fase 3): recibos PDF

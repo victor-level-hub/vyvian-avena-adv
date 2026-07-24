@@ -4,6 +4,7 @@
 // Idempotente no dia: não reenvia o mesmo canal/parcela duas vezes na mesma data.
 import { sendEmail, sendWhatsApp, renderTemplate } from "./lib/senders.js";
 import { runOwnerDailyAlerts } from "./lib/owner_alerts.js";
+import { syncInstagram } from "./lib/instagram.js"; // Fase B: estatísticas do Instagram
 
 function fmtMoney(amount, currency) {
   const n = Math.round(Number(amount || 0) * 100) / 100;
@@ -120,6 +121,14 @@ export async function runDailyCron(env, ctx) {
     summary.visitors_pruned = pr.meta.changes || 0;
   } catch (e) {
     summary.visitors_pruned = 0;
+  }
+
+  // Fase B: sincroniza seguidores e engajamento das publicações do Instagram.
+  try {
+    summary.instagram = await syncInstagram(env);
+  } catch (e) {
+    console.error("ig sync:", e);
+    summary.instagram = { error: String(e && e.message || e).slice(0, 200) };
   }
 
   return summary;

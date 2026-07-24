@@ -1,6 +1,6 @@
 // src/admin/pages/Statistics.jsx
 // Redes Sociais — Área Privada.
-// Três secções (abas): "Instagram" (Fase B — em breve), "Site" (Fase A — acessos,
+// Três secções (abas): "Instagram" (Fase B — seguidores e engajamento), "Site" (Fase A — acessos,
 // no ar) e "Insights" (sugestões de temas + artigos IA + fontes).
 import React, { useEffect, useRef, useState } from 'react';
 import { stats as statsApi } from '../apiClient';
@@ -60,19 +60,197 @@ export default function Statistics() {
   );
 }
 
-// ============ Secção INSTAGRAM (Fase B — em breve) ============
+// ============ Secção INSTAGRAM (Fase B — no ar) ============
 function InstagramSection() {
+  const [range, setRange] = useState('30d');
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setError(null);
+    statsApi.instagram(range)
+      .then((d) => { if (alive) setData(d); })
+      .catch((err) => { if (alive) setError(err.message); })
+      .finally(() => { if (alive) setLoading(false); });
+    return () => { alive = false; };
+  }, [range]);
+
+  if (loading && !data) {
+    return (
+      <>
+        <div className="adm-stat-toolbar">
+          <SlidingTabs items={RANGES} active={range} onChange={setRange} variant="pills" />
+        </div>
+        <div className="adm-kpi-grid">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="adm-kpi">
+              <span className="adm-skel" style={{ width: '60%', height: 9, display: 'block', marginBottom: 10 }} />
+              <span className="adm-skel" style={{ width: '45%', height: 22, display: 'block' }} />
+            </div>
+          ))}
+        </div>
+      </>
+    );
+  }
+  if (error) return <div className="adm-login-error">{error}</div>;
+  if (!data) return null;
+
+  const posts = data.posts || [];
+  const totalLikes = posts.reduce((s, p) => s + (p.like_count || 0), 0);
+  const totalComments = posts.reduce((s, p) => s + (p.comments_count || 0), 0);
+  const avgLikes = posts.length ? Math.round(totalLikes / posts.length) : 0;
+  const nd = data.new_followers;
+  const followerSeries = (data.series || []).map((p) => ({ label: p.label, views: p.followers }));
+
   return (
-    <div className="adm-stat-coming">
-      <div className="adm-stat-coming-icon"><IconInstagram size={26} /></div>
-      <div className="adm-stat-coming-badge">Em breve · Fase B</div>
-      <h3>Estatísticas do Instagram</h3>
-      <p>
-        Aqui vão aparecer os seguidores e os novos seguidores do período, além das curtidas e
-        comentários das últimas publicações do @vyvianavenaadv. Falta apenas ligar a conta à API
-        oficial do Instagram — uns minutos de configuração.
-      </p>
-    </div>
+    <>
+      <div className="adm-stat-toolbar">
+        <SlidingTabs items={RANGES} active={range} onChange={setRange} variant="pills" />
+        {data.updated_at && <span className="adm-stat-updated">Atualizado a {fmtWhen(data.updated_at)}</span>}
+      </div>
+
+      {!data.has_data ? (
+        <div className="adm-stat-coming">
+          <div className="adm-stat-coming-icon"><IconInstagram size={26} /></div>
+          <div className="adm-stat-coming-badge">Ligado · a recolher dados</div>
+          <h3>Conta ligada com sucesso</h3>
+          <p>
+            A conta @vyvianavenaadv já está ligada à API oficial do Instagram. A primeira recolha
+            de seguidores e publicações corre no próximo ciclo automático — os números aparecem
+            aqui a partir de amanhã, e atualizam-se sozinhos todos os dias.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="adm-kpi-grid">
+            <div className="adm-kpi">
+              <div className="adm-kpi-label">Seguidores</div>
+              <div className="adm-kpi-value"><CountUp value={data.followers_count || 0} /></div>
+              <div className="adm-kpi-delta adm-kpi-delta-muted">@vyvianavenaadv</div>
+            </div>
+
+            <div className="adm-kpi">
+              <div className="adm-kpi-label">Novos no período</div>
+              <div className="adm-kpi-value">
+                {nd == null
+                  ? <span style={{ color: 'var(--muted)' }}>—</span>
+                  : <>{nd > 0 ? '+' : nd < 0 ? '−' : ''}<CountUp value={Math.abs(nd)} /></>}
+              </div>
+              <div className={'adm-kpi-delta ' + (nd > 0 ? '' : nd < 0 ? 'adm-kpi-delta-danger' : 'adm-kpi-delta-muted')}>
+                {nd == null ? 'sem histórico ainda'
+                  : nd === 0 ? 'estável no período'
+                  : nd > 0 ? '▲ novos seguidores' : '▼ no período'}
+              </div>
+            </div>
+
+            <div className="adm-kpi">
+              <div className="adm-kpi-label">Publicações</div>
+              <div className="adm-kpi-value"><CountUp value={data.media_count || 0} /></div>
+              <div className="adm-kpi-delta adm-kpi-delta-muted">no total do perfil</div>
+            </div>
+
+            <div className="adm-kpi">
+              <div className="adm-kpi-label">Curtidas recentes</div>
+              <div className="adm-kpi-value"><CountUp value={totalLikes} /></div>
+              <div className="adm-kpi-delta adm-kpi-delta-muted">
+                {avgLikes}/post · {nf(totalComments)} comentário{totalComments === 1 ? '' : 's'}
+              </div>
+            </div>
+          </div>
+
+          <div className="adm-card adm-glow">
+            <div className="adm-card-title">
+              Evolução de seguidores
+              {followerSeries.length >= 2 && (
+                <span className="adm-stat-legend"><span className="adm-stat-legend-dot" /> seguidores</span>
+              )}
+            </div>
+            {followerSeries.length >= 2 ? (
+              <AreaChart
+                series={followerSeries}
+                granularity="day"
+                unit={{ one: 'seguidor', many: 'seguidores' }}
+                zeroBased={false}
+              />
+            ) : (
+              <div className="adm-stat-note">
+                O gráfico de evolução precisa de pelo menos dois dias de recolha. Como a ligação é
+                recente, a linha começa a desenhar-se nos próximos dias.
+              </div>
+            )}
+          </div>
+
+          <div className="adm-card">
+            <div className="adm-card-title">Últimas publicações</div>
+            {posts.length === 0 ? (
+              <div className="adm-stat-note">Ainda sem publicações recolhidas.</div>
+            ) : (
+              <div className="adm-ig-posts">
+                {posts.map((p) => (
+                  <a
+                    key={p.id}
+                    className="adm-ig-post"
+                    href={p.permalink || '#'}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <div className="adm-ig-thumb">
+                      {p.thumb_url
+                        ? <img src={p.thumb_url} alt="" loading="lazy" />
+                        : <div className="adm-ig-thumb-ph"><IconInstagram size={20} /></div>}
+                      {p.media_type === 'VIDEO' && <span className="adm-ig-badge">Vídeo</span>}
+                      {p.media_type === 'CAROUSEL_ALBUM' && <span className="adm-ig-badge">Álbum</span>}
+                    </div>
+                    <div className="adm-ig-body">
+                      <div className="adm-ig-date">{fmtPostDate(p.timestamp)}</div>
+                      {p.caption && <div className="adm-ig-caption">{p.caption}</div>}
+                      <div className="adm-ig-eng">
+                        <span title="curtidas"><HeartIcon /> {nf(p.like_count)}</span>
+                        <span title="comentários"><CommentIcon /> {nf(p.comments_count)}</span>
+                      </div>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+
+function fmtPostDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+// captured_at chega como 'YYYY-MM-DD HH:MM:SS' (UTC, do SQLite).
+function fmtWhen(iso) {
+  if (!iso) return '';
+  const d = new Date(String(iso).replace(' ', 'T') + 'Z');
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' });
+}
+
+function HeartIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: '-2px' }}>
+      <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" />
+    </svg>
+  );
+}
+
+function CommentIcon() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: '-2px' }}>
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+    </svg>
   );
 }
 
@@ -186,7 +364,7 @@ function peakLabel(series, granularity) {
 }
 
 // ============ Gráfico de área (SVG próprio, sem libs) ============
-function AreaChart({ series, granularity }) {
+function AreaChart({ series, granularity, unit = { one: 'visita', many: 'visitas' }, zeroBased = true }) {
   const wrapRef = useRef(null);
   const [hover, setHover] = useState(null);
 
@@ -197,18 +375,32 @@ function AreaChart({ series, granularity }) {
   const baseY = padT + plotH;
 
   const n = series.length;
-  const maxRaw = Math.max(1, ...series.map((p) => p.views));
-  const maxV = niceMax(maxRaw);
+  const vals = series.map((p) => p.views);
+  let minV, maxV;
+  if (zeroBased) {
+    minV = 0;
+    maxV = niceMax(Math.max(1, ...vals));
+  } else {
+    // eixo "ampliado": arranca perto do mínimo para dar a ver variações pequenas
+    // (ex.: seguidores a crescer devagar ficariam numa linha achatada com base 0).
+    let dMin = Math.min(...vals), dMax = Math.max(...vals);
+    if (!isFinite(dMin) || !isFinite(dMax)) { dMin = 0; dMax = 1; }
+    if (dMin === dMax) { dMin = Math.max(0, dMin - 1); dMax = dMax + 1; }
+    const pad = Math.max(1, Math.round((dMax - dMin) * 0.25));
+    minV = Math.max(0, dMin - pad);
+    maxV = dMax + pad;
+  }
+  const span = (maxV - minV) || 1;
 
   const xAt = (i) => (n === 1 ? padL + plotW / 2 : padL + (i / (n - 1)) * plotW);
-  const yAt = (v) => padT + plotH - (v / maxV) * plotH;
+  const yAt = (v) => padT + plotH - ((v - minV) / span) * plotH;
 
   const linePts = series.map((p, i) => `${xAt(i)},${yAt(p.views)}`);
   const linePath = 'M' + linePts.join(' L');
   const areaPath = `M${xAt(0)},${baseY} L` + linePts.join(' L') + ` L${xAt(n - 1)},${baseY} Z`;
 
   const step = Math.max(1, Math.ceil(n / 8));
-  const yTicks = [0, 0.5, 1].map((f) => ({ v: Math.round(maxV * f), y: yAt(maxV * f) }));
+  const yTicks = [0, 0.5, 1].map((f) => { const v = Math.round(minV + span * f); return { v, y: yAt(v) }; });
 
   const onMove = (e) => {
     const svg = wrapRef.current;
@@ -271,7 +463,7 @@ function AreaChart({ series, granularity }) {
 
       {hv && (
         <div className="adm-stat-tip" style={{ left: `${(hvX / W) * 100}%`, top: `${(hvY / H) * 100}%` }}>
-          <strong>{nf(hv.views)}</strong> visita{hv.views === 1 ? '' : 's'}
+          <strong>{nf(hv.views)}</strong> {hv.views === 1 ? unit.one : unit.many}
           {typeof hv.visitors === 'number' && <> · {nf(hv.visitors)} visitante{hv.visitors === 1 ? '' : 's'}</>}
           <span className="adm-stat-tip-label">{hv.label}</span>
         </div>

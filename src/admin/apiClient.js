@@ -131,6 +131,8 @@ export const dashboard = {
 export const stats = {
   // range: '1d' | '7d' | '15d' | '30d' — acessos ao site
   site: (range = '7d') => request(`/api/stats/site?range=${encodeURIComponent(range)}`),
+  // range: '1d' | '7d' | '15d' | '30d' — Instagram (seguidores + posts)
+  instagram: (range = '30d') => request(`/api/stats/instagram?range=${encodeURIComponent(range)}`),
 };
 
 // ============ INSIGHTS (Redes Sociais → Insights) ============

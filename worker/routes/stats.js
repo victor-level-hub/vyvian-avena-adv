@@ -1,7 +1,8 @@
 // worker/routes/stats.js
 // Estatísticas para a Área Privada.
 // FASE A: acessos ao site (contador próprio no D1 — ver worker/lib/visits.js).
-// (Instagram fica para a Fase B, noutro endpoint.)
+// FASE B: Instagram (@vyvianavenaadv) — seguidores e engajamento das publicações,
+// alimentado pelo cron diário via worker/lib/instagram.js.
 import { jsonResponse, jsonError } from '../lib/response.js';
 
 const RANGES = {
@@ -24,7 +25,70 @@ export async function handleStats(request, env, path, session) {
       : await siteDaily(env, rangeKey, days);
   }
 
+  // FASE B: Instagram — seguidores (evolução + novos no período) e engajamento dos posts.
+  if (path === '/api/stats/instagram') {
+    const url = new URL(request.url);
+    const asked = url.searchParams.get('range');
+    const rangeKey = RANGES[asked] ? asked : '30d';
+    return await instagramStats(env, rangeKey, RANGES[rangeKey].days);
+  }
+
   return jsonError('Not found', 404);
+}
+
+// Instagram: fotografias diárias de seguidores + últimas publicações com engajamento.
+async function instagramStats(env, rangeKey, days) {
+  const since = new Date(Date.now() - (days - 1) * 86400000).toISOString().slice(0, 10);
+
+  // Evolução de seguidores no período (um ponto por dia disponível).
+  const snaps = await env.DB.prepare(
+    `SELECT day, followers_count FROM ig_snapshots WHERE day >= ? ORDER BY day ASC`
+  ).bind(since).all();
+  const rows = snaps.results || [];
+  const series = rows.map((r) => ({
+    key: r.day,
+    label: r.day.slice(8, 10) + '/' + r.day.slice(5, 7),   // 'DD/MM'
+    followers: r.followers_count,
+  }));
+
+  // Estado mais recente (pode não ser exatamente hoje se o cron ainda não correu).
+  const latest = await env.DB.prepare(
+    `SELECT followers_count, media_count, captured_at FROM ig_snapshots ORDER BY day DESC LIMIT 1`
+  ).first();
+
+  // Novos seguidores no período = atual − primeiro ponto do período.
+  let new_followers = null;
+  if (rows.length >= 2) new_followers = rows[rows.length - 1].followers_count - rows[0].followers_count;
+  else if (rows.length === 1) new_followers = 0;
+
+  // Últimas 12 publicações por data de publicação.
+  const postsRes = await env.DB.prepare(
+    `SELECT id, caption, media_type, permalink, timestamp, like_count, comments_count, thumb_key
+     FROM ig_posts ORDER BY timestamp DESC LIMIT 12`
+  ).all();
+  const posts = (postsRes.results || []).map((p) => ({
+    id: p.id,
+    caption: p.caption,
+    media_type: p.media_type,
+    permalink: p.permalink,
+    timestamp: p.timestamp,
+    like_count: p.like_count,
+    comments_count: p.comments_count,
+    thumb_url: p.thumb_key ? '/api/ig/thumb/' + p.id : null,
+  }));
+
+  return jsonResponse({
+    range: rangeKey,
+    period_days: days,
+    since,
+    followers_count: latest ? latest.followers_count : null,
+    media_count: latest ? latest.media_count : null,
+    new_followers,
+    series,
+    posts,
+    updated_at: latest ? latest.captured_at : null,
+    has_data: !!latest,
+  });
 }
 
 // 1 dia → 24 pontos, um por hora (últimas 24h, UTC).

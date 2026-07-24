@@ -13,7 +13,6 @@
 
 ## Ações do Victor / da Dra. (não é código)
 
-- [ ] Victor: `git pull` em `C:\Users\victor.sousa\Projetos\vyvian-avena-adv` para trazer `d480f42`, `7530713` e `79500da`.
 - [ ] Victor (opcional): `IG_SYNC_KEY` foi rodada na integração da Fase B e o valor não ficou guardado. O cron diário não a usa; só serve para forçar uma sincronização manual. Repor com `npx wrangler secret put IG_SYNC_KEY < ficheiro.txt` (e apagar o ficheiro a seguir).
 - [ ] Dra.: experimentar as abas **Insights** e **Instagram** e dar feedback.
 - [ ] Victor: **créditos Recraft quase no fim (~40)** — fallback de imagem; recarregar se quiser manter o plano B.

@@ -1,14 +1,16 @@
 // src/admin/insights/ArticleStudio.jsx
-// Estúdio do artigo gerado a partir de uma sugestão de Insights:
-//  · editor de texto rico (Markdown ↔ TipTap) com título e descrição editáveis;
-//  · geração de 4 opções de imagem (Gemini; fallback Recraft) + "gerar todas novamente";
-//  · pré-visualização do artigo com o visual do blogue (hero + prosa).
-// Overlay a ecrã inteiro, por cima da página Redes Sociais.
+// Estúdio do artigo — redesign «Vyvian Avena Design System v3».
+//  · header de vidro (Voltar · chips · Pré-visualizar · Guardar com confetti);
+//  · título Fraunces editável + descrição SEO com contador e barra âmbar/vermelho;
+//  · editor rico TipTap (re-skin via rs-theme.css) · capas com hover direcional;
+//  · StepLoader narrado na geração de imagens · pré-visualização com contraste AA.
+// Lógica e endpoints inalterados.
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { marked } from 'marked';
 import { insights as api } from '../apiClient';
 import { admToast } from '../toasts';
 import { admConfirm } from '../dialogs';
+import { Icon, Tip, StepLoader, Confetti, Thumb } from '../rs/ui';
 
 const RichEditor = React.lazy(() => import('./RichEditor'));
 
@@ -16,6 +18,13 @@ const AREAS_LABEL = {
   familia: 'Direito de Família', civil: 'Direito Civil', comercial: 'Direito Comercial',
   cobranca: 'Cobrança de Dívida', nacionalidade: 'Nacionalidade', notarial: 'Direito Notarial',
 };
+
+const PASSOS_IMAGENS = [
+  'A ler o artigo e a extrair o tema visual…',
+  'A compor 4 direções de imagem…',
+  'A gerar em alta resolução (Gemini)…',
+  'A guardar no R2 e a otimizar…',
+];
 
 const minutosLeitura = (md) =>
   Math.max(1, Math.round((md || '').replace(/[#>*_`\-]/g, ' ').split(/\s+/).filter(Boolean).length / 200));
@@ -28,8 +37,10 @@ export default function ArticleStudio({ articleId, onClose }) {
   const [sujo, setSujo] = useState(false);
   const [guardando, setGuardando] = useState(false);
   const [gerandoImgs, setGerandoImgs] = useState(false);
+  const [erroImgs, setErroImgs] = useState(null);
   const [urls, setUrls] = useState({});            // imageId -> objectURL
   const [preview, setPreview] = useState(false);
+  const [fire, setFire] = useState(0);
   const mdRef = useRef('');
 
   useEffect(() => {
@@ -75,7 +86,7 @@ export default function ArticleStudio({ articleId, onClose }) {
       const d = await api.saveArticle(articleId, { titulo, descricao, markdown: mdRef.current });
       setData(d);
       setSujo(false);
-      if (!silencioso) admToast('Artigo guardado.');
+      if (!silencioso) { setFire(Date.now()); admToast('Artigo guardado.'); }
       return true;
     } catch (e) {
       admToast(`Não foi possível guardar: ${e.message}`, { kind: 'error' });
@@ -100,14 +111,15 @@ export default function ArticleStudio({ articleId, onClose }) {
       if (!ok) return;
     }
     setGerandoImgs(true);
+    setErroImgs(null);
     try {
       const d = await api.generateImages(articleId);
       setData(d);
+      setGerandoImgs(false);
+      setFire(Date.now());
       admToast(`${d.images.length} ${d.images.length === 1 ? 'imagem gerada' : 'imagens geradas'}.`);
     } catch (e) {
-      admToast(`Falha ao gerar imagens: ${e.message}`, { kind: 'error' });
-    } finally {
-      setGerandoImgs(false);
+      setErroImgs(e.message || 'Falha ao gerar as imagens.');
     }
   };
 
@@ -122,123 +134,153 @@ export default function ArticleStudio({ articleId, onClose }) {
   const a = data?.article;
   const escolhida = a?.imagem_escolhida || null;
   const tituloLongo = titulo.length > 60;
+  const temAviso = /(^|\n)\s*>/.test(mdRef.current || markdown);
 
   if (!data) {
     return (
-      <div className="adm-ins-studio"><div className="adm-ins-studio-load">
-        <span className="adm-ins-spin dark" aria-hidden="true" /> A abrir o artigo…
-      </div></div>
+      <div className="rs-studio">
+        <div style={{ display: 'grid', placeItems: 'center', minHeight: '60vh', color: 'var(--fg-2)', fontSize: 14 }}>
+          A abrir o artigo…
+        </div>
+      </div>
     );
   }
 
   return (
-    <div className="adm-ins-studio" role="dialog" aria-modal="true" aria-label="Editor do artigo">
-      <header className="adm-ins-studio-head">
-        <button type="button" className="adm-btn adm-btn-ghost" onClick={fechar}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6" /></svg>
-          Voltar
-        </button>
-        <div className="adm-ins-studio-headinfo">
-          <span className="adm-tag">{AREAS_LABEL[a.area] || 'Blogue'}</span>
-          <span className="adm-tag">{a.idioma === 'pt-BR' ? 'PT-BR' : 'PT-PT'}</span>
-          <span className="adm-tag">{minutosLeitura(mdRef.current || markdown)} min de leitura</span>
-        </div>
-        <div className="adm-ins-studio-headbtns">
-          <button type="button" className="adm-btn adm-btn-ghost" onClick={async () => { if (sujo) await guardar(true); setPreview(true); }}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg>
-            Pré-visualizar
+    <div className="rs-studio" role="dialog" aria-modal="true" aria-label="Editor do artigo">
+      <div className="rs-studio-inner">
+        {/* -------- header -------- */}
+        <div className="glass" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 14px', marginBottom: 22, flexWrap: 'wrap', borderRadius: 16 }}>
+          <button type="button" className="btn btn-quiet" onClick={fechar}
+                  style={{ letterSpacing: '.12em', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', display: 'inline-flex', gap: 7, alignItems: 'center' }}>
+            <Icon name="back" size={15} />Voltar
           </button>
-          <button type="button" className="adm-btn adm-btn-gold" onClick={() => guardar()} disabled={guardando}>
-            {guardando ? <span className="adm-ins-spin" aria-hidden="true" /> : (
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" /><path d="M17 21v-8H7v8M7 3v5h8" /></svg>
-            )}
-            {guardando ? 'A guardar…' : sujo ? 'Guardar alterações' : 'Guardado'}
-          </button>
-        </div>
-      </header>
-
-      <div className="adm-ins-studio-body">
-        <div className="adm-ins-studio-editor">
-          <div className="adm-field">
-            <label>Título {tituloLongo && <em className="adm-ins-avisochars">({titulo.length}/60 — o SEO trava títulos acima de 60)</em>}</label>
-            <input value={titulo} onChange={(e) => { setTitulo(e.target.value); setSujo(true); }} maxLength={120}
-                   className={tituloLongo ? 'adm-ins-input-warn' : ''} />
-          </div>
-          <div className="adm-field">
-            <label>Descrição (metas/SEO — {descricao.length}/155)</label>
-            <textarea rows={2} value={descricao} maxLength={200}
-                      onChange={(e) => { setDescricao(e.target.value); setSujo(true); }} />
-          </div>
-          <Suspense fallback={<div className="adm-rte"><div className="adm-rte-loading">A carregar o editor…</div></div>}>
-            <RichEditor initialMarkdown={markdown} onChangeMarkdown={onMd} placeholder="Corpo do artigo…" />
-          </Suspense>
+          <span style={{ width: 1, height: 20, background: 'var(--edge)' }} />
+          <span className="chip chip-gold">{AREAS_LABEL[a.area] || 'Blogue'}</span>
+          <span className="chip">{a.idioma === 'pt-BR' ? 'PT-BR' : 'PT-PT'}</span>
+          <span className="chip"><Icon name="clock" size={11} />{minutosLeitura(mdRef.current || markdown)} min de leitura</span>
+          <span style={{ marginLeft: 'auto', display: 'flex', gap: 9, alignItems: 'center' }}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={async () => { if (sujo) await guardar(true); setPreview(true); }}>
+              <Icon name="eye" size={14} />Pré-visualizar
+            </button>
+            <button type="button" className={'btn btn-sm ' + (sujo ? 'btn-gold' : 'btn-ghost')} onClick={() => guardar()} disabled={guardando}>
+              <Icon name={sujo ? 'save' : 'check'} size={14} s={sujo ? 1.6 : 3} />
+              {guardando ? 'A guardar…' : sujo ? 'Guardar' : 'Guardado'}
+            </button>
+          </span>
         </div>
 
-        <aside className="adm-ins-studio-rail">
-          <div className="adm-card">
-            <div className="adm-card-title">Imagem do artigo</div>
-            {gerandoImgs ? (
-              <>
-                <div className="adm-ins-imgs">
-                  {[0, 1, 2, 3].map((i) => <div key={i} className="adm-ins-img adm-ins-img-skel"><span className="adm-skel" /></div>)}
-                </div>
-                <div className="adm-ins-progress-sub" style={{ marginTop: 8 }}>
-                  A gerar 4 opções na direção de arte da marca… (até ~1 min)
-                </div>
-              </>
-            ) : data.images.length ? (
-              <>
-                <div className="adm-ins-imgs">
-                  {data.images.map((img, i) => (
-                    <button key={img.id} type="button"
-                            className={'adm-ins-img' + (escolhida === img.id ? ' escolhida' : '')}
-                            onClick={() => escolher(img.id)}
-                            title={`Opção ${i + 1} · ${img.provider}`}>
-                      {urls[img.id]
-                        ? <img src={urls[img.id]} alt={`Opção ${i + 1}`} />
-                        : <span className="adm-skel" />}
-                      {escolhida === img.id && (
-                        <span className="adm-ins-img-check" aria-label="Escolhida">
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
-                        </span>
-                      )}
-                    </button>
+        <div className="ed-grid">
+          {/* -------- coluna principal -------- */}
+          <div style={{ minWidth: 0 }}>
+            <div className="glass" style={{ padding: '26px 28px 24px', marginBottom: 16 }}>
+              <span className="overline">
+                Título{tituloLongo && <em style={{ color: 'var(--warn)', textTransform: 'none', letterSpacing: 0, fontWeight: 600, fontStyle: 'normal', marginLeft: 8 }}>({titulo.length}/60 — o SEO trava títulos acima de 60)</em>}
+              </span>
+              <textarea rows={2} value={titulo} maxLength={120}
+                        onChange={(e) => { setTitulo(e.target.value); setSujo(true); }}
+                        style={{ width: '100%', background: 'none', border: 0, resize: 'none', fontFamily: 'Fraunces,Georgia,serif',
+                                 fontSize: 'clamp(24px,2.5vw,32px)', lineHeight: 1.2, letterSpacing: '-.02em', color: 'var(--fg)', marginTop: 10, outline: 'none' }} />
+              <hr className="rule" style={{ margin: '14px 0 18px' }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
+                <span className="overline">Descrição SEO</span>
+                <span className="mono" style={{ fontSize: 11, color: descricao.length > 155 ? 'var(--danger)' : descricao.length > 140 ? 'var(--warn)' : 'var(--fg-3)' }}>
+                  {descricao.length}/155
+                </span>
+              </div>
+              <textarea rows={2} value={descricao} maxLength={200}
+                        onChange={(e) => { setDescricao(e.target.value); setSujo(true); }}
+                        style={{ width: '100%', background: 'none', border: 0, resize: 'none', fontSize: 14, lineHeight: 1.6, color: 'var(--fg-2)', marginTop: 8, outline: 'none' }} />
+              <div style={{ height: 3, borderRadius: 9, background: 'var(--edge)', overflow: 'hidden', marginTop: 6 }}>
+                <span style={{ display: 'block', height: '100%', width: Math.min(100, (descricao.length / 155) * 100) + '%',
+                               background: descricao.length > 155 ? 'var(--danger)' : 'var(--grad-gold)', transition: 'width .3s' }} />
+              </div>
+            </div>
+
+            <Suspense fallback={<div className="glass" style={{ padding: 30, color: 'var(--fg-3)', fontSize: 13 }}>A carregar o editor…</div>}>
+              <RichEditor initialMarkdown={markdown} onChangeMarkdown={onMd} placeholder="Corpo do artigo…" />
+            </Suspense>
+          </div>
+
+          {/* -------- sidebar -------- */}
+          <div className="ed-side">
+            <div className="glass" style={{ padding: '20px 20px 22px' }}>
+              <span className="overline">Imagem do artigo</span>
+              {gerandoImgs ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
+                  {[0, 1, 2, 3].map((i) => (
+                    <div key={i} style={{ aspectRatio: '4/3', borderRadius: 13, overflow: 'hidden', position: 'relative', background: 'var(--panel)' }}>
+                      <span className="shimmer" style={{ position: 'absolute', inset: 0 }} />
+                    </div>
                   ))}
                 </div>
-                <div className="adm-ins-img-hint">
-                  {escolhida ? 'Capa escolhida. Pode trocar clicando noutra opção.' : 'Clique numa imagem para a escolher como capa.'}
-                </div>
-                <button type="button" className="adm-btn adm-btn-ghost" style={{ width: '100%', marginTop: 8 }}
-                        onClick={gerarImagens}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" /><path d="M3 3v5h5" /></svg>
-                  Gerar todas novamente
-                </button>
-              </>
-            ) : (
-              <>
-                <p className="adm-ins-img-intro">
-                  Gere 4 opções de capa na direção de arte do blogue (Gemini). Depois escolha
-                  a preferida — ou gere todas novamente.
-                </p>
-                <button type="button" className="adm-btn adm-btn-primary" style={{ width: '100%' }}
-                        onClick={gerarImagens}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" /><circle cx="12" cy="13" r="3" /></svg>
-                  Gerar 4 opções de imagem
-                </button>
-              </>
-            )}
-          </div>
+              ) : data.images.length ? (
+                <>
+                  <p style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 8, lineHeight: 1.5 }}>
+                    4 opções geradas por IA. {escolhida ? 'Pode trocar clicando noutra opção.' : 'Clique numa imagem para a escolher como capa.'}
+                  </p>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 14 }}>
+                    {data.images.map((img, i) => (
+                      <CoverOption key={img.id} src={urls[img.id]} i={i} provider={img.provider}
+                                   chosen={escolhida === img.id} onPick={() => escolher(img.id)} />
+                    ))}
+                  </div>
+                  <button type="button" className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 14 }} onClick={gerarImagens}>
+                    <Icon name="refresh" size={13} />Gerar todas novamente
+                  </button>
+                  <div style={{ fontSize: 11, color: 'var(--fg-3)', marginTop: 9, textAlign: 'center' }}>1–2 min · Gemini, fallback Recraft</div>
+                </>
+              ) : (
+                <>
+                  <p style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 8, lineHeight: 1.55 }}>
+                    Gere 4 opções de capa na direção de arte do blogue. Depois escolha a preferida — ou gere todas novamente.
+                  </p>
+                  <button type="button" className="btn btn-gold btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 14 }} onClick={gerarImagens}>
+                    <Icon name="image" size={13} />Gerar 4 opções de imagem
+                  </button>
+                  <div style={{ fontSize: 11, color: 'var(--fg-3)', marginTop: 9, textAlign: 'center' }}>1–2 min · Gemini, fallback Recraft</div>
+                </>
+              )}
+            </div>
 
-          <div className="adm-card">
-            <div className="adm-card-title">Publicação</div>
-            <p className="adm-ins-img-intro">
-              Este artigo fica guardado como rascunho na área privada. A publicação no blogue
-              (fotos com marca de água, áudio do Modo Leitor, build e deploy) continua a ser
-              feita pelo fluxo habitual com o Victor.
-            </p>
+            <div className="glass" style={{ padding: 20 }}>
+              <span className="overline">Publicação</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 12 }}>
+                <span style={{ width: 8, height: 8, borderRadius: 9, background: 'var(--warn)', boxShadow: '0 0 0 4px rgba(200,150,86,.18)' }} />
+                <span style={{ fontSize: 13.5 }}>Rascunho pronto a revisão</span>
+              </div>
+              <p style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 11, lineHeight: 1.55 }}>
+                A publicação final no blogue segue fluxo manual — depois de aprovar, o artigo é colocado em produção pelo Victor.
+              </p>
+              <hr className="rule" style={{ margin: '15px 0' }} />
+              <div style={{ display: 'grid', gap: 9 }}>
+                {[
+                  ['Aviso legal incluído', temAviso],
+                  ['Capa escolhida', !!escolhida],
+                  ['Descrição SEO ≤ 155', descricao.length > 0 && descricao.length <= 155],
+                  ['Título ≤ 60 caracteres', titulo.length > 0 && titulo.length <= 60],
+                  ['Revisto pela Dra.', false],
+                ].map(([l, ok]) => (
+                  <span key={l} style={{ display: 'flex', gap: 9, alignItems: 'center', fontSize: 12.5, color: ok ? 'var(--fg-2)' : 'var(--fg-3)' }}>
+                    <span style={{ width: 16, height: 16, borderRadius: 5, flex: 'none', display: 'grid', placeItems: 'center',
+                                   border: '1px solid ' + (ok ? 'transparent' : 'var(--edge-2)'),
+                                   background: ok ? 'var(--grad-gold)' : 'transparent', color: '#1a1208' }}>
+                      {ok && <Icon name="check" size={10} s={3.4} />}
+                    </span>{l}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
-        </aside>
+        </div>
       </div>
+
+      <StepLoader open={gerandoImgs} steps={PASSOS_IMAGENS} per={16000}
+                  title="A gerar 4 novas capas (1–2 min)"
+                  error={erroImgs}
+                  onRetry={() => gerarImagens()}
+                  onCancel={() => { setGerandoImgs(false); setErroImgs(null); }} />
+      <Confetti fire={fire} key={fire} />
 
       {preview && (
         <PreviewBlogue
@@ -252,47 +294,126 @@ export default function ArticleStudio({ articleId, onClose }) {
   );
 }
 
+/* ---------------- opção de capa com hover direcional ---------------- */
+function CoverOption({ src, i, provider, chosen, onPick }) {
+  const [dir, setDir] = useState('b');
+  const enter = (e) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+    const d = Math.min(x, 1 - x, y, 1 - y);
+    setDir(d === y ? 't' : d === 1 - y ? 'b' : d === x ? 'l' : 'r');
+  };
+  const off = { t: 'translateY(-100%)', b: 'translateY(100%)', l: 'translateX(-100%)', r: 'translateX(100%)' }[dir];
+  return (
+    <button type="button" onMouseEnter={enter} onClick={onPick} aria-pressed={chosen}
+            className="rs-cover"
+            style={{ position: 'relative', borderRadius: 13, overflow: 'hidden', padding: 0, display: 'block', width: '100%',
+                     border: '1.5px solid ' + (chosen ? 'var(--gold-soft)' : 'var(--edge)'),
+                     boxShadow: chosen ? '0 0 0 3px rgba(184,147,90,.22)' : 'none',
+                     transition: 'border-color .25s,box-shadow .25s,transform .3s var(--ease-out)',
+                     animation: `rsScaleIn .5s ${i * 90}ms var(--ease-spring) both` }}
+            onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
+            onMouseOut={(e) => { e.currentTarget.style.transform = ''; }}>
+      <Thumb hue={i} src={src} dim={.42} style={{ aspectRatio: '4/3' }}>
+        <span style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(6,18,15,.94),rgba(6,18,15,.5))',
+                       display: 'flex', alignItems: 'flex-end', padding: 11, transform: off, transition: 'transform .38s var(--ease-out)' }}>
+          <span style={{ fontSize: 10.5, lineHeight: 1.45, color: 'rgba(244,238,226,.9)', textAlign: 'left' }}>
+            Opção {i + 1}{provider ? ` · ${provider}` : ''}
+          </span>
+        </span>
+      </Thumb>
+      <span className="mono" style={{ position: 'absolute', top: 8, left: 9, fontSize: 9.5, letterSpacing: '.14em', color: 'rgba(244,238,226,.7)',
+                                      background: 'rgba(6,18,15,.55)', padding: '2px 6px', borderRadius: 5, backdropFilter: 'blur(4px)' }}>
+        0{i + 1}
+      </span>
+      {chosen && (
+        <span style={{ position: 'absolute', top: 7, right: 7, width: 21, height: 21, borderRadius: '50%', background: 'var(--grad-gold)',
+                       color: '#1a1208', display: 'grid', placeItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,.5)',
+                       animation: 'rsScaleIn .35s var(--ease-spring) both' }}>
+          <Icon name="check" size={11} s={3.2} />
+        </span>
+      )}
+    </button>
+  );
+}
+
 // ---------------------------------------------------------- Pré-visualização
 
 function PreviewBlogue({ titulo, descricao, area, markdown, capaUrl, onClose }) {
-  // Rede de segurança: artigos gerados antes da limpeza no Worker podem ainda trazer
-  // tags de citação da pesquisa web (<cite index="…">), que o browser mostraria em itálico.
-  const html = useMemo(() => marked.parse(
-    (markdown || '').replace(/<\/?(?:cite|ref|citation|source)\b[^>]*>/gi, '')
-  ), [markdown]);
-  const hoje = new Date().toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric' });
+  // Rede de segurança: artigos antigos podem ainda trazer tags de citação da pesquisa web.
+  const mdLimpo = useMemo(() => (markdown || '').replace(/<\/?(?:cite|ref|citation|source)\b[^>]*>/gi, ''), [markdown]);
+  const html = useMemo(() => marked.parse(mdLimpo), [mdLimpo]);
+  const toc = useMemo(() => {
+    const out = [];
+    for (const m of mdLimpo.matchAll(/^##\s+(.+)$/gm)) out.push(m[1].trim());
+    return out.slice(0, 8);
+  }, [mdLimpo]);
+  const hoje = new Date().toLocaleDateString('pt-PT', { day: 'numeric', month: 'short', year: 'numeric' });
 
   return (
-    <div className="adm-ins-preview" role="dialog" aria-modal="true" aria-label="Pré-visualização do artigo">
-      <div className="adm-ins-preview-top">
-        <span>Pré-visualização — assim ficará no blogue</span>
-        <button type="button" className="adm-btn adm-btn-ghost" onClick={onClose}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m18 6-12 12M6 6l12 12" /></svg>
-          Fechar
+    <div className="rs-preview" role="dialog" aria-modal="true" aria-label="Pré-visualização do artigo"
+         style={{ position: 'fixed', inset: 0, zIndex: 150, background: '#0a1c18', overflowY: 'auto', animation: 'rsFadeIn .3s both' }}>
+      <div style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px',
+                    background: 'rgba(6,18,15,.82)', backdropFilter: 'blur(18px)', borderBottom: '1px solid rgba(212,181,133,.16)' }}>
+        <Icon name="eye" size={15} style={{ color: '#b8935a' }} />
+        <span style={{ fontSize: 11.5, letterSpacing: '.16em', textTransform: 'uppercase', fontWeight: 800, color: 'rgba(244,238,226,.72)' }}>
+          Pré-visualização — assim ficará no blogue
+        </span>
+        <button type="button" className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }} onClick={onClose}>
+          <Icon name="close" size={13} />Fechar
         </button>
       </div>
-      <div className="adm-ins-preview-scroll">
-        <section className="adm-ins-hero">
-          {capaUrl && <img src={capaUrl} alt="" className="adm-ins-hero-img" />}
-          <div className="adm-ins-hero-grad" />
-          <div className="adm-ins-hero-inner">
-            <div className="adm-ins-hero-rule" />
-            <div className="adm-ins-hero-meta">
-              {(AREAS_LABEL[area] || 'Blogue')} · {hoje} · {minutosLeitura(markdown)} min de leitura
-            </div>
-            <h1 className="adm-ins-hero-title">{titulo}</h1>
+
+      {/* hero — contraste AA por construção: gradiente de 3 paradas + text-shadow */}
+      <div style={{ position: 'relative', minHeight: 'min(62vh,520px)', display: 'flex', alignItems: 'flex-end', overflow: 'hidden' }}>
+        <Thumb hue={1} src={capaUrl} dim={.34} style={{ position: 'absolute', inset: 0 }} />
+        <span style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(6,18,15,.96) 4%,rgba(6,18,15,.78) 42%,rgba(6,18,15,.42) 100%)' }} />
+        <div style={{ position: 'relative', maxWidth: 860, margin: '0 auto', padding: '90px 24px 54px', width: '100%' }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase',
+                        color: '#d4b585', fontWeight: 800, animation: 'rsRiseIn .6s .1s var(--ease-out) both', flexWrap: 'wrap' }}>
+            <span>{AREAS_LABEL[area] || 'Blogue'}</span>
+            <span style={{ width: 22, height: 1, background: 'rgba(212,181,133,.6)' }} />
+            <span style={{ color: 'rgba(244,238,226,.62)' }}>{hoje}</span>
+            <span style={{ color: 'rgba(244,238,226,.62)' }}>· {minutosLeitura(markdown)} min</span>
           </div>
-        </section>
-        <div className="adm-ins-preview-body">
-          <aside className="adm-ins-preview-rail">
-            <div className="adm-ins-rail-label">Neste artigo</div>
-            <p className="adm-ins-rail-desc">{descricao}</p>
-            <div className="adm-ins-rail-rule" />
-            <div className="adm-ins-rail-label">Escrito por</div>
-            <div className="adm-ins-rail-autor">Dra. Vyvian Avena</div>
-            <div className="adm-ins-rail-sub">Advogada · Portugal e Brasil</div>
-          </aside>
-          <article className="blog-prose" dangerouslySetInnerHTML={{ __html: html }} />
+          <h1 style={{ fontSize: 'clamp(30px,4.6vw,56px)', lineHeight: 1.06, color: '#f5f0e8', marginTop: 18, maxWidth: '22ch',
+                       fontFamily: 'Fraunces,Georgia,serif', fontWeight: 400, letterSpacing: '-.02em',
+                       textShadow: '0 2px 24px rgba(6,18,15,.85)', animation: 'rsRiseIn .7s .2s var(--ease-out) both', textWrap: 'balance' }}>
+            {titulo}
+          </h1>
+        </div>
+      </div>
+
+      <div className="pv-grid" style={{ maxWidth: 1080, margin: '0 auto', padding: '48px 24px 90px' }}>
+        <aside className="only-desk" style={{ position: 'sticky', top: 74, alignSelf: 'start' }}>
+          <span style={{ fontSize: 10, letterSpacing: '.22em', textTransform: 'uppercase', fontWeight: 800, color: '#b8935a' }}>Neste artigo</span>
+          <span className="rule-s" style={{ display: 'block', margin: '11px 0 14px' }} />
+          {toc.length ? (
+            <nav style={{ display: 'grid', gap: 11 }}>
+              {toc.map((t, i) => (
+                <span key={i} style={{ fontSize: 12.5, lineHeight: 1.45, color: 'rgba(244,238,226,.6)', paddingLeft: 11,
+                                       borderLeft: '1px solid rgba(212,181,133,' + (i ? '.16' : '.7') + ')' }}>{t}</span>
+              ))}
+            </nav>
+          ) : (
+            <p style={{ fontSize: 12.5, lineHeight: 1.55, color: 'rgba(244,238,226,.55)' }}>{descricao}</p>
+          )}
+        </aside>
+        <div>
+          <div className="prose" style={{ color: 'rgba(244,238,226,.74)' }} dangerouslySetInnerHTML={{ __html: html }} />
+          <div style={{ marginTop: 46, padding: 26, borderRadius: 18, border: '1px solid rgba(212,181,133,.2)', background: 'rgba(28,65,56,.4)',
+                        display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
+            <span style={{ width: 62, height: 62, borderRadius: '50%', background: 'linear-gradient(150deg,#1c4138,#0a1c18)',
+                           border: '1px solid rgba(212,181,133,.4)', display: 'grid', placeItems: 'center',
+                           fontFamily: 'Fraunces,serif', fontSize: 22, color: '#d4b585', flex: 'none' }}>VA</span>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ fontSize: 10.5, letterSpacing: '.2em', textTransform: 'uppercase', color: '#b8935a', fontWeight: 800 }}>Autora</div>
+              <div style={{ fontFamily: 'Fraunces,serif', fontSize: 20, color: '#f5f0e8', marginTop: 5 }}>Dra. Vyvian Avena</div>
+              <p style={{ fontSize: 13, lineHeight: 1.6, color: 'rgba(244,238,226,.6)', marginTop: 7 }}>
+                Advogada em Portugal. Nacionalidade, vistos, direito da família e civil para quem recomeça longe de casa.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>

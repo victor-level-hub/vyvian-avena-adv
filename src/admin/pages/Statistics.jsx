@@ -1,28 +1,29 @@
 // src/admin/pages/Statistics.jsx
-// Redes Sociais — Área Privada.
-// Três secções (abas): "Instagram" (Fase B — seguidores e engajamento), "Site" (Fase A — acessos,
-// no ar) e "Insights" (sugestões de temas + artigos IA + fontes).
+// Redes Sociais — Área Privada, com o redesign do handoff «Vyvian Avena Design System v3».
+// Três abas (Instagram · Site · Insights) sobre um fundo vivo (aurora + grelha + spotlight),
+// escuro por defeito com modo claro opcional. Dados e endpoints inalterados.
 import React, { useEffect, useRef, useState } from 'react';
 import { stats as statsApi } from '../apiClient';
-import { CountUp } from '../numbers';
-import SlidingTabs from '../tabs';
-import { IconInstagram } from '../icons';
 import InsightsSection from '../insights/InsightsSection';
+import { Icon, Ticker, Reveal, Tip, Tabs, Seg, Sparkles, Chart, Spark, Tilt, Thumb, PanelHead } from '../rs/ui';
+import '../rs/rs-theme.css';
 
 const SECTIONS = [
-  { id: 'instagram', label: 'Instagram' },
-  { id: 'site', label: 'Site' },
-  { id: 'insights', label: 'Insights' },
+  { k: 'instagram', label: 'Instagram', icon: 'instagram' },
+  { k: 'site', label: 'Site', icon: 'globe' },
+  { k: 'insights', label: 'Insights', icon: 'spark' },
 ];
 
 const RANGES = [
-  { id: '1d', label: '1 dia' },
-  { id: '7d', label: '7 dias' },
-  { id: '15d', label: '15 dias' },
-  { id: '30d', label: '30 dias' },
+  { k: '1d', label: '1 DIA' },
+  { k: '7d', label: '7 DIAS' },
+  { k: '15d', label: '15 DIAS' },
+  { k: '30d', label: '30 DIAS' },
 ];
 
+const RS_C = { gold: '#d4b585', gold2: '#b8935a', sage: '#9fc4b6', warm: '#c89656' };
 const nf = (n) => Number(n || 0).toLocaleString('pt-PT');
+const sp = (a) => a.map((v) => ({ v: Number(v) || 0 }));
 
 function pctDelta(cur, prev) {
   if (!prev) return cur > 0 ? 100 : 0;
@@ -30,47 +31,165 @@ function pctDelta(cur, prev) {
 }
 
 export default function Statistics() {
-  const [section, setSection] = useState('site');
+  const [section, setSection] = useState('instagram');
+  const [theme, setTheme] = useState(() => localStorage.getItem('rs-theme') || 'dark');
+  const scopeRef = useRef(null);
+
+  useEffect(() => { localStorage.setItem('rs-theme', theme); }, [theme]);
+
+  // spotlight de pontos segue o rato (atualiza --mx/--my via rAF)
+  useEffect(() => {
+    const el = scopeRef.current;
+    if (!el) return;
+    let raf = 0;
+    const onMove = (e) => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const r = el.getBoundingClientRect();
+        el.style.setProperty('--mx', `${((e.clientX - r.left) / r.width) * 100}%`);
+        el.style.setProperty('--my', `${((e.clientY - r.top) / r.height) * 100}%`);
+      });
+    };
+    el.addEventListener('mousemove', onMove);
+    return () => { el.removeEventListener('mousemove', onMove); if (raf) cancelAnimationFrame(raf); };
+  }, []);
 
   return (
-    <>
-      <header className="adm-page-header">
-        <div>
-          <h1>Redes Sociais</h1>
-          <div className="adm-sub">
-            {section === 'site'
-              ? 'Acessos ao site · vyavenaadv.com'
-              : section === 'insights'
-                ? 'Insights · temas com potencial de engajamento e artigos para o blogue'
-                : 'Instagram · @vyvianavenaadv'}
+    <div ref={scopeRef} className="rs-scope" data-rs-theme={theme}>
+      <div className="rs-bg" aria-hidden="true">
+        <span className="aur a1" /><span className="aur a2" /><span className="aur a3" />
+        <span className="grid" /><span className="dots" /><span className="vig" />
+      </div>
+
+      <div className="rs-wrap">
+        <header className="hdr">
+          <Sparkles />
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 240 }}>
+              <span className="overline">Área privada · Redes Sociais</span>
+              <h1 style={{ marginTop: 10 }}>Redes Sociais</h1>
+              <span className="rule-s" style={{ display: 'block', marginTop: 14 }} />
+              <p className="sub">
+                {section === 'site'
+                  ? 'Acessos ao site · vyavenaadv.com — dados próprios, sem cookies.'
+                  : section === 'insights'
+                    ? 'Motor editorial — temas com potencial de engajamento, artigos e fontes.'
+                    : 'Instagram · @vyvianavenaadv — sincronização diária automática.'}
+              </p>
+            </div>
+            <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 4 }}
+                    onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+                    title={theme === 'dark' ? 'Mudar para o modo claro' : 'Mudar para o modo escuro'}
+                    aria-label="Alternar tema">
+              <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={14} />
+              {theme === 'dark' ? 'Claro' : 'Escuro'}
+            </button>
           </div>
+        </header>
+
+        <div style={{ marginBottom: 26, overflowX: 'auto', paddingBottom: 4 }}>
+          <Tabs items={SECTIONS} value={section} onChange={setSection} />
         </div>
-      </header>
 
-      <SlidingTabs
-        className="adm-stat-sectiontabs"
-        items={SECTIONS}
-        active={section}
-        onChange={setSection}
-        variant="underline"
-      />
-
-      {section === 'site' ? <SiteSection /> : section === 'insights' ? <InsightsSection /> : <InstagramSection />}
-    </>
+        {section === 'site' ? <SiteSection goInsights={() => setSection('insights')} />
+          : section === 'insights' ? <InsightsSection />
+          : <InstagramSection />}
+      </div>
+    </div>
   );
 }
 
-// ============ Secção INSTAGRAM (Fase B — no ar) ============
+/* ---------------- barra de período ---------------- */
+function PeriodBar({ range, setRange, updated }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 20 }}>
+      <Seg items={RANGES} value={range} onChange={setRange} />
+      {updated && (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 11.5, color: 'var(--fg-3)', letterSpacing: '.04em' }}>
+          <span style={{ width: 6, height: 6, borderRadius: 9, background: 'var(--success)', boxShadow: '0 0 0 3px rgba(74,124,89,.22)', animation: 'rsPulseGold 2.4s infinite' }} />
+          Atualizado a {updated} · sincronização diária
+        </span>
+      )}
+    </div>
+  );
+}
+
+/* ---------------- cartão KPI (padrão sean0205/area-charts-1) ---------------- */
+function Kpi({ label, period, value, prefix, suffix, foot, delta, hero, hi, icon, color, spark, sparkId, fmt, d = 0, span = 1 }) {
+  const c = color || RS_C.gold2;
+  return (
+    <Reveal d={d} cls={'glass kpi' + (hi ? ' hi' : '') + (span > 1 ? ' b-' + span : '')}
+            style={{ padding: hero ? '24px 26px 22px' : '20px 22px' }}>
+      {hero && <><span className="beam" /><span className="beam-mask" /></>}
+      <div style={{ position: 'relative' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+          <span style={{ color: c, display: 'flex' }}><Icon name={icon} size={17} /></span>
+          <span style={{ fontSize: 14.5, fontWeight: 700 }}>{label}</span>
+        </div>
+        {hero
+          ? <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 18, marginTop: 15 }}>
+              <div style={{ minWidth: 0 }}>
+                <div className="lbl" style={{ whiteSpace: 'nowrap' }}>{period}</div>
+                <div className="val num" style={{ marginTop: 7, fontSize: 'clamp(40px,4.4vw,58px)' }}>
+                  <Ticker value={value} prefix={prefix} suffix={suffix} />
+                </div>
+              </div>
+              {spark && spark.length >= 2 && (
+                <div style={{ flex: 1, minWidth: 120, maxWidth: 240 }}>
+                  <Spark series={spark} accent={c} id={sparkId} h={78} fmt={fmt} />
+                </div>
+              )}
+            </div>
+          : <>
+              <div className="lbl" style={{ whiteSpace: 'nowrap', marginTop: 14 }}>{period}</div>
+              <div className="val num" style={{ marginTop: 6, fontSize: 'clamp(28px,2.9vw,36px)' }}>
+                <Ticker value={value} prefix={prefix} suffix={suffix} />
+              </div>
+              {spark && spark.length >= 2 && (
+                <div style={{ marginTop: 10, marginInline: -4 }}>
+                  <Spark series={spark} accent={c} id={sparkId} h={50} fmt={fmt} />
+                </div>
+              )}
+            </>}
+        {(foot || delta != null) && (
+          <div className="foot">
+            {delta != null && <span className={'delta ' + (delta >= 0 ? 'up' : 'dn')}>{delta >= 0 ? '+' : ''}{Math.round(delta)}%</span>}
+            {foot}
+          </div>
+        )}
+      </div>
+    </Reveal>
+  );
+}
+
+function KpiSkeleton() {
+  return (
+    <div className="bento">
+      {[2, 1, 1].map((s, i) => (
+        <div key={i} className={'glass kpi' + (s > 1 ? ' b-2' : '')} style={{ minHeight: 150 }}>
+          <span className="adm-skel" style={{ width: '55%', height: 10, display: 'block', marginTop: 6 }} />
+          <span className="adm-skel" style={{ width: '40%', height: 34, display: 'block', marginTop: 22 }} />
+        </div>
+      ))}
+      <div className="glass b-4" style={{ minHeight: 180 }}>
+        <span className="adm-skel" style={{ width: '30%', height: 12, display: 'block', margin: '24px 26px' }} />
+      </div>
+    </div>
+  );
+}
+
+/* ============ Aba INSTAGRAM ============ */
 function InstagramSection() {
   const [range, setRange] = useState('30d');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [focus, setFocus] = useState(null);
 
   useEffect(() => {
     let alive = true;
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     statsApi.instagram(range)
       .then((d) => { if (alive) setData(d); })
       .catch((err) => { if (alive) setError(err.message); })
@@ -78,24 +197,8 @@ function InstagramSection() {
     return () => { alive = false; };
   }, [range]);
 
-  if (loading && !data) {
-    return (
-      <>
-        <div className="adm-stat-toolbar">
-          <SlidingTabs items={RANGES} active={range} onChange={setRange} variant="pills" />
-        </div>
-        <div className="adm-kpi-grid">
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="adm-kpi">
-              <span className="adm-skel" style={{ width: '60%', height: 9, display: 'block', marginBottom: 10 }} />
-              <span className="adm-skel" style={{ width: '45%', height: 22, display: 'block' }} />
-            </div>
-          ))}
-        </div>
-      </>
-    );
-  }
-  if (error) return <div className="adm-login-error">{error}</div>;
+  if (loading && !data) return <><PeriodBar range={range} setRange={setRange} /><KpiSkeleton /></>;
+  if (error) return <div className="glass" style={{ padding: 22, color: '#e39b9b', fontSize: 13.5 }}>{error}</div>;
   if (!data) return null;
 
   const posts = data.posts || [];
@@ -103,116 +206,103 @@ function InstagramSection() {
   const totalComments = posts.reduce((s, p) => s + (p.comments_count || 0), 0);
   const avgLikes = posts.length ? Math.round(totalLikes / posts.length) : 0;
   const nd = data.new_followers;
-  const followerSeries = (data.series || []).map((p) => ({ label: p.label, views: p.followers }));
+  const series = (data.series || []).map((p) => ({ d: p.label, v: p.followers }));
+  const spark = series.map((s) => ({ v: s.v }));
+  const ganhos = series.map((s, i, a) => ({ v: i ? s.v - a[i - 1].v : 0 }));
+  const likesSpark = sp(posts.map((p) => p.like_count || 0).reverse());
+  const nDays = range === '1d' ? 1 : Number(range.replace('d', ''));
+  const period = nDays === 1 ? 'Último dia' : `Últimos ${nDays} dias`;
+  const growPct = nd != null && data.followers_count > nd && nd !== 0
+    ? ((nd / (data.followers_count - nd)) * 100).toFixed(1) : null;
+  const diasRecolha = series.length;
 
   return (
     <>
-      <div className="adm-stat-toolbar">
-        <SlidingTabs items={RANGES} active={range} onChange={setRange} variant="pills" />
-        {data.updated_at && <span className="adm-stat-updated">Atualizado a {fmtWhen(data.updated_at)}</span>}
-      </div>
+      <PeriodBar range={range} setRange={setRange} updated={data.updated_at ? fmtWhen(data.updated_at) : null} />
 
       {!data.has_data ? (
-        <div className="adm-stat-coming">
-          <div className="adm-stat-coming-icon"><IconInstagram size={26} /></div>
-          <div className="adm-stat-coming-badge">Ligado · a recolher dados</div>
-          <h3>Conta ligada com sucesso</h3>
-          <p>
-            A conta @vyvianavenaadv já está ligada à API oficial do Instagram. A primeira recolha
-            de seguidores e publicações corre no próximo ciclo automático — os números aparecem
-            aqui a partir de amanhã, e atualizam-se sozinhos todos os dias.
+        <Reveal cls="glass" style={{ padding: '44px 30px', textAlign: 'center' }}>
+          <span style={{ width: 52, height: 52, borderRadius: 16, margin: '0 auto', background: 'var(--grad-gold-soft)', border: '1px solid var(--edge-2)', display: 'grid', placeItems: 'center', color: 'var(--gold-soft)' }}>
+            <Icon name="instagram" size={24} />
+          </span>
+          <div className="chip chip-ok" style={{ marginTop: 18 }}>Ligado · a recolher dados</div>
+          <h3 style={{ fontSize: 24, marginTop: 14 }}>Conta ligada com sucesso</h3>
+          <p style={{ fontSize: 13.5, color: 'var(--fg-2)', maxWidth: '52ch', margin: '12px auto 0', lineHeight: 1.6 }}>
+            A conta @vyvianavenaadv já está ligada à API oficial do Instagram. A primeira recolha corre
+            no próximo ciclo automático — os números aparecem aqui a partir de amanhã.
           </p>
-        </div>
+        </Reveal>
       ) : (
         <>
-          <div className="adm-kpi-grid">
-            <div className="adm-kpi">
-              <div className="adm-kpi-label">Seguidores</div>
-              <div className="adm-kpi-value"><CountUp value={data.followers_count || 0} /></div>
-              <div className="adm-kpi-delta adm-kpi-delta-muted">@vyvianavenaadv</div>
-            </div>
-
-            <div className="adm-kpi">
-              <div className="adm-kpi-label">Novos no período</div>
-              <div className="adm-kpi-value">
-                {nd == null
-                  ? <span style={{ color: 'var(--muted)' }}>—</span>
-                  : <>{nd > 0 ? '+' : nd < 0 ? '−' : ''}<CountUp value={Math.abs(nd)} /></>}
-              </div>
-              <div className={'adm-kpi-delta ' + (nd > 0 ? '' : nd < 0 ? 'adm-kpi-delta-danger' : 'adm-kpi-delta-muted')}>
-                {nd == null ? 'sem histórico ainda'
-                  : nd === 0 ? 'estável no período'
-                  : nd > 0 ? '▲ novos seguidores' : '▼ no período'}
-              </div>
-            </div>
-
-            <div className="adm-kpi">
-              <div className="adm-kpi-label">Publicações</div>
-              <div className="adm-kpi-value"><CountUp value={data.media_count || 0} /></div>
-              <div className="adm-kpi-delta adm-kpi-delta-muted">no total do perfil</div>
-            </div>
-
-            <div className="adm-kpi">
-              <div className="adm-kpi-label">Curtidas recentes</div>
-              <div className="adm-kpi-value"><CountUp value={totalLikes} /></div>
-              <div className="adm-kpi-delta adm-kpi-delta-muted">
-                {avgLikes}/post · {nf(totalComments)} comentário{totalComments === 1 ? '' : 's'}
-              </div>
-            </div>
+          <div className="bento">
+            <Kpi hero hi span={2} icon="instagram" label="Seguidores" period={period}
+                 value={data.followers_count || 0} color={RS_C.gold} spark={spark} sparkId="rsk1"
+                 foot={nd == null ? '@vyvianavenaadv'
+                   : <><span className={'delta ' + (nd >= 0 ? 'up' : 'dn')}>{nd >= 0 ? '+' : ''}{nf(nd)}</span> desde o início do período</>} />
+            <Kpi d={70} icon="trend" label="Novos" period={period}
+                 value={Math.abs(nd || 0)} prefix={nd < 0 ? '−' : ''} color={RS_C.gold2}
+                 spark={ganhos.length >= 2 ? ganhos : null} sparkId="rsk2"
+                 foot={nd == null ? 'sem histórico ainda' : nd === 0 ? 'estável no período' : `≈ ${(Math.abs(nd) / nDays).toFixed(1)}/dia`} />
+            <Kpi d={140} icon="image" label="Publicações" period="Total no perfil"
+                 value={data.media_count || 0} color={RS_C.warm} sparkId="rsk3"
+                 foot={`${posts.length} recentes recolhidas`} />
+            <Reveal d={200} cls="glass b-3" style={{ padding: '24px 26px 20px' }}>
+              <PanelHead over="Crescimento" title="Evolução de seguidores"
+                right={growPct != null && <span className="chip chip-gold"><Icon name="trend" size={12} />+{growPct}%</span>} />
+              <Chart series={series} id="rsig" h={210}
+                     keys={[{ k: 'v', label: 'Seguidores', color: RS_C.gold }]}
+                     flatNote={diasRecolha < 2
+                       ? 'O gráfico precisa de pelo menos dois dias de recolha — a linha começa a desenhar-se nos próximos dias.'
+                       : diasRecolha <= 14
+                         ? `A recolha começou há ${diasRecolha} dias — a série ganha relevo com o passar das semanas.`
+                         : null} />
+            </Reveal>
+            <Kpi d={260} icon="heart" label="Curtidas" period="Publicações recentes"
+                 value={totalLikes} color={RS_C.gold} spark={likesSpark.length >= 2 ? likesSpark : null} sparkId="rsk4"
+                 foot={<><span>{avgLikes}/publicação</span><span style={{ opacity: .4 }}>·</span><span>{nf(totalComments)} comentário{totalComments === 1 ? '' : 's'}</span></>} />
           </div>
 
-          <div className="adm-card adm-glow">
-            <div className="adm-card-title">
-              Evolução de seguidores
-              {followerSeries.length >= 2 && (
-                <span className="adm-stat-legend"><span className="adm-stat-legend-dot" /> seguidores</span>
-              )}
-            </div>
-            {followerSeries.length >= 2 ? (
-              <AreaChart
-                series={followerSeries}
-                granularity="day"
-                unit={{ one: 'seguidor', many: 'seguidores' }}
-                zeroBased={false}
-              />
-            ) : (
-              <div className="adm-stat-note">
-                O gráfico de evolução precisa de pelo menos dois dias de recolha. Como a ligação é
-                recente, a linha começa a desenhar-se nos próximos dias.
-              </div>
-            )}
-          </div>
-
-          <div className="adm-card">
-            <div className="adm-card-title">Últimas publicações</div>
+          <div style={{ marginTop: 42 }}>
+            <PanelHead over="Conteúdo" title="Últimas publicações" note="Clique para abrir no Instagram."
+              right={<a className="btn btn-ghost btn-sm" href="https://www.instagram.com/vyvianavenaadv/" target="_blank" rel="noreferrer">@vyvianavenaadv<Icon name="ext" size={13} /></a>} />
             {posts.length === 0 ? (
-              <div className="adm-stat-note">Ainda sem publicações recolhidas.</div>
+              <div className="glass" style={{ padding: 22, fontSize: 13, color: 'var(--fg-3)' }}>Ainda sem publicações recolhidas.</div>
             ) : (
-              <div className="adm-ig-posts">
-                {posts.map((p) => (
-                  <a
-                    key={p.id}
-                    className="adm-ig-post"
-                    href={p.permalink || '#'}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    <div className="adm-ig-thumb">
-                      {p.thumb_url
-                        ? <img src={p.thumb_url} alt="" loading="lazy" />
-                        : <div className="adm-ig-thumb-ph"><IconInstagram size={20} /></div>}
-                      {p.media_type === 'VIDEO' && <span className="adm-ig-badge">Vídeo</span>}
-                      {p.media_type === 'CAROUSEL_ALBUM' && <span className="adm-ig-badge">Álbum</span>}
-                    </div>
-                    <div className="adm-ig-body">
-                      <div className="adm-ig-date">{fmtPostDate(p.timestamp)}</div>
-                      {p.caption && <div className="adm-ig-caption">{p.caption}</div>}
-                      <div className="adm-ig-eng">
-                        <span title="curtidas"><HeartIcon /> {nf(p.like_count)}</span>
-                        <span title="comentários"><CommentIcon /> {nf(p.comments_count)}</span>
-                      </div>
-                    </div>
-                  </a>
+              <div onMouseLeave={() => setFocus(null)}
+                   style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fill,minmax(186px,1fr))' }}>
+                {posts.map((p, i) => (
+                  <Reveal key={p.id} d={i * 45} y={18}>
+                    <a href={p.permalink || '#'} target="_blank" rel="noopener noreferrer" style={{ display: 'block', color: 'inherit' }}>
+                      <Tilt onMouseEnter={() => setFocus(i)} max={7}
+                            style={{ borderRadius: 'var(--r-md)', overflow: 'hidden', border: '1px solid var(--edge)', background: 'var(--panel)', cursor: 'pointer',
+                                     filter: focus != null && focus !== i ? 'brightness(.62) saturate(.7)' : 'none',
+                                     transitionProperty: 'transform,filter', transitionDuration: '.45s,.4s' }}>
+                        <Thumb hue={i} src={p.thumb_url} style={{ aspectRatio: '1/1' }}>
+                          <span style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(6,18,15,.86) 0%,transparent 52%)' }} />
+                          {(p.media_type === 'CAROUSEL_ALBUM' || p.media_type === 'VIDEO') && (
+                            <span style={{ position: 'absolute', top: 9, right: 9, padding: '3px 8px', borderRadius: 6, fontSize: 8.5, fontWeight: 800, letterSpacing: '.14em',
+                                           background: 'rgba(6,18,15,.62)', border: '1px solid rgba(212,181,133,.4)', color: '#d4b585', backdropFilter: 'blur(6px)' }}>
+                              {p.media_type === 'VIDEO' ? 'VÍDEO' : 'ÁLBUM'}
+                            </span>
+                          )}
+                          <span className="mono" style={{ position: 'absolute', bottom: 10, left: 12, fontSize: 10.5, color: 'rgba(244,238,226,.68)', letterSpacing: '.08em' }}>
+                            {fmtPostDate(p.timestamp)}
+                          </span>
+                          <span style={{ position: 'absolute', bottom: 8, right: 10, display: 'flex', gap: 10, fontSize: 11, color: '#f4eee2', alignItems: 'center' }}>
+                            <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><Icon name="heart" size={12} />{nf(p.like_count)}</span>
+                            <span style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}><Icon name="comment" size={12} />{nf(p.comments_count)}</span>
+                          </span>
+                        </Thumb>
+                        {p.caption && (
+                          <div style={{ padding: '12px 13px 14px' }}>
+                            <p style={{ fontSize: 12.5, lineHeight: 1.5, color: 'var(--fg-2)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textWrap: 'pretty' }}>
+                              {p.caption}
+                            </p>
+                          </div>
+                        )}
+                      </Tilt>
+                    </a>
+                  </Reveal>
                 ))}
               </div>
             )}
@@ -227,7 +317,7 @@ function fmtPostDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('pt-PT', { day: '2-digit', month: 'short', year: 'numeric' });
+  return d.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: '2-digit' });
 }
 
 // captured_at chega como 'YYYY-MM-DD HH:MM:SS' (UTC, do SQLite).
@@ -238,24 +328,8 @@ function fmtWhen(iso) {
   return d.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' });
 }
 
-function HeartIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: '-2px' }}>
-      <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" />
-    </svg>
-  );
-}
-
-function CommentIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ verticalAlign: '-2px' }}>
-      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-    </svg>
-  );
-}
-
-// ============ Secção SITE (Fase A — acessos, no ar) ============
-function SiteSection() {
+/* ============ Aba SITE ============ */
+function SiteSection({ goInsights }) {
   const [range, setRange] = useState('7d');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -263,8 +337,7 @@ function SiteSection() {
 
   useEffect(() => {
     let alive = true;
-    setLoading(true);
-    setError(null);
+    setLoading(true); setError(null);
     statsApi.site(range)
       .then((d) => { if (alive) setData(d); })
       .catch((err) => { if (alive) setError(err.message); })
@@ -272,210 +345,61 @@ function SiteSection() {
     return () => { alive = false; };
   }, [range]);
 
-  const delta = data ? pctDelta(data.total_views, data.prev_total_views) : 0;
+  if (loading && !data) return <><PeriodBar range={range} setRange={setRange} /><KpiSkeleton /></>;
+  if (error) return <div className="glass" style={{ padding: 22, color: '#e39b9b', fontSize: 13.5 }}>{error}</div>;
+  if (!data) return null;
+
+  const delta = pctDelta(data.total_views, data.prev_total_views);
   const nDays = range === '1d' ? 1 : Number(range.replace('d', ''));
-  const avgPerDay = data ? Math.round(data.total_views / nDays) : 0;
+  const hourly = data.granularity === 'hour';
+  const avgPerDay = hourly ? Math.round(data.total_views / 24) : Math.round(data.total_views / nDays);
+  const hasVisitors = (data.series || []).some((p) => typeof p.visitors === 'number');
+  const series = (data.series || []).map((p) => ({ d: p.label, v: p.views, ...(hasVisitors ? { u: p.visitors || 0 } : {}) }));
+  const spark = series.map((s) => ({ v: s.v }));
+  const peak = series.reduce((a, b) => (b.v > (a?.v ?? -1) ? b : a), series[0] || null);
+  const period = nDays === 1 ? 'Últimas 24 h' : `Últimos ${nDays} dias`;
+  const avgMovel = series.map((x, i, a) => ({ v: Math.round(a.slice(Math.max(0, i - 2), i + 1).reduce((m, n) => m + n.v, 0) / Math.min(3, i + 1)) }));
+
+  const keys = hasVisitors
+    ? [{ k: 'v', label: 'Visitas', color: RS_C.gold }, { k: 'u', label: 'Únicos', color: RS_C.sage }]
+    : [{ k: 'v', label: 'Visitas', color: RS_C.gold }];
 
   return (
     <>
-      <div className="adm-stat-toolbar">
-        <SlidingTabs items={RANGES} active={range} onChange={setRange} variant="pills" />
+      <PeriodBar range={range} setRange={setRange} />
+      <div className="bento">
+        <Kpi hero hi span={2} icon="globe" label="Visitas" period={period}
+             value={data.total_views || 0} delta={delta} color={RS_C.gold}
+             spark={spark.length >= 2 ? spark : null} sparkId="rss1" foot="vs. período anterior" />
+        <Kpi d={70} icon="trend" label={hourly ? 'Média por hora' : 'Média por dia'} period={hourly ? 'nas últimas 24 h' : `${series.length || nDays} dias`}
+             value={avgPerDay} color={RS_C.sage} spark={avgMovel.length >= 2 ? avgMovel : null} sparkId="rss2" foot="média móvel de 3 dias" />
+        <Kpi d={140} icon="users" label="Visitantes únicos" period={period}
+             value={data.total_visitors || 0} color={RS_C.sage}
+             spark={hasVisitors && series.length >= 2 ? series.map((x) => ({ v: x.u })) : null} sparkId="rss3"
+             foot={<Tip label="Contagem própria no Worker (D1), por impressão diária — sem cookies e sem Google Analytics.">
+               <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center', cursor: 'help', borderBottom: '1px dotted var(--edge-2)' }}>
+                 sem cookies <Icon name="info" size={12} />
+               </span>
+             </Tip>} />
+        <Reveal d={200} cls="glass b-3" style={{ padding: '24px 26px 20px' }}>
+          <PanelHead over="Tráfego" title={hourly ? 'Acessos por hora (últimas 24 h)' : 'Acessos por dia'}
+            note="Dados próprios do Worker — sem Google Analytics."
+            right={peak && peak.v > 0 && <span className="chip"><Icon name="target" size={12} />pico {nf(peak.v)} · {peak.d}</span>} />
+          <Chart series={series} id="rsst" h={218} keys={keys}
+                 flatNote={data.total_views === 0 ? 'Ainda sem acessos registados neste período — os primeiros aparecem aqui em breve.' : null} />
+        </Reveal>
+        <Kpi d={260} icon="target" label="Pico" period={peak && peak.v > 0 ? `registado ${hourly ? 'às' : 'a'} ${peak.d}` : 'sem dados ainda'}
+             value={peak ? peak.v : 0} color={RS_C.warm} spark={spark.length >= 2 ? spark : null} sparkId="rss4"
+             foot={hourly ? 'melhor hora do período' : 'melhor dia do período'} />
       </div>
-
-      {loading && !data ? (
-        <div className="adm-kpi-grid">
-          {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="adm-kpi">
-              <span className="adm-skel" style={{ width: '60%', height: 9, display: 'block', marginBottom: 10 }} />
-              <span className="adm-skel" style={{ width: '45%', height: 22, display: 'block' }} />
-            </div>
-          ))}
-        </div>
-      ) : error ? (
-        <div className="adm-login-error">{error}</div>
-      ) : data ? (
-        <>
-          <div className="adm-kpi-grid">
-            <div className="adm-kpi">
-              <div className="adm-kpi-label">Visitas no período</div>
-              <div className="adm-kpi-value"><CountUp value={data.total_views} /></div>
-              <div className={'adm-kpi-delta ' + (delta > 0 ? '' : delta < 0 ? 'adm-kpi-delta-danger' : 'adm-kpi-delta-muted')}>
-                {delta > 0 ? '▲ ' : delta < 0 ? '▼ ' : ''}
-                {Math.abs(delta).toFixed(0)}% vs. período anterior
-              </div>
-            </div>
-
-            <div className="adm-kpi">
-              <div className="adm-kpi-label">
-                {data.granularity === 'hour' ? 'Média por hora' : 'Média por dia'}
-              </div>
-              <div className="adm-kpi-value">
-                <CountUp value={data.granularity === 'hour' ? Math.round(data.total_views / 24) : avgPerDay} />
-              </div>
-              <div className="adm-kpi-delta adm-kpi-delta-muted">
-                {data.granularity === 'hour' ? 'nas últimas 24h' : `ao longo de ${nDays} dias`}
-              </div>
-            </div>
-
-            <div className="adm-kpi">
-              <div className="adm-kpi-label">Visitantes únicos</div>
-              <div className="adm-kpi-value">
-                {data.total_visitors == null
-                  ? <span style={{ color: 'var(--muted)' }}>—</span>
-                  : <CountUp value={data.total_visitors} />}
-              </div>
-              <div className="adm-kpi-delta adm-kpi-delta-muted">
-                {data.total_visitors == null ? 'contado por dia' : 'soma por dia (sem cookies)'}
-              </div>
-            </div>
-
-            <div className="adm-kpi">
-              <div className="adm-kpi-label">Pico</div>
-              <div className="adm-kpi-value"><CountUp value={Math.max(0, ...data.series.map((p) => p.views))} /></div>
-              <div className="adm-kpi-delta adm-kpi-delta-muted">{peakLabel(data.series, data.granularity)}</div>
-            </div>
-          </div>
-
-          <div className="adm-card adm-glow">
-            <div className="adm-card-title">
-              {data.granularity === 'hour' ? 'Acessos por hora (últimas 24h)' : `Acessos por dia (${nDays} dias)`}
-              <span className="adm-stat-legend"><span className="adm-stat-legend-dot" /> visitas</span>
-            </div>
-            <AreaChart series={data.series} granularity={data.granularity} />
-            {data.total_views === 0 && (
-              <div className="adm-stat-note">
-                Ainda sem acessos registados neste período. A contagem começa a partir da entrada
-                desta funcionalidade no ar — os primeiros acessos aparecem aqui em breve.
-              </div>
-            )}
-          </div>
-        </>
-      ) : null}
+      <Reveal d={120} cls="glass" style={{ marginTop: 22, padding: '20px 24px', display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+        <span style={{ color: 'var(--gold)', display: 'flex' }}><Icon name="info" size={17} /></span>
+        <p style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55, flex: 1, minWidth: 220, textWrap: 'pretty' }}>
+          Conteúdo novo no blogue é o que mais move estas curvas. A aba <strong style={{ color: 'var(--fg)', fontWeight: 700 }}>Insights</strong> sugere
+          os 10 temas com maior potencial de engajamento para o público da Dra.
+        </p>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={goInsights}>Ver sugestões<Icon name="chev" size={13} /></button>
+      </Reveal>
     </>
   );
-}
-
-function peakLabel(series, granularity) {
-  if (!series || !series.length) return '—';
-  let best = series[0];
-  for (const p of series) if (p.views > best.views) best = p;
-  if (best.views === 0) return 'sem dados ainda';
-  return granularity === 'hour' ? `às ${best.label}` : `em ${best.label}`;
-}
-
-// ============ Gráfico de área (SVG próprio, sem libs) ============
-function AreaChart({ series, granularity, unit = { one: 'visita', many: 'visitas' }, zeroBased = true }) {
-  const wrapRef = useRef(null);
-  const [hover, setHover] = useState(null);
-
-  const W = 760, H = 240;
-  const padL = 40, padR = 16, padT = 16, padB = 28;
-  const plotW = W - padL - padR;
-  const plotH = H - padT - padB;
-  const baseY = padT + plotH;
-
-  const n = series.length;
-  const vals = series.map((p) => p.views);
-  let minV, maxV;
-  if (zeroBased) {
-    minV = 0;
-    maxV = niceMax(Math.max(1, ...vals));
-  } else {
-    // eixo "ampliado": arranca perto do mínimo para dar a ver variações pequenas
-    // (ex.: seguidores a crescer devagar ficariam numa linha achatada com base 0).
-    let dMin = Math.min(...vals), dMax = Math.max(...vals);
-    if (!isFinite(dMin) || !isFinite(dMax)) { dMin = 0; dMax = 1; }
-    if (dMin === dMax) { dMin = Math.max(0, dMin - 1); dMax = dMax + 1; }
-    const pad = Math.max(1, Math.round((dMax - dMin) * 0.25));
-    minV = Math.max(0, dMin - pad);
-    maxV = dMax + pad;
-  }
-  const span = (maxV - minV) || 1;
-
-  const xAt = (i) => (n === 1 ? padL + plotW / 2 : padL + (i / (n - 1)) * plotW);
-  const yAt = (v) => padT + plotH - ((v - minV) / span) * plotH;
-
-  const linePts = series.map((p, i) => `${xAt(i)},${yAt(p.views)}`);
-  const linePath = 'M' + linePts.join(' L');
-  const areaPath = `M${xAt(0)},${baseY} L` + linePts.join(' L') + ` L${xAt(n - 1)},${baseY} Z`;
-
-  const step = Math.max(1, Math.ceil(n / 8));
-  const yTicks = [0, 0.5, 1].map((f) => { const v = Math.round(minV + span * f); return { v, y: yAt(v) }; });
-
-  const onMove = (e) => {
-    const svg = wrapRef.current;
-    if (!svg) return;
-    const rect = svg.getBoundingClientRect();
-    const vbX = ((e.clientX - rect.left) / rect.width) * W;
-    let idx = n === 1 ? 0 : Math.round(((vbX - padL) / plotW) * (n - 1));
-    idx = Math.max(0, Math.min(n - 1, idx));
-    setHover(idx);
-  };
-
-  const hv = hover != null ? series[hover] : null;
-  const hvX = hover != null ? xAt(hover) : 0;
-  const hvY = hover != null ? yAt(hv.views) : 0;
-
-  return (
-    <div className="adm-stat-chart-wrap">
-      <svg
-        ref={wrapRef}
-        className="adm-stat-chart"
-        viewBox={`0 0 ${W} ${H}`}
-        role="img"
-        aria-label="Gráfico de acessos ao site"
-        onMouseMove={onMove}
-        onMouseLeave={() => setHover(null)}
-      >
-        <defs>
-          <linearGradient id="statFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="var(--forest)" stopOpacity="0.28" />
-            <stop offset="100%" stopColor="var(--forest)" stopOpacity="0.02" />
-          </linearGradient>
-        </defs>
-
-        {yTicks.map((t, i) => (
-          <g key={i}>
-            <line x1={padL} y1={t.y} x2={W - padR} y2={t.y} stroke="var(--line)" strokeWidth="1" />
-            <text x={padL - 8} y={t.y + 3} textAnchor="end" className="adm-stat-axis">{nf(t.v)}</text>
-          </g>
-        ))}
-
-        <path d={areaPath} fill="url(#statFill)" />
-        <path d={linePath} fill="none" stroke="var(--forest)" strokeWidth="2"
-              strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-
-        {series.map((p, i) => (
-          <circle key={i} cx={xAt(i)} cy={yAt(p.views)} r={hover === i ? 4 : 2.5}
-                  fill={hover === i ? 'var(--gold)' : 'var(--forest)'} />
-        ))}
-
-        {series.map((p, i) => (
-          (i % step === 0 || i === n - 1) ? (
-            <text key={i} x={xAt(i)} y={H - 8} textAnchor="middle" className="adm-stat-axis">{p.label}</text>
-          ) : null
-        ))}
-
-        {hv && (
-          <line x1={hvX} y1={padT} x2={hvX} y2={baseY} stroke="var(--gold)" strokeWidth="1" strokeDasharray="3 3" />
-        )}
-      </svg>
-
-      {hv && (
-        <div className="adm-stat-tip" style={{ left: `${(hvX / W) * 100}%`, top: `${(hvY / H) * 100}%` }}>
-          <strong>{nf(hv.views)}</strong> {hv.views === 1 ? unit.one : unit.many}
-          {typeof hv.visitors === 'number' && <> · {nf(hv.visitors)} visitante{hv.visitors === 1 ? '' : 's'}</>}
-          <span className="adm-stat-tip-label">{hv.label}</span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function niceMax(v) {
-  if (v <= 5) return 5;
-  const pow = Math.pow(10, Math.floor(Math.log10(v)));
-  const n = v / pow;
-  const step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 5 ? 5 : 10;
-  return Math.ceil(v / (step * pow / 5)) * (step * pow / 5);
 }

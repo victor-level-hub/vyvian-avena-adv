@@ -34,6 +34,9 @@ const RS_ICONS = {
   target: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z|M12 16.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Z|M12 13.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3',
   gov: 'M4 20h16|M6 20V10l6-4 6 4v10|M10 20v-5h4v5',
   info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z|M12 11v5|M12 7.8h.01',
+  expand: 'M9 4H4v5|M15 4h5v5|M9 20H4v-5|M15 20h5v-5',
+  chevL: 'M15 6l-6 6 6 6',
+  chevR: 'M9 6l6 6-6 6',
 };
 export function Icon({ name, size = 18, s = 1.6, style, cls }) {
   const d = RS_ICONS[name];

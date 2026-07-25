@@ -157,6 +157,24 @@ export const insights = {
     if (!res.ok) return null;
     return URL.createObjectURL(await res.blob());
   },
+  // O mesmo, mas devolve o Blob (para compor a marca de água no canvas).
+  async imageBlob(imageId) {
+    const token = getToken();
+    const res = await fetch(`/api/insights/images/${imageId}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) return null;
+    return res.blob();
+  },
+  // Substitui os bytes da imagem no R2 (grava a versão com marca de água).
+  async replaceImage(imageId, blob) {
+    const token = getToken();
+    const res = await fetch(`/api/insights/images/${imageId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': blob.type || 'image/jpeg', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: blob,
+    });
+    if (!res.ok) throw new Error('Falha ao gravar a imagem com marca de água');
+    return res.json();
+  },
 
   sources: () => request('/api/insights/sources'),
   addSource: (url) => request('/api/insights/sources', { method: 'POST', body: { url } }),

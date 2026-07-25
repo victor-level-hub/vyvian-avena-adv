@@ -156,6 +156,7 @@ export async function handleInsights(request, env, path, session) {
   if (mt && m === "POST") return chooseImage(request, env, +mt[1]);
   mt = path.match(/^\/api\/insights\/images\/(\d+)$/);
   if (mt && m === "GET") return serveImage(env, +mt[1]);
+  if (mt && m === "PUT") return replaceImage(request, env, +mt[1]);
 
   if (path === "/api/insights/sources" && m === "GET") return listSources(env);
   if (path === "/api/insights/sources" && m === "POST") return addSource(request, env);
@@ -386,7 +387,11 @@ verde-floresta escuro (#12302a), dourado discreto (#b8935a) e creme; ambientes p
 (Lisboa/Porto: azulejos discretos, calçada, arquitetura clássica) quando fizer sentido.
 Pessoas plausíveis e diversas em contexto (consulta, documentos, videochamada, família),
 enquadramento 16:9, profundidade de campo suave, SEM texto na imagem, sem logótipos,
-sem marcas visíveis, sem rostos distorcidos.`;
+sem marcas visíveis, sem rostos distorcidos.
+Coerência física obrigatória: ecrãs de telemóveis e computadores sempre virados para a
+pessoa que os está a usar — quem olha para um telemóvel vê o ecrã, e a câmara vê as
+COSTAS do aparelho. Nunca mostrar um ecrã virado para a câmara enquanto a pessoa olha
+para ele; mãos com cinco dedos e a segurar os objetos de forma natural.`;
 
 function imagePrompts(article) {
   const base = `${DIRECAO_ARTE}\n\nTema do artigo: "${article.titulo}" — ${article.descricao || ""}`;
@@ -477,6 +482,20 @@ async function chooseImage(request, env, articleId) {
     `UPDATE insight_articles SET imagem_escolhida = ?, atualizado_em = datetime('now') WHERE id = ?`
   ).bind(img.id, articleId).run();
   return getArticle(env, articleId);
+}
+
+// Substitui os bytes de uma imagem (mesma chave R2) — usado pelo admin para
+// gravar a versão com a marca de água (favicon da Dra.) composta no browser.
+async function replaceImage(request, env, id) {
+  const img = await env.DB.prepare(`SELECT * FROM insight_images WHERE id = ?`).bind(id).first();
+  if (!img) return jsonError("Imagem não encontrada", 404);
+  const bytes = new Uint8Array(await request.arrayBuffer());
+  if (!bytes.length) return jsonError("Corpo vazio", 400);
+  if (bytes.length > 8 * 1024 * 1024) return jsonError("Imagem demasiado grande (máx. 8 MB)", 413);
+  const contentType = request.headers.get("content-type") || img.content_type || "image/jpeg";
+  await env.RECIBOS.put(img.r2_key, bytes, { httpMetadata: { contentType } });
+  await env.DB.prepare(`UPDATE insight_images SET content_type = ? WHERE id = ?`).bind(contentType, id).run();
+  return jsonResponse({ ok: true, id, bytes: bytes.length });
 }
 
 async function serveImage(env, id) {

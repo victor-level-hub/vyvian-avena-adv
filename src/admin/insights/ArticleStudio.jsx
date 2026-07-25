@@ -9,7 +9,7 @@ import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { marked } from 'marked';
 import { insights as api } from '../apiClient';
 import { admToast } from '../toasts';
-import { admConfirm } from '../dialogs';
+import { admConfirm, admPrompt } from '../dialogs';
 import { Icon, Tip, StepLoader, Confetti, Thumb } from '../rs/ui';
 
 const RichEditor = React.lazy(() => import('./RichEditor'));
@@ -101,8 +101,38 @@ export default function ArticleStudio({ articleId, onClose }) {
   const [rev, setRev] = useState(0);               // força refetch dos blobs (pós marca de água)
   const [preview, setPreview] = useState(false);
   const [ampliada, setAmpliada] = useState(null);  // índice da imagem aberta no lightbox
+  const [regras, setRegras] = useState(null);      // correções de imagem (erros a evitar)
   const [fire, setFire] = useState(0);
   const mdRef = useRef('');
+
+  useEffect(() => {
+    api.imageRules().then((d) => setRegras(d.rules || [])).catch(() => setRegras([]));
+  }, []);
+
+  const adicionarRegra = async (texto) => {
+    const t = String(texto || '').trim();
+    if (!t) return;
+    try {
+      const d = await api.addImageRule(t);
+      setRegras(d.rules || []);
+      admToast('Correção guardada — entra no prompt das próximas gerações.');
+    } catch (e) { admToast(e.message, { kind: 'error' }); }
+  };
+
+  const removerRegra = async (id) => {
+    try {
+      const d = await api.removeImageRule(id);
+      setRegras(d.rules || []);
+    } catch (e) { admToast(e.message, { kind: 'error' }); }
+  };
+
+  const reportarErroDialogo = async (contexto) => {
+    const texto = await admPrompt(
+      'Descreva o erro para a IA nunca mais o repetir (ex.: «ecrã do telemóvel virado ao contrário»):',
+      { title: contexto || 'Reportar erro na imagem', placeholder: 'O que está errado nesta imagem?' }
+    );
+    if (texto != null) await adicionarRegra(texto);
+  };
 
   useEffect(() => {
     api.getArticle(articleId).then((d) => {
@@ -326,6 +356,8 @@ export default function ArticleStudio({ articleId, onClose }) {
               )}
             </div>
 
+            <ImageRulesCard regras={regras} onAdd={adicionarRegra} onRemove={removerRegra} />
+
             <div className="glass" style={{ padding: 20 }}>
               <span className="overline">Publicação</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 12 }}>
@@ -364,6 +396,7 @@ export default function ArticleStudio({ articleId, onClose }) {
           start={ampliada}
           chosenId={escolhida}
           onPick={(id) => escolher(id)}
+          onReport={(n) => reportarErroDialogo(`Reportar erro · Opção ${n}`)}
           onClose={() => setAmpliada(null)}
         />
       )}
@@ -440,10 +473,60 @@ function CoverOption({ src, i, provider, chosen, onPick, onExpand }) {
   );
 }
 
+/* ---------------- correções de imagem (erros apontados pela Dra.) ----------------
+   Cada erro grotesco visto numa imagem (ex.: ecrã do telemóvel ao contrário) vira
+   uma regra permanente que entra no prompt de TODAS as gerações seguintes. */
+function ImageRulesCard({ regras, onAdd, onRemove }) {
+  const [texto, setTexto] = useState('');
+  const submeter = (e) => {
+    e.preventDefault();
+    if (!texto.trim()) return;
+    onAdd(texto);
+    setTexto('');
+  };
+  return (
+    <div className="glass" style={{ padding: 20 }}>
+      <span className="overline">Correções de imagem</span>
+      <p style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 8, lineHeight: 1.55 }}>
+        Viu um erro grotesco numa imagem (ecrã ao contrário, mãos estranhas)? Aponte aqui —
+        a nota entra no prompt de <strong style={{ color: 'var(--fg-2)' }}>todas as próximas gerações</strong>.
+      </p>
+      <form onSubmit={submeter} style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+        <input className="field" style={{ padding: '9px 12px', fontSize: 13 }} value={texto} maxLength={240}
+               onChange={(e) => setTexto(e.target.value)}
+               placeholder="Ex.: ecrã do telemóvel virado ao contrário" />
+        <button type="submit" className="btn btn-gold btn-sm" disabled={!texto.trim()} title="Guardar correção" aria-label="Guardar correção"
+                style={{ padding: '7px 11px' }}>
+          <Icon name="plus" size={13} />
+        </button>
+      </form>
+      {regras == null ? (
+        <div style={{ fontSize: 11.5, color: 'var(--fg-3)', marginTop: 12 }}>A carregar…</div>
+      ) : regras.length === 0 ? (
+        <div style={{ fontSize: 11.5, color: 'var(--fg-3)', marginTop: 12 }}>Ainda sem correções registadas.</div>
+      ) : (
+        <div style={{ display: 'grid', gap: 6, marginTop: 12 }}>
+          {regras.map((r) => (
+            <div key={r.id} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '8px 10px', borderRadius: 10,
+                                     background: 'var(--panel)', border: '1px solid var(--edge)', animation: 'rsRiseInSm .35s var(--ease-out) both' }}>
+              <span style={{ flex: 'none', marginTop: 3, width: 6, height: 6, borderRadius: 9, background: 'var(--gold)' }} />
+              <span style={{ flex: 1, fontSize: 12, lineHeight: 1.5, color: 'var(--fg-2)' }}>{r.texto}</span>
+              <button type="button" className="btn-quiet" title="Remover esta correção" onClick={() => onRemove(r.id)}
+                      style={{ padding: 3, borderRadius: 6, flex: 'none' }}>
+                <Icon name="trash" size={13} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ---------------- lightbox / carrossel das capas ----------------
    Ampliação a ecrã inteiro: setas, teclado (←/→/Esc), swipe no telemóvel,
    miniaturas com anel dourado na ativa e «Usar como capa» sem sair daqui. */
-function Lightbox({ images, start = 0, chosenId, onPick, onClose }) {
+function Lightbox({ images, start = 0, chosenId, onPick, onReport, onClose }) {
   const [i, setI] = useState(Math.max(0, Math.min(start, images.length - 1)));
   const [dir, setDir] = useState(1); // direção da transição (1 = próxima)
   const touchX = useRef(null);
@@ -516,11 +599,19 @@ function Lightbox({ images, start = 0, chosenId, onPick, onClose }) {
       {/* rodapé: usar como capa + miniaturas */}
       <div style={{ flex: 'none', padding: '12px 20px calc(16px + env(safe-area-inset-bottom))', display: 'grid', gap: 12, justifyItems: 'center' }}
            onClick={(e) => e.stopPropagation()}>
-        <button type="button" className={'btn btn-sm ' + (escolhidaEsta ? 'btn-ghost' : 'btn-gold')}
-                onClick={() => onPick(img.id)} disabled={escolhidaEsta}>
-          <Icon name={escolhidaEsta ? 'check' : 'image'} size={13} s={escolhidaEsta ? 3 : 1.6} />
-          {escolhidaEsta ? 'É a capa escolhida' : 'Usar como capa'}
-        </button>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <button type="button" className={'btn btn-sm ' + (escolhidaEsta ? 'btn-ghost' : 'btn-gold')}
+                  onClick={() => onPick(img.id)} disabled={escolhidaEsta}>
+            <Icon name={escolhidaEsta ? 'check' : 'image'} size={13} s={escolhidaEsta ? 3 : 1.6} />
+            {escolhidaEsta ? 'É a capa escolhida' : 'Usar como capa'}
+          </button>
+          {onReport && (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => onReport(i + 1)}
+                    title="Aponte um erro grotesco desta imagem — a IA nunca mais o repete">
+              <Icon name="info" size={13} />Reportar erro
+            </button>
+          )}
+        </div>
         <div style={{ display: 'flex', gap: 9, justifyContent: 'center', flexWrap: 'wrap' }}>
           {images.map((im, k) => (
             <button key={im.id} type="button" aria-label={`Ver a opção ${k + 1}`} aria-current={k === i}

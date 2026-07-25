@@ -176,6 +176,11 @@ export const insights = {
     return res.json();
   },
 
+  // Correções de imagem (erros apontados pela Dra. — entram no prompt das próximas gerações)
+  imageRules: () => request('/api/insights/image-rules'),
+  addImageRule: (texto) => request('/api/insights/image-rules', { method: 'POST', body: { texto } }),
+  removeImageRule: (id) => request(`/api/insights/image-rules/${id}`, { method: 'DELETE' }),
+
   sources: () => request('/api/insights/sources'),
   addSource: (url) => request('/api/insights/sources', { method: 'POST', body: { url } }),
   updateSource: (id, data) => request(`/api/insights/sources/${id}`, { method: 'PATCH', body: data }),

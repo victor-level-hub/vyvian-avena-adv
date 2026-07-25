@@ -158,6 +158,12 @@ export async function handleInsights(request, env, path, session) {
   if (mt && m === "GET") return serveImage(env, +mt[1]);
   if (mt && m === "PUT") return replaceImage(request, env, +mt[1]);
 
+  // Correções de imagem apontadas pela Dra. — entram no prompt de todas as gerações.
+  if (path === "/api/insights/image-rules" && m === "GET") return listImageRules(env);
+  if (path === "/api/insights/image-rules" && m === "POST") return addImageRule(request, env);
+  mt = path.match(/^\/api\/insights\/image-rules\/(\d+)$/);
+  if (mt && m === "DELETE") return removeImageRule(env, +mt[1]);
+
   if (path === "/api/insights/sources" && m === "GET") return listSources(env);
   if (path === "/api/insights/sources" && m === "POST") return addSource(request, env);
   mt = path.match(/^\/api\/insights\/sources\/(\d+)$/);
@@ -393,8 +399,50 @@ pessoa que os está a usar — quem olha para um telemóvel vê o ecrã, e a câ
 COSTAS do aparelho. Nunca mostrar um ecrã virado para a câmara enquanto a pessoa olha
 para ele; mãos com cinco dedos e a segurar os objetos de forma natural.`;
 
-function imagePrompts(article) {
-  const base = `${DIRECAO_ARTE}\n\nTema do artigo: "${article.titulo}" — ${article.descricao || ""}`;
+/* ---------------- correções de imagem (apontadas pela Dra.) ----------------
+   Guardadas no KV (SESSIONS, chave insights:img-correcoes) — sem migração.
+   Cada erro grotesco visto numa imagem gerada vira uma regra permanente
+   que é acrescentada ao prompt de TODAS as gerações seguintes. */
+const IMG_RULES_KEY = "insights:img-correcoes";
+
+async function getImageRules(env) {
+  try {
+    const raw = await env.SESSIONS.get(IMG_RULES_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+}
+
+async function listImageRules(env) {
+  return jsonResponse({ rules: await getImageRules(env) });
+}
+
+async function addImageRule(request, env) {
+  let body = {};
+  try { body = await request.json(); } catch {}
+  const texto = String(body.texto || "").trim().slice(0, 240);
+  if (!texto) return jsonError("Descreva o erro a evitar", 400);
+  const rules = await getImageRules(env);
+  if (rules.length >= 40) return jsonError("Limite de 40 correções — apague alguma antiga primeiro", 400);
+  const rule = { id: Date.now(), texto, criado_em: new Date().toISOString().slice(0, 19).replace("T", " ") };
+  rules.unshift(rule);
+  await env.SESSIONS.put(IMG_RULES_KEY, JSON.stringify(rules));
+  return jsonResponse({ ok: true, rule, rules });
+}
+
+async function removeImageRule(env, id) {
+  const rules = (await getImageRules(env)).filter((r) => r.id !== id);
+  await env.SESSIONS.put(IMG_RULES_KEY, JSON.stringify(rules));
+  return jsonResponse({ ok: true, rules });
+}
+
+function imagePrompts(article, regras = []) {
+  let base = `${DIRECAO_ARTE}`;
+  if (regras.length) {
+    base += `\nERROS JÁ OBSERVADOS EM GERAÇÕES ANTERIORES — NUNCA REPETIR:\n` +
+      regras.map((r) => `- ${r.texto}`).join("\n");
+  }
+  base += `\n\nTema do artigo: "${article.titulo}" — ${article.descricao || ""}`;
   return [
     `${base}\nCena 1: momento humano central do tema (protagonista em primeiro plano, ambiente desfocado).`,
     `${base}\nCena 2: a interação com a advogada — reunião ou consulta, cumplicidade e confiança.`,
@@ -446,7 +494,7 @@ async function generateImages(request, env, articleId) {
   ).bind(articleId).first();
   const ronda = (prev?.r || 0) + 1;
 
-  const prompts = imagePrompts(article);
+  const prompts = imagePrompts(article, await getImageRules(env));
   const results = await Promise.allSettled(prompts.map((p) => gerarUmaImagem(env, p)));
   const ok = [];
   results.forEach((r, i) => { if (r.status === "fulfilled") ok.push({ ...r.value, prompt: prompts[i], i }); });

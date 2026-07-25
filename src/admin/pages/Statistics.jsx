@@ -2,7 +2,9 @@
 // Redes Sociais — Área Privada, com o redesign do handoff «Vyvian Avena Design System v3».
 // Três abas (Instagram · Site · Insights) sobre um fundo vivo (aurora + grelha + spotlight),
 // escuro por defeito com modo claro opcional. Dados e endpoints inalterados.
-import React, { useEffect, useRef, useState } from 'react';
+// Filtros: período (1/7/15/30/60/90/120 dias) + agrupamento (dias/semanas/meses),
+// com legenda e rótulos de eixo X/Y em todos os gráficos.
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { stats as statsApi } from '../apiClient';
 import InsightsSection from '../insights/InsightsSection';
 import { Icon, Ticker, Reveal, Tip, Tabs, Seg, Sparkles, Chart, Spark, Tilt, Thumb, PanelHead } from '../rs/ui';
@@ -19,15 +21,83 @@ const RANGES = [
   { k: '7d', label: '7 DIAS' },
   { k: '15d', label: '15 DIAS' },
   { k: '30d', label: '30 DIAS' },
+  { k: '60d', label: '60 DIAS' },
+  { k: '90d', label: '90 DIAS' },
+  { k: '120d', label: '120 DIAS' },
 ];
+
+const GRUPOS = [
+  { k: 'day', label: 'DIAS' },
+  { k: 'week', label: 'SEMANAS' },
+  { k: 'month', label: 'MESES' },
+];
+const GRUPO_SING = { day: 'dia', week: 'semana', month: 'mês', hour: 'hora' };
+const GRUPO_PLUR = { day: 'dias', week: 'semanas', month: 'meses', hour: 'horas' };
+const MES_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 
 const RS_C = { gold: '#d4b585', gold2: '#b8935a', sage: '#9fc4b6', warm: '#c89656' };
 const nf = (n) => Number(n || 0).toLocaleString('pt-PT');
-const sp = (a) => a.map((v) => ({ v: Number(v) || 0 }));
 
 function pctDelta(cur, prev) {
   if (!prev) return cur > 0 ? 100 : 0;
   return ((cur - prev) / prev) * 100;
+}
+
+/* ---------------- agrupamento temporal (dias → semanas/meses) ----------------
+   Os pontos da API trazem `key` ISO ('YYYY-MM-DD'). Semana = segunda-feira ISO. */
+function chaveGrupo(iso, grupo) {
+  if (grupo === 'month') return iso.slice(0, 7);
+  if (grupo === 'week') {
+    const d = new Date(iso + 'T00:00:00Z');
+    const dow = (d.getUTCDay() + 6) % 7; // segunda = 0
+    return new Date(d.getTime() - dow * 86400000).toISOString().slice(0, 10);
+  }
+  return iso;
+}
+function rotuloGrupo(key, grupo) {
+  if (grupo === 'month') { const [y, m] = key.split('-'); return MES_PT[+m - 1] + '/' + y.slice(2); }
+  const lbl = key.slice(8, 10) + '/' + key.slice(5, 7);
+  return grupo === 'week' ? 'sem. ' + lbl : lbl;
+}
+/* campos: { views: 'sum', followers: 'last', … } — pontos chegam por ordem cronológica */
+function agrupar(series, grupo, campos) {
+  if (!series || !series.length) return [];
+  if (grupo === 'day') {
+    return series.map((p) => {
+      const o = { key: p.key, d: p.label };
+      for (const campo of Object.keys(campos)) o[campo] = Number(p[campo] || 0);
+      return o;
+    });
+  }
+  const map = new Map();
+  for (const p of series) {
+    const k = chaveGrupo(p.key, grupo);
+    let b = map.get(k);
+    if (!b) { b = { key: k, d: rotuloGrupo(k, grupo) }; map.set(k, b); }
+    for (const [campo, modo] of Object.entries(campos)) {
+      const v = Number(p[campo] || 0);
+      b[campo] = modo === 'sum' ? (b[campo] || 0) + v : v; // 'last'
+    }
+  }
+  return [...map.values()];
+}
+/* publicações do Instagram → curtidas e nº de posts por dia/semana/mês */
+function agruparPosts(posts, grupo) {
+  const map = new Map();
+  for (const p of posts) {
+    const iso = (p.timestamp || '').slice(0, 10);
+    if (!iso) continue;
+    const k = chaveGrupo(iso, grupo);
+    const b = map.get(k) || { likes: 0, count: 0 };
+    b.likes += p.like_count || 0;
+    b.count += 1;
+    map.set(k, b);
+  }
+  const arr = [...map.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1));
+  return {
+    likes: arr.map(([, b]) => ({ v: b.likes })),
+    pubs: arr.map(([, b]) => ({ v: b.count })),
+  };
 }
 
 export default function Statistics() {
@@ -100,23 +170,39 @@ export default function Statistics() {
   );
 }
 
-/* ---------------- barra de período ---------------- */
-function PeriodBar({ range, setRange, updated }) {
+/* ---------------- barra de filtros: período + agrupamento + legenda ---------------- */
+function PeriodBar({ range, setRange, grupo, setGrupo, updated, nDays }) {
+  const hourly = range === '1d';
+  const legenda = hourly
+    ? 'Últimas 24 horas · agrupado por hora'
+    : `Últimos ${nDays} dias · agrupado por ${GRUPO_SING[grupo]}`;
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap', marginBottom: 20 }}>
-      <Seg items={RANGES} value={range} onChange={setRange} />
-      {updated && (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 11.5, color: 'var(--fg-3)', letterSpacing: '.04em' }}>
-          <span style={{ width: 6, height: 6, borderRadius: 9, background: 'var(--success)', boxShadow: '0 0 0 3px rgba(74,124,89,.22)', animation: 'rsPulseGold 2.4s infinite' }} />
-          Atualizado a {updated} · sincronização diária
+    <div style={{ display: 'grid', gap: 12, marginBottom: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--fg-3)' }}>Período</span>
+        <Seg items={RANGES} value={range} onChange={setRange} small />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        {!hourly && <>
+          <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--fg-3)' }}>Agrupar por</span>
+          <Seg items={GRUPOS} value={grupo} onChange={setGrupo} small />
+        </>}
+        <span className="chip chip-gold" style={{ textTransform: 'none', letterSpacing: '.02em', fontWeight: 600 }}>
+          <Icon name="filter" size={11} />{legenda}
         </span>
-      )}
+        {updated && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 11.5, color: 'var(--fg-3)', letterSpacing: '.04em' }}>
+            <span style={{ width: 6, height: 6, borderRadius: 9, background: 'var(--success)', boxShadow: '0 0 0 3px rgba(74,124,89,.22)', animation: 'rsPulseGold 2.4s infinite' }} />
+            Atualizado a {updated} · sincronização diária
+          </span>
+        )}
+      </div>
     </div>
   );
 }
 
 /* ---------------- cartão KPI (padrão sean0205/area-charts-1) ---------------- */
-function Kpi({ label, period, value, prefix, suffix, foot, delta, hero, hi, icon, color, spark, sparkId, fmt, d = 0, span = 1 }) {
+function Kpi({ label, period, value, prefix, suffix, foot, delta, hero, hi, icon, color, spark, sparkId, fmt, d = 0, span = 1, eixoX, eixoY }) {
   const c = color || RS_C.gold2;
   return (
     <Reveal d={d} cls={'glass kpi' + (hi ? ' hi' : '') + (span > 1 ? ' b-' + span : '')}
@@ -158,6 +244,11 @@ function Kpi({ label, period, value, prefix, suffix, foot, delta, hero, hi, icon
             {foot}
           </div>
         )}
+        {(eixoX || eixoY) && (
+          <div style={{ marginTop: 8, fontSize: 9, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: 'var(--fg-3)', opacity: .85 }}>
+            {eixoX && <>X · {eixoX}</>}{eixoX && eixoY && <span style={{ opacity: .5 }}> &nbsp;—&nbsp; </span>}{eixoY && <>Y · {eixoY}</>}
+          </div>
+        )}
       </div>
     </Reveal>
   );
@@ -182,6 +273,7 @@ function KpiSkeleton() {
 /* ============ Aba INSTAGRAM ============ */
 function InstagramSection() {
   const [range, setRange] = useState('30d');
+  const [grupo, setGrupo] = useState('day');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -197,7 +289,23 @@ function InstagramSection() {
     return () => { alive = false; };
   }, [range]);
 
-  if (loading && !data) return <><PeriodBar range={range} setRange={setRange} /><KpiSkeleton /></>;
+  const nDays = range === '1d' ? 1 : Number(range.replace('d', ''));
+  const gEfetivo = range === '1d' ? 'day' : grupo;
+  const xPlur = GRUPO_PLUR[gEfetivo];
+
+  // agregações derivadas (agrupamento é só apresentação — os dados são os mesmos)
+  const gseries = useMemo(
+    () => agrupar(data?.series || [], gEfetivo, { followers: 'last' }),
+    [data, gEfetivo]
+  );
+  const chartSeries = useMemo(() => gseries.map((p) => ({ d: p.d, v: p.followers })), [gseries]);
+  const novosSerie = useMemo(
+    () => gseries.map((p, i, a) => ({ v: i ? p.followers - a[i - 1].followers : 0 })),
+    [gseries]
+  );
+  const postBuckets = useMemo(() => agruparPosts(data?.posts || [], gEfetivo), [data, gEfetivo]);
+
+  if (loading && !data) return <><PeriodBar range={range} setRange={setRange} grupo={grupo} setGrupo={setGrupo} nDays={nDays} /><KpiSkeleton /></>;
   if (error) return <div className="glass" style={{ padding: 22, color: '#e39b9b', fontSize: 13.5 }}>{error}</div>;
   if (!data) return null;
 
@@ -206,19 +314,15 @@ function InstagramSection() {
   const totalComments = posts.reduce((s, p) => s + (p.comments_count || 0), 0);
   const avgLikes = posts.length ? Math.round(totalLikes / posts.length) : 0;
   const nd = data.new_followers;
-  const series = (data.series || []).map((p) => ({ d: p.label, v: p.followers }));
-  const spark = series.map((s) => ({ v: s.v }));
-  const ganhos = series.map((s, i, a) => ({ v: i ? s.v - a[i - 1].v : 0 }));
-  const likesSpark = sp(posts.map((p) => p.like_count || 0).reverse());
-  const nDays = range === '1d' ? 1 : Number(range.replace('d', ''));
   const period = nDays === 1 ? 'Último dia' : `Últimos ${nDays} dias`;
   const growPct = nd != null && data.followers_count > nd && nd !== 0
     ? ((nd / (data.followers_count - nd)) * 100).toFixed(1) : null;
-  const diasRecolha = series.length;
+  const diasRecolha = (data.series || []).length;
 
   return (
     <>
-      <PeriodBar range={range} setRange={setRange} updated={data.updated_at ? fmtWhen(data.updated_at) : null} />
+      <PeriodBar range={range} setRange={setRange} grupo={grupo} setGrupo={setGrupo}
+                 nDays={nDays} updated={data.updated_at ? fmtWhen(data.updated_at) : null} />
 
       {!data.has_data ? (
         <Reveal cls="glass" style={{ padding: '44px 30px', textAlign: 'center' }}>
@@ -236,29 +340,40 @@ function InstagramSection() {
         <>
           <div className="bento">
             <Kpi hero hi span={2} icon="instagram" label="Seguidores" period={period}
-                 value={data.followers_count || 0} color={RS_C.gold} spark={spark} sparkId="rsk1"
+                 value={data.followers_count || 0} color={RS_C.gold}
+                 spark={chartSeries.map((s) => ({ v: s.v }))} sparkId="rsk1"
+                 eixoX={xPlur} eixoY="seguidores"
                  foot={nd == null ? '@vyvianavenaadv'
                    : <><span className={'delta ' + (nd >= 0 ? 'up' : 'dn')}>{nd >= 0 ? '+' : ''}{nf(nd)}</span> desde o início do período</>} />
             <Kpi d={70} icon="trend" label="Novos" period={period}
                  value={Math.abs(nd || 0)} prefix={nd < 0 ? '−' : ''} color={RS_C.gold2}
-                 spark={ganhos.length >= 2 ? ganhos : null} sparkId="rsk2"
+                 spark={novosSerie.length >= 2 ? novosSerie : null} sparkId="rsk2"
+                 eixoX={xPlur} eixoY="novos seguidores"
                  foot={nd == null ? 'sem histórico ainda' : nd === 0 ? 'estável no período' : `≈ ${(Math.abs(nd) / nDays).toFixed(1)}/dia`} />
             <Kpi d={140} icon="image" label="Publicações" period="Total no perfil"
-                 value={data.media_count || 0} color={RS_C.warm} sparkId="rsk3"
+                 value={data.media_count || 0} color={RS_C.warm}
+                 spark={postBuckets.pubs.length >= 2 ? postBuckets.pubs : null} sparkId="rsk3"
+                 eixoX={xPlur + ' (posts recentes)'} eixoY="publicações"
                  foot={`${posts.length} recentes recolhidas`} />
             <Reveal d={200} cls="glass b-3" style={{ padding: '24px 26px 20px' }}>
               <PanelHead over="Crescimento" title="Evolução de seguidores"
+                note={`Últimos ${nDays} dias · agrupado por ${GRUPO_SING[gEfetivo]} (último valor de cada ${GRUPO_SING[gEfetivo]})`}
                 right={growPct != null && <span className="chip chip-gold"><Icon name="trend" size={12} />+{growPct}%</span>} />
-              <Chart series={series} id="rsig" h={210}
+              <Chart series={chartSeries} id="rsig" h={210}
                      keys={[{ k: 'v', label: 'Seguidores', color: RS_C.gold }]}
+                     xLabel={xPlur} yLabel="seguidores"
                      flatNote={diasRecolha < 2
                        ? 'O gráfico precisa de pelo menos dois dias de recolha — a linha começa a desenhar-se nos próximos dias.'
-                       : diasRecolha <= 14
-                         ? `A recolha começou há ${diasRecolha} dias — a série ganha relevo com o passar das semanas.`
-                         : null} />
+                       : chartSeries.length < 2
+                         ? `Com este agrupamento o período só tem ${chartSeries.length} ponto — escolha um período maior ou um agrupamento mais fino.`
+                         : diasRecolha <= 14
+                           ? `A recolha começou há ${diasRecolha} dias — a série ganha relevo com o passar das semanas.`
+                           : null} />
             </Reveal>
             <Kpi d={260} icon="heart" label="Curtidas" period="Publicações recentes"
-                 value={totalLikes} color={RS_C.gold} spark={likesSpark.length >= 2 ? likesSpark : null} sparkId="rsk4"
+                 value={totalLikes} color={RS_C.gold}
+                 spark={postBuckets.likes.length >= 2 ? postBuckets.likes : null} sparkId="rsk4"
+                 eixoX={xPlur + ' (posts recentes)'} eixoY="curtidas"
                  foot={<><span>{avgLikes}/publicação</span><span style={{ opacity: .4 }}>·</span><span>{nf(totalComments)} comentário{totalComments === 1 ? '' : 's'}</span></>} />
           </div>
 
@@ -331,6 +446,7 @@ function fmtWhen(iso) {
 /* ============ Aba SITE ============ */
 function SiteSection({ goInsights }) {
   const [range, setRange] = useState('7d');
+  const [grupo, setGrupo] = useState('day');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -345,20 +461,30 @@ function SiteSection({ goInsights }) {
     return () => { alive = false; };
   }, [range]);
 
-  if (loading && !data) return <><PeriodBar range={range} setRange={setRange} /><KpiSkeleton /></>;
+  const nDays = range === '1d' ? 1 : Number(range.replace('d', ''));
+  const hourly = data?.granularity === 'hour';
+  const gEfetivo = hourly ? 'hour' : grupo;
+  const xPlur = GRUPO_PLUR[gEfetivo];
+  const hasVisitors = (data?.series || []).some((p) => typeof p.visitors === 'number' && !hourly);
+
+  // série agrupada (soma de visitas/únicos por dia/semana/mês; por hora fica como vem)
+  const gseries = useMemo(() => {
+    if (!data?.series) return [];
+    if (hourly) return data.series.map((p) => ({ d: p.label, v: p.views }));
+    return agrupar(data.series, grupo, { views: 'sum', visitors: 'sum' })
+      .map((p) => ({ d: p.d, v: p.views, ...(hasVisitors ? { u: p.visitors } : {}) }));
+  }, [data, grupo, hourly, hasVisitors]);
+
+  if (loading && !data) return <><PeriodBar range={range} setRange={setRange} grupo={grupo} setGrupo={setGrupo} nDays={nDays} /><KpiSkeleton /></>;
   if (error) return <div className="glass" style={{ padding: 22, color: '#e39b9b', fontSize: 13.5 }}>{error}</div>;
   if (!data) return null;
 
   const delta = pctDelta(data.total_views, data.prev_total_views);
-  const nDays = range === '1d' ? 1 : Number(range.replace('d', ''));
-  const hourly = data.granularity === 'hour';
   const avgPerDay = hourly ? Math.round(data.total_views / 24) : Math.round(data.total_views / nDays);
-  const hasVisitors = (data.series || []).some((p) => typeof p.visitors === 'number');
-  const series = (data.series || []).map((p) => ({ d: p.label, v: p.views, ...(hasVisitors ? { u: p.visitors || 0 } : {}) }));
-  const spark = series.map((s) => ({ v: s.v }));
-  const peak = series.reduce((a, b) => (b.v > (a?.v ?? -1) ? b : a), series[0] || null);
+  const spark = gseries.map((s) => ({ v: s.v }));
+  const peak = gseries.reduce((a, b) => (b.v > (a?.v ?? -1) ? b : a), gseries[0] || null);
   const period = nDays === 1 ? 'Últimas 24 h' : `Últimos ${nDays} dias`;
-  const avgMovel = series.map((x, i, a) => ({ v: Math.round(a.slice(Math.max(0, i - 2), i + 1).reduce((m, n) => m + n.v, 0) / Math.min(3, i + 1)) }));
+  const avgMovel = gseries.map((x, i, a) => ({ v: Math.round(a.slice(Math.max(0, i - 2), i + 1).reduce((m, n) => m + n.v, 0) / Math.min(3, i + 1)) }));
 
   const keys = hasVisitors
     ? [{ k: 'v', label: 'Visitas', color: RS_C.gold }, { k: 'u', label: 'Únicos', color: RS_C.sage }]
@@ -366,31 +492,47 @@ function SiteSection({ goInsights }) {
 
   return (
     <>
-      <PeriodBar range={range} setRange={setRange} />
+      <PeriodBar range={range} setRange={setRange} grupo={grupo} setGrupo={setGrupo} nDays={nDays} />
       <div className="bento">
         <Kpi hero hi span={2} icon="globe" label="Visitas" period={period}
              value={data.total_views || 0} delta={delta} color={RS_C.gold}
-             spark={spark.length >= 2 ? spark : null} sparkId="rss1" foot="vs. período anterior" />
-        <Kpi d={70} icon="trend" label={hourly ? 'Média por hora' : 'Média por dia'} period={hourly ? 'nas últimas 24 h' : `${series.length || nDays} dias`}
-             value={avgPerDay} color={RS_C.sage} spark={avgMovel.length >= 2 ? avgMovel : null} sparkId="rss2" foot="média móvel de 3 dias" />
+             spark={spark.length >= 2 ? spark : null} sparkId="rss1"
+             eixoX={xPlur} eixoY="visitas"
+             foot="vs. período anterior" />
+        <Kpi d={70} icon="trend" label={hourly ? 'Média por hora' : 'Média por dia'} period={hourly ? 'nas últimas 24 h' : `${nDays} dias`}
+             value={avgPerDay} color={RS_C.sage}
+             spark={avgMovel.length >= 2 ? avgMovel : null} sparkId="rss2"
+             eixoX={xPlur} eixoY={`média de visitas/${GRUPO_SING[gEfetivo]}`}
+             foot={`média móvel de 3 ${xPlur}`} />
         <Kpi d={140} icon="users" label="Visitantes únicos" period={period}
              value={data.total_visitors || 0} color={RS_C.sage}
-             spark={hasVisitors && series.length >= 2 ? series.map((x) => ({ v: x.u })) : null} sparkId="rss3"
+             spark={hasVisitors && gseries.length >= 2 ? gseries.map((x) => ({ v: x.u })) : null} sparkId="rss3"
+             eixoX={xPlur} eixoY="visitantes únicos"
              foot={<Tip label="Contagem própria no Worker (D1), por impressão diária — sem cookies e sem Google Analytics.">
                <span style={{ display: 'inline-flex', gap: 5, alignItems: 'center', cursor: 'help', borderBottom: '1px dotted var(--edge-2)' }}>
                  sem cookies <Icon name="info" size={12} />
                </span>
              </Tip>} />
         <Reveal d={200} cls="glass b-3" style={{ padding: '24px 26px 20px' }}>
-          <PanelHead over="Tráfego" title={hourly ? 'Acessos por hora (últimas 24 h)' : 'Acessos por dia'}
-            note="Dados próprios do Worker — sem Google Analytics."
+          <PanelHead over="Tráfego" title={hourly ? 'Acessos por hora (últimas 24 h)' : `Acessos por ${GRUPO_SING[gEfetivo]}`}
+            note={hourly
+              ? 'Últimas 24 horas · um ponto por hora. Dados próprios do Worker — sem Google Analytics.'
+              : `Últimos ${nDays} dias · agrupado por ${GRUPO_SING[gEfetivo]} (soma de cada ${GRUPO_SING[gEfetivo]}). Dados próprios do Worker — sem Google Analytics.`}
             right={peak && peak.v > 0 && <span className="chip"><Icon name="target" size={12} />pico {nf(peak.v)} · {peak.d}</span>} />
-          <Chart series={series} id="rsst" h={218} keys={keys}
-                 flatNote={data.total_views === 0 ? 'Ainda sem acessos registados neste período — os primeiros aparecem aqui em breve.' : null} />
+          <Chart series={gseries} id="rsst" h={218} keys={keys}
+                 xLabel={xPlur} yLabel={hasVisitors ? 'visitas / únicos' : 'visitas'}
+                 flatNote={data.total_views === 0
+                   ? 'Ainda sem acessos registados neste período — os primeiros aparecem aqui em breve.'
+                   : gseries.length < 2
+                     ? `Com este agrupamento o período só tem ${gseries.length} ponto — escolha um período maior ou um agrupamento mais fino.`
+                     : null} />
         </Reveal>
-        <Kpi d={260} icon="target" label="Pico" period={peak && peak.v > 0 ? `registado ${hourly ? 'às' : 'a'} ${peak.d}` : 'sem dados ainda'}
-             value={peak ? peak.v : 0} color={RS_C.warm} spark={spark.length >= 2 ? spark : null} sparkId="rss4"
-             foot={hourly ? 'melhor hora do período' : 'melhor dia do período'} />
+        <Kpi d={260} icon="target" label="Pico"
+             period={peak && peak.v > 0 ? `melhor ${GRUPO_SING[gEfetivo]} · ${peak.d}` : 'sem dados ainda'}
+             value={peak ? peak.v : 0} color={RS_C.warm}
+             spark={spark.length >= 2 ? spark : null} sparkId="rss4"
+             eixoX={xPlur} eixoY="visitas"
+             foot={`máximo entre os ${xPlur} do período`} />
       </div>
       <Reveal d={120} cls="glass" style={{ marginTop: 22, padding: '20px 24px', display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
         <span style={{ color: 'var(--gold)', display: 'flex' }}><Icon name="info" size={17} /></span>

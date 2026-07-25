@@ -6,10 +6,13 @@
 import { jsonResponse, jsonError } from '../lib/response.js';
 
 const RANGES = {
-  '1d':  { days: 1,  granularity: 'hour' },
-  '7d':  { days: 7,  granularity: 'day' },
-  '15d': { days: 15, granularity: 'day' },
-  '30d': { days: 30, granularity: 'day' },
+  '1d':   { days: 1,   granularity: 'hour' },
+  '7d':   { days: 7,   granularity: 'day' },
+  '15d':  { days: 15,  granularity: 'day' },
+  '30d':  { days: 30,  granularity: 'day' },
+  '60d':  { days: 60,  granularity: 'day' },
+  '90d':  { days: 90,  granularity: 'day' },
+  '120d': { days: 120, granularity: 'day' },
 };
 
 export async function handleStats(request, env, path, session) {

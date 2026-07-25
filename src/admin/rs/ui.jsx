@@ -169,11 +169,15 @@ export function useMeasure() {
 }
 
 /* escala com folga mínima — séries curtas e planas nunca colam ao eixo */
-function rsScale(series, ks, h, pt, pb) {
+function rsBounds(series, ks) {
   const vals = []; series.forEach((s) => ks.forEach((k) => vals.push(s[k.k])));
   let min = Math.min(...vals), max = Math.max(...vals);
   const span = max - min, pad = span < max * .08 ? Math.max(2, max * .05) : span * .3;
   min = Math.max(0, min - pad); max = max + pad * .6;
+  return { min, max };
+}
+function rsScale(series, ks, h, pt, pb) {
+  const { min, max } = rsBounds(series, ks);
   return (v) => pt + (1 - (v - min) / (max - min || 1)) * (h - pt - pb);
 }
 /* curva monotone-ish */
@@ -186,7 +190,7 @@ function rsPath(pts) {
 }
 
 /* ---------------- gráfico grande (padrão bklitai/area-chart: grid horizontal, fadeEdges, tooltip de linhas) ---------------- */
-export function Chart({ series, keys, h = 200, id = 'c', unit = '', flatNote, accent = '#d4b585' }) {
+export function Chart({ series, keys, h = 200, id = 'c', unit = '', flatNote, accent = '#d4b585', xLabel, yLabel }) {
   const ks = keys || [{ k: 'v', label: '', color: accent }];
   const [ref, W] = useMeasure();
   const [hi, setHi] = useState(null);
@@ -196,6 +200,11 @@ export function Chart({ series, keys, h = 200, id = 'c', unit = '', flatNote, ac
       ? <div style={{ display: 'flex', gap: 7, alignItems: 'center', fontSize: 12.5, color: 'var(--fg-3)', padding: '18px 0' }}><Icon name="info" size={13} />{flatNote}</div>
       : null;
   }
+  const bounds = rsBounds(series, ks);
+  const fmtTick = (v) => {
+    const n = Math.round(v);
+    return n >= 10000 ? (n / 1000).toFixed(1).replace('.', ',') + ' mil' : n.toLocaleString('pt-PT');
+  };
   const y = rsScale(series, ks, h, PT, PB);
   const x = (i) => (i / Math.max(1, series.length - 1)) * W;
   const geo = ks.map((k) => {
@@ -234,8 +243,15 @@ export function Chart({ series, keys, h = 200, id = 'c', unit = '', flatNote, ac
           <filter id={id + 'ds'} x="-60%" y="-60%" width="220%" height="220%"><feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="rgba(0,0,0,.55)" /></filter>
         </defs>
         {[0, .5, 1].map((f) => (
-          <line key={f} x1="0" x2={W} y1={PT + f * (h - PT - PB)} y2={PT + f * (h - PT - PB)}
-                stroke="var(--edge)" strokeWidth="1" strokeDasharray={f ? '3 7' : ''} />
+          <g key={f}>
+            <line x1="0" x2={W} y1={PT + f * (h - PT - PB)} y2={PT + f * (h - PT - PB)}
+                  stroke="var(--edge)" strokeWidth="1" strokeDasharray={f ? '3 7' : ''} />
+            {/* rótulo do eixo Y sobre cada linha-guia */}
+            <text x="0" y={PT + f * (h - PT - PB) - 5} fontSize="9.5" fill="var(--fg-3)"
+                  style={{ fontVariantNumeric: 'tabular-nums', letterSpacing: '.04em' }}>
+              {fmtTick(bounds.max - f * (bounds.max - bounds.min))}
+            </text>
+          </g>
         ))}
         <g mask={'url(#' + id + 'em)'}>
           {geo.map((g) => <path key={g.k.k} d={g.area} fill={'url(#' + id + g.k.k + 'f)'} style={{ animation: 'rsFadeIn 1.1s .35s var(--ease-out) both' }} />)}
@@ -257,6 +273,12 @@ export function Chart({ series, keys, h = 200, id = 'c', unit = '', flatNote, ac
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 10.5, color: 'var(--fg-3)', letterSpacing: '.06em', marginTop: 8 }}>
         {ticks.map((s, i) => <span key={i}>{s.d}</span>)}
       </div>
+      {(xLabel || yLabel) && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginTop: 9, fontSize: 10, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--fg-3)' }}>
+          {xLabel && <span>Eixo X · {xLabel}</span>}
+          {yLabel && <span>Eixo Y · {yLabel}</span>}
+        </div>
+      )}
       {hi != null && (
         <div style={{ position: 'absolute', left: x(hi), top: 0,
                       transform: `translate(${hi > series.length - 3 ? '-92%' : hi < 2 ? '-8%' : '-50%'},-56%)`,

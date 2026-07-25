@@ -168,6 +168,7 @@ export default function ArticleStudio({ articleId, onClose }) {
     const onKey = (e) => {
       if (e.key !== 'Escape') return;
       if (ampliadaRef.current != null) return; // o lightbox trata do seu próprio Esc
+      if (document.querySelector('.adm-overlay')) return; // um diálogo aberto trata do seu próprio Esc
       setPreview((p) => { if (p) return false; fechar(); return p; });
     };
     window.addEventListener('keydown', onKey);
@@ -537,6 +538,7 @@ function Lightbox({ images, start = 0, chosenId, onPick, onReport, onClose }) {
 
   useEffect(() => {
     const onKey = (e) => {
+      if (document.querySelector('.adm-overlay')) return; // diálogo aberto (ex.: reportar erro) — as teclas são dele
       if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
       else if (e.key === 'ArrowRight') ir(i + 1, 1);
       else if (e.key === 'ArrowLeft') ir(i - 1, -1);

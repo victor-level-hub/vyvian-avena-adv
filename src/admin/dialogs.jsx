@@ -4,7 +4,7 @@
 //   admConfirm(mensagem, { title?, okLabel?, cancelLabel?, danger? }) -> Promise<boolean>
 //   admPrompt(mensagem, { title?, defaultValue?, placeholder? })      -> Promise<string|null>
 // O <DialogHost /> é montado uma única vez no AdminApp.
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 let pushDialog = null; // ligado quando o DialogHost monta
 
@@ -37,6 +37,22 @@ export function DialogHost() {
 
   useEffect(() => {
     if (d && d.kind === 'prompt') setValue(d.defaultValue || '');
+  }, [d]);
+
+  // Forçar o foco no campo do prompt: o autoFocus do React perde quando outro
+  // componente retém o foco (ex.: o editor TipTap no estúdio do artigo) — sem
+  // isto, o que se escreve vai parar ao editor escondido atrás do diálogo.
+  const inputRef = useRef(null);
+  useEffect(() => {
+    if (!d || d.kind !== 'prompt') return undefined;
+    const foca = () => {
+      const el = inputRef.current;
+      if (el && document.activeElement !== el) { el.focus(); el.select(); }
+    };
+    foca();
+    const t1 = setTimeout(foca, 50);
+    const t2 = setTimeout(foca, 220); // segunda ronda ganha a quem roubar o foco
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [d]);
 
   useEffect(() => {
@@ -81,6 +97,7 @@ export function DialogHost() {
         </div>
         {d.kind === 'prompt' && (
           <input
+            ref={inputRef}
             autoFocus
             type="text"
             value={value}

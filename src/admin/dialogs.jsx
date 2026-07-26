@@ -66,6 +66,33 @@ export function DialogHost() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [d]);
 
+  // Guarda do teclado no prompt: enquanto o diálogo está aberto, QUALQUER tecla
+  // escrita fora do campo (porque algo lhe roubou o foco — ex.: o editor TipTap)
+  // é redirecionada para o campo. Corre em fase de captura, antes de todos.
+  useEffect(() => {
+    if (!d || d.kind !== 'prompt') return undefined;
+    const guard = (e) => {
+      const el = inputRef.current;
+      if (!el || document.activeElement === el) return; // já está no sítio certo
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key && e.key.length === 1) {
+        e.preventDefault(); e.stopPropagation();
+        el.focus();
+        setValue((v) => v + e.key);
+      } else if (e.key === 'Backspace') {
+        e.preventDefault(); e.stopPropagation();
+        el.focus();
+        setValue((v) => v.slice(0, -1));
+      } else if (e.key === 'Enter') {
+        e.preventDefault(); e.stopPropagation();
+        el.focus();
+      }
+    };
+    window.addEventListener('keydown', guard, true);
+    return () => window.removeEventListener('keydown', guard, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [d]);
+
   if (!d) return null;
 
   function close(result) {

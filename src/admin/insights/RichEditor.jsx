@@ -9,6 +9,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
+import Image from '@tiptap/extension-image';
 import { Markdown } from 'tiptap-markdown';
 import { admPrompt } from '../dialogs';
 
@@ -32,6 +33,7 @@ export default function RichEditor({ initialMarkdown, onChangeMarkdown, placehol
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [2, 3] } }),
+      Image.configure({ HTMLAttributes: { loading: 'lazy' } }), // fotos no corpo do artigo
       Underline,
       Link.configure({ openOnClick: false, autolink: true, HTMLAttributes: { rel: 'noopener noreferrer' } }),
       Placeholder.configure({ placeholder: placeholder || 'Escreva o artigo…' }),

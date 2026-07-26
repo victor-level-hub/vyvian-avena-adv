@@ -199,6 +199,8 @@
 .rs-scope .prose strong { color: var(--fg); font-weight: 700; }
 .rs-scope .prose a { text-decoration: underline; text-underline-offset: 3px; }
 .rs-scope .prose hr { border: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--edge-2) 12%, var(--edge-2) 88%, transparent); margin: 30px 0; }
+.rs-scope .prose img, .rs-scope .adm-rte-area .tiptap img { display: block; max-width: 100%; height: auto; border-radius: 14px; border: 1px solid var(--edge); margin: 26px 0; box-shadow: var(--shadow); }
+.rs-scope .adm-rte-area .tiptap img.ProseMirror-selectednode { outline: 2px solid var(--gold-soft); outline-offset: 3px; }
 .rs-scope .prose [contenteditable]:focus, .rs-scope .prose:focus { outline: none; }
 
 /* capitular na pré-visualização */

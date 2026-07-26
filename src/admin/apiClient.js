@@ -143,7 +143,13 @@ export const insights = {
   topics: () => request('/api/insights/topics'),
 
   generateArticle: (topicId) => request('/api/insights/articles', { method: 'POST', body: { topic_id: topicId } }),
+  // Tema livre: a Dra. escreve o tema e a IA pesquisa e escreve o artigo.
+  generateFromTheme: (tema) => request('/api/insights/articles', { method: 'POST', body: { tema } }),
+  freeArticles: () => request('/api/insights/articles'),
   getArticle: (id) => request(`/api/insights/articles/${id}`),
+  // Fotos no corpo: a IA decide após que parágrafo entra cada imagem escolhida.
+  insertImages: (articleId, imageIds) =>
+    request(`/api/insights/articles/${articleId}/inserir-imagens`, { method: 'POST', body: { image_ids: imageIds } }),
   saveArticle: (id, data) => request(`/api/insights/articles/${id}`, { method: 'PATCH', body: data }),
 
   // Gera 4 opções de imagem (Gemini; fallback Recraft). Repetir = gerar todas de novo.

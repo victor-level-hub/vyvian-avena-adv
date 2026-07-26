@@ -121,6 +121,12 @@ export default {
           return await handlePublicUpload(request, env, path);
         }
 
+        // Imagens dos artigos Insights — públicas em GET (destinam-se ao blogue;
+        // sem dados sensíveis). Permite usá-las em <img>/markdown na pré-visualização.
+        if (request.method === 'GET' && /^\/api\/insights\/images\/\d+$/.test(path)) {
+          return await handleInsights(request, env, path, null);
+        }
+
         // Rotas privadas — requerem sessão válida
         const session = await requireAuth(request, env);
         if (!session) {

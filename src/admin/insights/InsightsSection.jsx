@@ -15,6 +15,7 @@ import { Icon, Reveal, Tip, Seg, StepLoader, Confetti, Level, PanelHead } from '
 
 const VISTAS = [
   { k: 'sugestoes', label: 'SUGESTÕES' },
+  { k: 'tema', label: 'TEMA LIVRE' },
   { k: 'fontes', label: 'FONTES' },
 ];
 
@@ -73,7 +74,9 @@ export default function InsightsSection() {
       </div>
       {vista === 'sugestoes'
         ? <Sugestoes onAbrirArtigo={setArtigoId} />
-        : <Fontes />}
+        : vista === 'tema'
+          ? <TemaLivre onAbrirArtigo={setArtigoId} />
+          : <Fontes />}
       {artigoId != null && (
         <ArticleStudio articleId={artigoId} onClose={() => setArtigoId(null)} />
       )}
@@ -268,6 +271,106 @@ function Sugestoes({ onAbrirArtigo }) {
                   error={erroArtigo}
                   onRetry={() => gerarArtigo(gerando)}
                   onCancel={() => { setGerando(null); setErroArtigo(null); }} />
+      <Confetti fire={fire} key={fire} />
+    </>
+  );
+}
+
+// ============================================================ TEMA LIVRE
+
+const PASSOS_TEMA = [
+  'A pesquisar o tema nas fontes oficiais e na imprensa…',
+  'A estruturar o artigo no padrão do blogue…',
+  'A escrever com aviso legal…',
+  'A calcular tempo de leitura e descrição SEO…',
+];
+
+function TemaLivre({ onAbrirArtigo }) {
+  const [tema, setTema] = useState('');
+  const [gerando, setGerando] = useState(false);
+  const [erro, setErro] = useState(null);
+  const [anteriores, setAnteriores] = useState(null);
+  const [fire, setFire] = useState(0);
+
+  const carregar = () => api.freeArticles().then((d) => setAnteriores(d.articles || [])).catch(() => setAnteriores([]));
+  useEffect(() => { carregar(); }, []);
+
+  const gerar = async () => {
+    const t = tema.trim();
+    if (!t) return;
+    setGerando(true);
+    setErro(null);
+    try {
+      const d = await api.generateFromTheme(t);
+      setGerando(false);
+      setTema('');
+      setFire(Date.now());
+      carregar();
+      setTimeout(() => onAbrirArtigo(d.article.id), 380);
+    } catch (e) {
+      setErro(e.message || 'Falha ao gerar o artigo.');
+    }
+  };
+
+  return (
+    <>
+      <div className="glass" style={{ padding: '26px 28px', marginBottom: 24, position: 'relative', overflow: 'hidden' }}>
+        <span className="overline">O tema é seu</span>
+        <h3 style={{ fontSize: 24, marginTop: 10 }}>Sobre o que quer escrever?</h3>
+        <p style={{ fontSize: 13.5, color: 'var(--fg-2)', marginTop: 10, maxWidth: '62ch', lineHeight: 1.6 }}>
+          Escreva o assunto por palavras suas — a IA pesquisa as fontes oficiais e a atualidade
+          sobre o tema e entrega o artigo completo no padrão do blogue, pronto a rever no editor.
+        </p>
+        <form onSubmit={(e) => { e.preventDefault(); gerar(); }} style={{ marginTop: 16 }}>
+          <textarea
+            className="field" rows={3} value={tema} maxLength={300} disabled={gerando}
+            onChange={(e) => setTema(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) gerar(); }}
+            placeholder="Ex.: O que muda para os nômades digitais com as novas regras do visto D8 em 2026"
+            style={{ resize: 'vertical', minHeight: 84, lineHeight: 1.55 }}
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12, flexWrap: 'wrap' }}>
+            <button type="submit" className="btn btn-gold" disabled={gerando || !tema.trim()}>
+              <Icon name="spark" size={14} />Gerar artigo
+            </button>
+            <span className="mono" style={{ fontSize: 11, color: 'var(--fg-3)' }}>{tema.length}/300</span>
+            <span style={{ fontSize: 11.5, color: 'var(--fg-3)' }}>~1 min · depois abre no editor, como nas sugestões</span>
+          </div>
+        </form>
+      </div>
+
+      {anteriores == null ? null : anteriores.length > 0 && (
+        <>
+          <PanelHead over={`${anteriores.length} ${anteriores.length === 1 ? 'artigo' : 'artigos'}`} title="Temas livres anteriores"
+                     note="Artigos gerados a partir de temas seus — clique para reabrir no editor." />
+          <div style={{ display: 'grid', gap: 10 }}>
+            {anteriores.map((a, i) => (
+              <button key={a.id} type="button" onClick={() => onAbrirArtigo(a.id)}
+                      className="glass"
+                      style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '15px 18px', textAlign: 'left', width: '100%',
+                               animation: `rsRiseInSm .4s ${Math.min(i, 8) * 50}ms var(--ease-out) both`, cursor: 'pointer' }}>
+                <span style={{ width: 32, height: 32, flex: 'none', borderRadius: 9, display: 'grid', placeItems: 'center',
+                               background: 'var(--grad-gold-soft)', border: '1px solid var(--edge-2)', color: 'var(--gold-soft)' }}>
+                  <Icon name="edit" size={14} />
+                </span>
+                <span style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ display: 'block', fontSize: 14.5, fontWeight: 600, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a.titulo}</span>
+                  <span className="mono" style={{ display: 'block', fontSize: 11, color: 'var(--fg-3)', marginTop: 3 }}>
+                    {(AREAS_LABEL[a.area] || a.area || 'Blogue')} · {fmtDataHora(a.criado_em)}
+                  </span>
+                </span>
+                <Icon name="chev" size={15} style={{ color: 'var(--fg-3)', flexShrink: 0 }} />
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+
+      <StepLoader open={gerando} steps={PASSOS_TEMA} per={14000}
+                  title="A escrever o artigo do seu tema (~1 min)"
+                  error={erro}
+                  onRetry={() => { setErro(null); gerar(); }}
+                  onCancel={() => { setGerando(false); setErro(null); }} />
       <Confetti fire={fire} key={fire} />
     </>
   );

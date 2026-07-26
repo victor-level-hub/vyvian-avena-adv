@@ -145,11 +145,14 @@ export async function handleInsights(request, env, path, session) {
   if (path === "/api/insights/topics" && m === "GET") return listTopics(env);
 
   if (path === "/api/insights/articles" && m === "POST") return generateArticle(request, env);
+  if (path === "/api/insights/articles" && m === "GET") return listFreeArticles(env);
   let mt = path.match(/^\/api\/insights\/articles\/(\d+)$/);
   if (mt) {
     if (m === "GET") return getArticle(env, +mt[1]);
     if (m === "PATCH") return updateArticle(request, env, +mt[1]);
   }
+  mt = path.match(/^\/api\/insights\/articles\/(\d+)\/inserir-imagens$/);
+  if (mt && m === "POST") return inserirImagens(request, env, +mt[1]);
   mt = path.match(/^\/api\/insights\/articles\/(\d+)\/images$/);
   if (mt && m === "POST") return generateImages(request, env, +mt[1]);
   mt = path.match(/^\/api\/insights\/articles\/(\d+)\/escolher-imagem$/);
@@ -300,16 +303,28 @@ const safeParse = (s) => { try { return JSON.parse(s || "[]"); } catch { return 
 async function generateArticle(request, env) {
   let body = {};
   try { body = await request.json(); } catch {}
-  const topic = await env.DB.prepare(`SELECT * FROM insight_topics WHERE id = ?`).bind(+body.topic_id || 0).first();
-  if (!topic) return jsonError("Sugestão não encontrada", 404);
 
-  const fontes = safeParse(topic.fontes);
+  // Duas origens: uma sugestão do motor (topic_id) OU um tema livre escrito pela Dra.
+  const temaLivre = String(body.tema || "").trim().slice(0, 300);
+  let topic = null;
+  if (+body.topic_id) {
+    topic = await env.DB.prepare(`SELECT * FROM insight_topics WHERE id = ?`).bind(+body.topic_id).first();
+    if (!topic) return jsonError("Sugestão não encontrada", 404);
+  } else if (!temaLivre) {
+    return jsonError("Indique a sugestão (topic_id) ou escreva o tema", 400);
+  }
+
+  const fontes = topic ? safeParse(topic.fontes) : [];
+  const assunto = topic ? topic.titulo : temaLivre;
+  const contexto = topic
+    ? topic.resumo
+    : "Tema proposto diretamente pela Dra. Vyvian. Pesquisa a atualidade e as fontes oficiais portuguesas sobre este assunto antes de escrever.";
   const prompt = `${PERFIL}
 
 Escreve um artigo COMPLETO para o blogue da Dra. Vyvian (vyavenaadv.com/blog) sobre o assunto:
 
-ASSUNTO: ${topic.titulo}
-CONTEXTO: ${topic.resumo}
+ASSUNTO: ${assunto}
+CONTEXTO: ${contexto}
 FONTES JÁ IDENTIFICADAS (usa a pesquisa Google para confirmar os factos nelas e aprofundar):
 ${fontes.map((f) => `- ${f.nome}: ${f.titulo || ""} — ${f.url}`).join("\n") || "(procura tu as fontes oficiais)"}
 
@@ -350,13 +365,99 @@ Responde EXCLUSIVAMENTE com JSON válido:
 
   const ins = await env.DB.prepare(
     `INSERT INTO insight_articles (topic_id, titulo, descricao, area, idioma, markdown) VALUES (?,?,?,?,?,?)`
-  ).bind(topic.id, limparCitacoes(String(art.titulo)).slice(0, 120),
+  ).bind(topic ? topic.id : null, limparCitacoes(String(art.titulo)).slice(0, 120),
          limparCitacoes(String(art.descricao || "")).slice(0, 300),
-         String(art.area || topic.area || "").slice(0, 30) || null,
+         String(art.area || (topic && topic.area) || "").slice(0, 30) || null,
          art.idioma === "pt-BR" ? "pt-BR" : "pt-PT", limparCitacoes(String(art.markdown))).run();
-  await env.DB.prepare(`UPDATE insight_topics SET estado='artigo_gerado' WHERE id = ?`).bind(topic.id).run();
+  if (topic) {
+    await env.DB.prepare(`UPDATE insight_topics SET estado='artigo_gerado' WHERE id = ?`).bind(topic.id).run();
+  }
 
   return getArticle(env, ins.meta.last_row_id);
+}
+
+// Artigos de tema livre (sem sugestão associada) — para a Dra. os reabrir depois.
+async function listFreeArticles(env) {
+  const rows = (await env.DB.prepare(
+    `SELECT id, titulo, area, idioma, criado_em FROM insight_articles
+     WHERE topic_id IS NULL ORDER BY id DESC LIMIT 20`
+  ).all()).results || [];
+  return jsonResponse({ articles: rows });
+}
+
+// ------------------------------------------------ fotos no corpo do artigo
+// A Dra. escolhe as imagens; a IA decide após que parágrafo cada uma encaixa
+// melhor e o Worker insere o markdown correspondente (imagens públicas em GET).
+async function inserirImagens(request, env, articleId) {
+  let body = {};
+  try { body = await request.json(); } catch {}
+  const ids = (Array.isArray(body.image_ids) ? body.image_ids : []).map(Number).filter(Boolean).slice(0, 4);
+  if (!ids.length) return jsonError("Escolha pelo menos uma imagem", 400);
+
+  const a = await env.DB.prepare(`SELECT * FROM insight_articles WHERE id = ?`).bind(articleId).first();
+  if (!a) return jsonError("Artigo não encontrado", 404);
+  const imgs = (await env.DB.prepare(
+    `SELECT id, prompt FROM insight_images WHERE article_id = ? AND id IN (${ids.map(() => "?").join(",")})`
+  ).bind(articleId, ...ids).all()).results || [];
+  if (!imgs.length) return jsonError("Imagens não encontradas neste artigo", 404);
+
+  // blocos do markdown (separados por linha em branco); imagens já existentes não contam
+  const blocos = String(a.markdown || "").split(/\n{2,}/);
+  const lista = blocos.map((b, i) => `[${i}] ${b.replace(/\s+/g, " ").slice(0, 180)}`).join("\n");
+  const cenas = imgs.map((im) => {
+    const desc = String(im.prompt || "").split("\n").filter((l) => /^Cena/i.test(l.trim()))[0] || String(im.prompt || "").slice(-160);
+    return `- imagem ${im.id}: ${desc.trim().slice(0, 200)}`;
+  }).join("\n");
+
+  const prompt = `Vais posicionar fotografias dentro de um artigo de blogue jurídico em português.
+
+BLOCOS DO ARTIGO (por ordem; [n] é o índice do bloco):
+${lista}
+
+FOTOGRAFIAS DISPONÍVEIS (descrição da cena de cada uma):
+${cenas}
+
+Regras:
+- Cada fotografia entra DEPOIS do bloco cujo conteúdo mais se relaciona com a cena.
+- Distribui as fotografias ao longo do artigo (nunca duas seguidas, nunca após o mesmo bloco).
+- Evita o bloco 0 (abertura) e o último bloco.
+- "alt" é uma descrição breve e natural da cena em português (8-14 palavras, sem aspas).
+
+Responde EXCLUSIVAMENTE com JSON válido:
+{"colocacoes":[{"image_id":123,"apos_bloco":4,"alt":"..."}]}`;
+
+  let plano;
+  try {
+    const data = await gemini(env, MODEL_PESQUISA, {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
+    });
+    plano = extractJson(geminiText(data));
+  } catch (e) {
+    return jsonError(`Falha a posicionar as imagens: ${e.message}`, 502);
+  }
+
+  const colocacoes = (plano.colocacoes || [])
+    .filter((c) => ids.includes(Number(c.image_id)))
+    .map((c) => ({
+      id: Number(c.image_id),
+      apos: Math.max(1, Math.min(blocos.length - 2, Number(c.apos_bloco) || 1)),
+      alt: String(c.alt || "Fotografia ilustrativa do artigo").slice(0, 140).replace(/["\]]/g, ""),
+    }));
+  if (!colocacoes.length) return jsonError("A IA não devolveu posições válidas", 502);
+
+  // remover duplicados de posição (empurra para o bloco seguinte) e inserir de trás para a frente
+  const usadas = new Set();
+  for (const c of colocacoes) { while (usadas.has(c.apos)) c.apos++; usadas.add(c.apos); }
+  colocacoes.sort((x, y) => y.apos - x.apos);
+  for (const c of colocacoes) {
+    const md = `![${c.alt}](/api/insights/images/${c.id})`;
+    blocos.splice(Math.min(c.apos, blocos.length - 1) + 1, 0, md);
+  }
+
+  await env.DB.prepare(`UPDATE insight_articles SET markdown = ? WHERE id = ?`)
+    .bind(blocos.join("\n\n"), articleId).run();
+  return getArticle(env, articleId);
 }
 
 async function getArticle(env, id) {

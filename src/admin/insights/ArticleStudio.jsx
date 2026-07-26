@@ -102,6 +102,8 @@ export default function ArticleStudio({ articleId, onClose }) {
   const [preview, setPreview] = useState(false);
   const [ampliada, setAmpliada] = useState(null);  // índice da imagem aberta no lightbox
   const [regras, setRegras] = useState(null);      // correções de imagem (erros a evitar)
+  const [corpo, setCorpo] = useState(() => new Set()); // imagens marcadas para o corpo do artigo
+  const [inserindo, setInserindo] = useState(false);
   const [fire, setFire] = useState(0);
   const mdRef = useRef('');
 
@@ -126,7 +128,36 @@ export default function ArticleStudio({ articleId, onClose }) {
     } catch (e) { admToast(e.message, { kind: 'error' }); }
   };
 
+  const toggleCorpo = (id) => setCorpo((s) => {
+    const n = new Set(s);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+
+  const inserirNoArtigo = async () => {
+    const ids = [...corpo];
+    if (!ids.length) return;
+    if (sujo) await guardar(true); // não perder edições — a inserção reescreve o markdown
+    setInserindo(true);
+    try {
+      const d = await api.insertImages(articleId, ids);
+      setData(d);
+      setMarkdown(d.article.markdown || '');
+      mdRef.current = d.article.markdown || '';
+      setSujo(false);
+      setCorpo(new Set());
+      setFire(Date.now());
+      admToast(`${ids.length} ${ids.length === 1 ? 'foto colocada' : 'fotos colocadas'} nos parágrafos mais adequados.`);
+    } catch (e) {
+      admToast(`Não foi possível inserir as fotos: ${e.message}`, { kind: 'error' });
+    } finally {
+      setInserindo(false);
+    }
+  };
+
   const reportarErroDialogo = async (contexto) => {
+    // solta o foco do editor antes de abrir o diálogo (o TipTap retém o teclado)
+    try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch {}
     const texto = await admPrompt(
       'Descreva o erro para a IA nunca mais o repetir (ex.: «ecrã do telemóvel virado ao contrário»):',
       { title: contexto || 'Reportar erro na imagem', placeholder: 'O que está errado nesta imagem?' }
@@ -333,6 +364,9 @@ export default function ArticleStudio({ articleId, onClose }) {
                     {data.images.map((img, i) => (
                       <CoverOption key={img.id} src={urls[img.id]} i={i} provider={img.provider}
                                    chosen={escolhida === img.id} onPick={() => escolher(img.id)}
+                                   noCorpo={corpo.has(img.id)}
+                                   jaNoArtigo={(mdRef.current || markdown).includes(`/api/insights/images/${img.id})`)}
+                                   onToggleCorpo={() => toggleCorpo(img.id)}
                                    onExpand={() => setAmpliada(i)} />
                     ))}
                   </div>
@@ -343,6 +377,19 @@ export default function ArticleStudio({ articleId, onClose }) {
                     <Icon name="refresh" size={13} />Gerar todas novamente
                   </button>
                   <div style={{ fontSize: 11, color: 'var(--fg-3)', marginTop: 9, textAlign: 'center' }}>1–2 min · Gemini, fallback Recraft</div>
+
+                  <hr className="rule" style={{ margin: '16px 0 13px' }} />
+                  <span className="overline">Fotos no corpo do artigo</span>
+                  <p style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 8, lineHeight: 1.55 }}>
+                    Marque fotos com o botão <Icon name="plus" size={10} style={{ verticalAlign: '-1px' }} /> em cada miniatura —
+                    a IA coloca cada uma <strong style={{ color: 'var(--fg-2)' }}>após o parágrafo com que mais se relaciona</strong>.
+                  </p>
+                  <button type="button" className={'btn btn-sm ' + (corpo.size ? 'btn-gold' : 'btn-ghost')}
+                          style={{ width: '100%', justifyContent: 'center', marginTop: 11 }}
+                          onClick={inserirNoArtigo} disabled={!corpo.size || inserindo}>
+                    <Icon name={inserindo ? 'refresh' : 'image'} size={13} />
+                    {inserindo ? 'A posicionar as fotos…' : corpo.size ? `Inserir ${corpo.size} no artigo` : 'Inserir no artigo'}
+                  </button>
                 </>
               ) : (
                 <>
@@ -422,7 +469,7 @@ export default function ArticleStudio({ articleId, onClose }) {
 }
 
 /* ---------------- opção de capa com hover direcional ---------------- */
-function CoverOption({ src, i, provider, chosen, onPick, onExpand }) {
+function CoverOption({ src, i, provider, chosen, onPick, onExpand, noCorpo, jaNoArtigo, onToggleCorpo }) {
   const [dir, setDir] = useState('b');
   const enter = (e) => {
     const r = e.currentTarget.getBoundingClientRect();
@@ -462,6 +509,25 @@ function CoverOption({ src, i, provider, chosen, onPick, onExpand }) {
                        backdropFilter: 'blur(4px)', cursor: 'zoom-in' }}>
           <Icon name="expand" size={12} />
         </span>
+      )}
+      {onToggleCorpo && (
+        jaNoArtigo
+          ? <span title="Já está no corpo do artigo"
+                  style={{ position: 'absolute', bottom: 7, left: 7, height: 24, padding: '0 7px', borderRadius: 7, display: 'inline-flex', alignItems: 'center', gap: 4,
+                           background: 'rgba(74,124,89,.55)', border: '1px solid rgba(143,208,162,.5)', color: '#d9f2e0',
+                           fontSize: 8.5, fontWeight: 800, letterSpacing: '.08em', backdropFilter: 'blur(4px)' }}>
+              <Icon name="check" size={9} s={3.4} />NO ARTIGO
+            </span>
+          : <span role="button" tabIndex={0} aria-pressed={noCorpo}
+                  title={noCorpo ? 'Retirar da seleção para o corpo do artigo' : 'Marcar para o corpo do artigo'}
+                  onClick={(e) => { e.stopPropagation(); e.preventDefault(); onToggleCorpo(); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onToggleCorpo(); } }}
+                  style={{ position: 'absolute', bottom: 7, left: 7, width: 24, height: 24, borderRadius: 7, display: 'grid', placeItems: 'center',
+                           background: noCorpo ? 'var(--grad-gold)' : 'rgba(6,18,15,.62)',
+                           border: '1px solid rgba(212,181,133,.4)', color: noCorpo ? '#1a1208' : '#d4b585',
+                           backdropFilter: 'blur(4px)', cursor: 'pointer' }}>
+              <Icon name={noCorpo ? 'check' : 'plus'} size={12} s={noCorpo ? 3 : 1.8} />
+            </span>
       )}
       {chosen && (
         <span style={{ position: 'absolute', top: 7, right: 7, width: 21, height: 21, borderRadius: '50%', background: 'var(--grad-gold)',

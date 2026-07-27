@@ -101,13 +101,17 @@ export function trackPageView(path) {
 // localStorage), apenas um POST fire-and-forget que o servidor agrega de forma
 // anónima (ver worker/lib/visits.js). Alimenta a página "Estatísticas" da Área Privada.
 export function trackHit() {
+  // O corpo leva o caminho da página (só o pathname — sem query nem hash), para o
+  // contador por página (site_page_views) que alimenta o Banco de Palavras (SEO).
+  let path = "/";
+  try { path = window.location.pathname || "/"; } catch {}
   try {
     if (typeof navigator !== "undefined" && navigator.sendBeacon) {
-      navigator.sendBeacon("/api/hit");
+      navigator.sendBeacon("/api/hit", path);
       return;
     }
   } catch {}
   try {
-    fetch("/api/hit", { method: "POST", keepalive: true, cache: "no-store" }).catch(() => {});
+    fetch("/api/hit", { method: "POST", body: path, keepalive: true, cache: "no-store" }).catch(() => {});
   } catch {}
 }

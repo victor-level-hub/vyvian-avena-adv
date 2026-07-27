@@ -8,6 +8,7 @@
 // com fallback Recraft (env.RECRAFT_API_KEY). Imagens ficam no R2 (env.RECIBOS,
 // prefixo insights/).
 import { jsonResponse, jsonError } from "../lib/response.js";
+import { upsertKeywords, resumoBanco, blocoBancoParaPrompt, updateKeywordMetrics } from "../lib/keywords.js";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 // Aliases "latest": resistentes a descontinuações (a 24/07/2026, o gemini-2.5-flash
@@ -171,6 +172,9 @@ export async function handleInsights(request, env, path, session) {
   mt = path.match(/^\/api\/insights\/articles\/(\d+)\/images\/(\d+)$/);
   if (mt && m === "DELETE") return descartarImagem(env, +mt[1], +mt[2]);
 
+  // Banco de Palavras (SEO) — termos com potencial + métricas reais
+  if (path === "/api/insights/palavras" && m === "GET") return listKeywords(env);
+
   // Correções de imagem apontadas pela Dra. — entram no prompt de todas as gerações.
   if (path === "/api/insights/image-rules" && m === "GET") return listImageRules(env);
   if (path === "/api/insights/image-rules" && m === "POST") return addImageRule(request, env);
@@ -197,6 +201,7 @@ async function refresh(request, env) {
   const fontes = (await env.DB.prepare(
     `SELECT nome, tipo, url FROM insight_sources ORDER BY fiabilidade DESC, engajamento DESC LIMIT 40`
   ).all()).results || [];
+  const banco = blocoBancoParaPrompt(await resumoBanco(env, 10));
 
   const prompt = `${PERFIL}
 
@@ -213,6 +218,10 @@ ${fontes.map((f) => `- ${f.nome} (${f.tipo}) — ${f.url}`).join("\n")}
 
 ${titulosExistentes.length ? `O blogue já tem artigos sobre estes títulos — EVITA repetir o mesmo ângulo:
 ${titulosExistentes.map((t) => `- ${t}`).join("\n")}` : ""}
+${banco}
+${banco ? `Ao escolher os 10 assuntos, dá vantagem a temas que cubram termos do banco AINDA NÃO
+usados (alargam o portfólio de indexação do site) e a temas ligados aos termos com melhor
+desempenho — sem forçar: a atualidade e o impacto continuam a mandar.` : ""}
 
 REGRAS IMPORTANTES:
 - Para CADA assunto, indica TODAS as fontes que encontraste a falar dele (mínimo 1,
@@ -329,6 +338,7 @@ async function generateArticle(request, env) {
   const contexto = topic
     ? topic.resumo
     : "Tema proposto diretamente pela Dra. Vyvian. Pesquisa a atualidade e as fontes oficiais portuguesas sobre este assunto antes de escrever.";
+  const banco = blocoBancoParaPrompt(await resumoBanco(env, 10));
   const prompt = `${PERFIL}
 
 Escreve um artigo COMPLETO para o blogue da Dra. Vyvian (vyavenaadv.com/blog) sobre o assunto:
@@ -337,6 +347,19 @@ ASSUNTO: ${assunto}
 CONTEXTO: ${contexto}
 FONTES JÁ IDENTIFICADAS (usa a pesquisa Google para confirmar os factos nelas e aprofundar):
 ${fontes.map((f) => `- ${f.nome}: ${f.titulo || ""} — ${f.url}`).join("\n") || "(procura tu as fontes oficiais)"}
+${banco}
+
+SEO E PALAVRAS-CHAVE (obrigatório):
+- O público NÃO é só o leitor brasileiro: inclui também portugueses, luso-descendentes e
+  famílias binacionais. Escolhe o ângulo e os termos conforme o tema, sem assumir um só público.
+- Antes de escrever, define a PALAVRA-CHAVE PRINCIPAL do artigo: o conjunto de palavras que
+  alguém digitaria no Google para encontrar este texto (ex.: «rastreamento processo aima»).
+- Usa a palavra-chave principal de forma NATURAL no título, na "descricao", no primeiro
+  parágrafo e em 2-3 dos títulos "##". Nada de repetição forçada (keyword stuffing).
+- Inclui variações que os dois públicos pesquisam (PT-PT e PT-BR, ex.: «telemóvel/celular»,
+  «arrendamento/aluguel») quando o tema o justificar.
+- Devolve no JSON 3 a 6 "palavras_chave" (a principal primeiro), cada uma com um score 0-100
+  do potencial de pesquisa que estimas — vão para o banco de palavras do blogue.
 
 PADRÃO EDITORIAL DO BLOGUE (obrigatório — é o padrão acordado com a Dra.):
 - Idioma: PT-PT por defeito; usa PT-BR apenas se o público-alvo do tema for claramente o
@@ -359,7 +382,8 @@ Responde EXCLUSIVAMENTE com JSON válido:
   "descricao": "120-155 caracteres",
   "area": "familia|civil|comercial|cobranca|nacionalidade|notarial",
   "idioma": "pt-PT" ou "pt-BR",
-  "markdown": "corpo do artigo em Markdown, SEM o título repetido no início"
+  "markdown": "corpo do artigo em Markdown, SEM o título repetido no início",
+  "palavras_chave": [{ "termo": "conjunto de palavras pesquisável", "score": 0-100 }]
 }`;
 
   let art;
@@ -382,6 +406,13 @@ Responde EXCLUSIVAMENTE com JSON válido:
   if (topic) {
     await env.DB.prepare(`UPDATE insight_topics SET estado='artigo_gerado' WHERE id = ?`).bind(topic.id).run();
   }
+
+  // Banco de Palavras: os termos devolvidos pela IA entram no banco e as
+  // métricas (usos, etc.) são já recalculadas — nunca parte a geração.
+  try {
+    const n = await upsertKeywords(env, art.palavras_chave);
+    if (n) await updateKeywordMetrics(env);
+  } catch (e) { console.error("keyword_bank:", e && e.message); }
 
   return getArticle(env, ins.meta.last_row_id);
 }
@@ -528,6 +559,15 @@ Coerência física obrigatória: ecrãs de telemóveis e computadores sempre vir
 pessoa que os está a usar — quem olha para um telemóvel vê o ecrã, e a câmara vê as
 COSTAS do aparelho. Nunca mostrar um ecrã virado para a câmara enquanto a pessoa olha
 para ele; mãos com cinco dedos e a segurar os objetos de forma natural.`;
+
+/* ---------------- Banco de Palavras (SEO) ---------------- */
+async function listKeywords(env) {
+  const rows = (await env.DB.prepare(
+    `SELECT id, termo, tipo, score, usos, visitas, ig_curtidas, ig_comentarios, origem, criado_em, atualizado_em
+     FROM keyword_bank ORDER BY score DESC, usos DESC LIMIT 400`
+  ).all()).results || [];
+  return jsonResponse({ keywords: rows });
+}
 
 /* ---------------- Banco de Imagens ----------------
    Guarda referências às imagens geradas (bytes continuam no R2). UNIQUE(image_id)

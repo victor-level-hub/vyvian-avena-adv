@@ -5,6 +5,7 @@
 import { sendEmail, sendWhatsApp, renderTemplate } from "./lib/senders.js";
 import { runOwnerDailyAlerts } from "./lib/owner_alerts.js";
 import { syncInstagram } from "./lib/instagram.js"; // Fase B: estatísticas do Instagram
+import { updateKeywordMetrics } from "./lib/keywords.js"; // Banco de Palavras (SEO)
 
 function fmtMoney(amount, currency) {
   const n = Math.round(Number(amount || 0) * 100) / 100;
@@ -129,6 +130,14 @@ export async function runDailyCron(env, ctx) {
   } catch (e) {
     console.error("ig sync:", e);
     summary.instagram = { error: String(e && e.message || e).slice(0, 200) };
+  }
+
+  // ── Banco de Palavras (SEO): recalcular usos/visitas/engajamento por termo ──
+  try {
+    summary.palavras = await updateKeywordMetrics(env);
+  } catch (e) {
+    console.error("keyword metrics:", e);
+    summary.palavras = { error: String(e && e.message || e).slice(0, 200) };
   }
 
   return summary;

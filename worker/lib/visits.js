@@ -41,6 +41,23 @@ export async function recordVisit(request, env) {
        ON CONFLICT(hour) DO UPDATE SET views = views + 1`
     ).bind(hour).run();
 
+    // page views por página/dia (Banco de Palavras): o beacon envia o pathname no
+    // corpo; fallback para o Referer. Só caminhos públicos plausíveis.
+    try {
+      let path = '';
+      try { path = (await request.text()).trim(); } catch {}
+      if (!path) {
+        try { path = new URL(request.headers.get('Referer') || '').pathname; } catch {}
+      }
+      if (path && path.startsWith('/') && path.length <= 160 && !path.startsWith('/admin') && !path.startsWith('/api')) {
+        path = path.split('?')[0].split('#')[0].replace(/\/+$/, '') || '/';
+        await env.DB.prepare(
+          `INSERT INTO site_page_views (day, path, views) VALUES (?, ?, 1)
+           ON CONFLICT(day, path) DO UPDATE SET views = views + 1`
+        ).bind(day, path).run();
+      }
+    } catch { /* contador auxiliar — nunca parte o principal */ }
+
     // visitante único do dia (sem cookies; ignora se já visto hoje)
     const ip = request.headers.get('CF-Connecting-IP') || '';
     const ua = request.headers.get('User-Agent') || '';

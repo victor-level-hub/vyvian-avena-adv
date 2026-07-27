@@ -800,8 +800,12 @@ function ImageRulesCard({ regras, onAdd, onRemove }) {
         a nota entra no prompt de <strong style={{ color: 'var(--fg-2)' }}>todas as próximas gerações</strong>.
       </p>
       <form onSubmit={submeter} style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+        {/* onFocus/onBlur: desativa o TipTap enquanto se escreve aqui (mesmo
+            mecanismo do fix dos diálogos) — o ProseMirror rouba o teclado se puder */}
         <input className="field" style={{ padding: '9px 12px', fontSize: 13 }} value={texto} maxLength={240}
                onChange={(e) => setTexto(e.target.value)}
+               onFocus={() => window.dispatchEvent(new CustomEvent('adm-dialog-open'))}
+               onBlur={() => window.dispatchEvent(new CustomEvent('adm-dialog-close'))}
                placeholder="Ex.: ecrã do telemóvel virado ao contrário" />
         <button type="submit" className="btn btn-gold btn-sm" disabled={!texto.trim()} data-tip="Guardar correção" aria-label="Guardar correção"
                 style={{ padding: '7px 11px' }}>

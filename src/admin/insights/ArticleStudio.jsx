@@ -415,7 +415,11 @@ export default function ArticleStudio({ articleId, onClose }) {
           <span className="chip">{a.idioma === 'pt-BR' ? 'PT-BR' : 'PT-PT'}</span>
           <span className="chip"><Icon name="clock" size={11} />{minutosLeitura(mdRef.current || markdown)} min de leitura</span>
           <span style={{ marginLeft: 'auto', display: 'flex', gap: 9, alignItems: 'center' }}>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={async () => { if (sujo) await guardar(true); setPreview(true); }}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={async () => {
+              if (sujo) await guardar(true);
+              if (corpo.size) admToast(`Tem ${corpo.size} ${corpo.size === 1 ? 'foto marcada' : 'fotos marcadas'} ainda NÃO inseridas — use «Inserir no artigo» para entrarem no corpo.`, { kind: 'info' });
+              setPreview(true);
+            }}>
               <Icon name="eye" size={14} />Pré-visualizar
             </button>
             <button type="button" className={'btn btn-sm ' + (sujo ? 'btn-gold' : 'btn-ghost')} onClick={() => guardar()} disabled={guardando}>
@@ -778,7 +782,7 @@ function NarracaoCard({ articleId, audioKey, audioEm, sujo, onAntesDeGerar, onGe
             Gerada a {dataFmt}.{sujo && <strong style={{ color: 'var(--warn)' }}> O texto foi alterado desde então — gere novamente.</strong>}
           </p>
           {url
-            ? <audio controls src={url} style={{ width: '100%', marginTop: 11, borderRadius: 10 }} />
+            ? <PlayerDourado url={url} />
             : <div style={{ fontSize: 11.5, color: 'var(--fg-3)', marginTop: 11 }}>A carregar o áudio…</div>}
           <button type="button" className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 11 }}
                   onClick={gerar} disabled={gerando}>
@@ -786,6 +790,98 @@ function NarracaoCard({ articleId, audioKey, audioEm, sujo, onAntesDeGerar, onGe
           </button>
         </>
       )}
+    </div>
+  );
+}
+
+/* ---------------- player dourado (narração na sidebar) ----------------
+   Substitui o <audio controls> nativo (branco) por um player no design do
+   site: play dourado, progresso clicável e velocidades 1/1.25/1.5/2x. */
+const VELOC_NARR = [1, 1.25, 1.5, 2];
+const fmtSeg = (s) => {
+  if (!Number.isFinite(s)) return '0:00';
+  const m = Math.floor(s / 60), ss = Math.floor(s % 60);
+  return `${m}:${String(ss).padStart(2, '0')}`;
+};
+
+function PlayerDourado({ url }) {
+  const [tocar, setTocar] = useState(false);
+  const [t, setT] = useState(0);
+  const [dur, setDur] = useState(0);
+  const [vel, setVel] = useState(0);
+  const audioRef = useRef(null);
+  const rafRef = useRef(0);
+
+  useEffect(() => () => { cancelAnimationFrame(rafRef.current); audioRef.current?.pause(); }, []);
+  useEffect(() => { // URL nova (narração regenerada) → recomeça
+    cancelAnimationFrame(rafRef.current);
+    audioRef.current?.pause();
+    audioRef.current = null;
+    setTocar(false); setT(0); setDur(0);
+  }, [url]);
+
+  const tique = () => {
+    const a = audioRef.current;
+    if (a) setT(a.currentTime);
+    rafRef.current = requestAnimationFrame(tique);
+  };
+  const play = () => {
+    let a = audioRef.current;
+    if (!a) {
+      a = new Audio(url);
+      a.preload = 'auto';
+      a.playbackRate = VELOC_NARR[vel];
+      a.addEventListener('loadedmetadata', () => setDur(a.duration || 0));
+      a.addEventListener('ended', () => { setTocar(false); cancelAnimationFrame(rafRef.current); });
+      audioRef.current = a;
+    }
+    a.play(); setTocar(true);
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(tique);
+  };
+  const pause = () => { audioRef.current?.pause(); setTocar(false); cancelAnimationFrame(rafRef.current); };
+  const mudarVel = () => {
+    const nv = (vel + 1) % VELOC_NARR.length;
+    setVel(nv);
+    if (audioRef.current) audioRef.current.playbackRate = VELOC_NARR[nv];
+  };
+  const procurar = (e) => {
+    const a = audioRef.current;
+    if (!a || !dur) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    a.currentTime = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)) * dur;
+    setT(a.currentTime);
+  };
+
+  return (
+    <div style={{ marginTop: 11, padding: '12px 13px', borderRadius: 13, border: '1px solid var(--edge-2)',
+                  background: 'rgba(184,147,90,.08)', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <button type="button" onClick={tocar ? pause : play} aria-label={tocar ? 'Pausar' : 'Ouvir a narração'}
+              style={{ width: 38, height: 38, borderRadius: '50%', background: 'var(--grad-gold)', color: '#1a1208',
+                       display: 'grid', placeItems: 'center', border: 'none', cursor: 'pointer', flex: 'none',
+                       boxShadow: '0 6px 18px -6px rgba(184,147,90,.7)' }}>
+        {tocar ? <Pause style={{ width: 15, height: 15 }} /> : <Play style={{ width: 15, height: 15, transform: 'translateX(1px)' }} />}
+      </button>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 8 }}>
+          <span className="mono" style={{ fontSize: 10.5, color: 'var(--fg-3)', fontVariantNumeric: 'tabular-nums' }}>
+            {fmtSeg(t / VELOC_NARR[vel])} / {fmtSeg(dur / VELOC_NARR[vel])}
+          </span>
+          <button type="button" onClick={mudarVel} data-tip="Velocidade da narração"
+                  style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.08em', color: 'var(--gold-soft)',
+                           border: '1px solid var(--edge-2)', borderRadius: 7, padding: '1px 7px',
+                           background: 'transparent', cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}>
+            {VELOC_NARR[vel]}x
+          </button>
+        </div>
+        <div role="slider" aria-label="Posição da narração" aria-valuemin={0} aria-valuemax={Math.round(dur)} aria-valuenow={Math.round(t)}
+             tabIndex={0} onClick={procurar} style={{ marginTop: 8, height: 14, display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
+          <div style={{ position: 'relative', height: 4, width: '100%', borderRadius: 9, background: 'var(--edge)', overflow: 'hidden' }}>
+            <span style={{ position: 'absolute', inset: '0 auto 0 0', width: (dur ? (t / dur) * 100 : 0) + '%',
+                           background: 'var(--grad-gold)', borderRadius: 9, transition: 'width .15s' }} />
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1324,7 +1420,7 @@ function PreviewBlogue({ titulo, descricao, area, markdown, capaUrl, articleId, 
    (AudioArtigo.jsx), a tocar a narração ElevenLabs gerada no editor. A leitura
    acompanhada palavra a palavra só existe no site publicado (timestamps do
    script de publicação). */
-const VELOC_PREVIEW = [1, 1.25, 1.5];
+const VELOC_PREVIEW = [1, 1.25, 1.5, 2];
 const fmtTempo = (s) => {
   if (!Number.isFinite(s)) return '0:00';
   const m = Math.floor(s / 60), ss = Math.floor(s % 60);
@@ -1393,8 +1489,10 @@ function AudioPreview({ articleId }) {
       <div className="flex items-center gap-4">
         <button type="button" onClick={tocar ? pause : play}
                 aria-label={tocar ? 'Pausar a narração' : 'Ouvir este artigo'}
-                className="shrink-0 w-12 h-12 rounded-full bg-gold text-forest flex items-center justify-center hover:bg-[#a07d4a] hover:text-warmwhite transition-colors duration-300">
-          {tocar ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 translate-x-[1px]" />}
+                style={{ width: 48, height: 48, borderRadius: '50%', background: '#b8935a', color: '#12302a',
+                         display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none',
+                         border: 'none', cursor: 'pointer' }}>
+          {tocar ? <Pause style={{ width: 20, height: 20 }} /> : <Play style={{ width: 20, height: 20, transform: 'translateX(1px)' }} />}
         </button>
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-3">
@@ -1414,7 +1512,8 @@ function AudioPreview({ articleId }) {
         </div>
         <div className="shrink-0 flex flex-col items-end gap-1.5">
           <button type="button" onClick={mudarVel} aria-label="Velocidade da narração"
-                  className="font-body text-[12px] tracking-wide text-forest/70 border border-forest/20 px-2 py-0.5 hover:border-gold hover:text-gold transition-colors duration-300 tabular-nums">
+                  style={{ fontSize: 12, letterSpacing: '.04em', color: 'rgba(18,48,42,.7)', border: '1px solid rgba(18,48,42,.2)',
+                           padding: '2px 8px', background: 'transparent', cursor: 'pointer', fontVariantNumeric: 'tabular-nums' }}>
             {VELOC_PREVIEW[vel]}x
           </button>
         </div>

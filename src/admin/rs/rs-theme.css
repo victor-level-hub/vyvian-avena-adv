@@ -221,6 +221,22 @@
 /* re-skin do RichEditor (classes adm-rte) dentro do scope */
 .rs-scope .adm-rte { border: 0; background: none; }
 .rs-scope .adm-rte-toolbar { position: sticky; top: 12px; z-index: 20; display: flex; align-items: center; gap: 2px; padding: 7px 9px; border-radius: 14px; flex-wrap: wrap; background: var(--panel-2); border: 1px solid var(--edge); backdrop-filter: blur(22px) saturate(1.15); -webkit-backdrop-filter: blur(22px) saturate(1.15); box-shadow: var(--shadow); }
+/* ---- pré-visualização do blogue (.pv-blog): imune ao tema do admin ----
+   A pré-visualização replica a página REAL do blogue (sempre clara). O tema do
+   admin pinta h1-h4 com var(--fg) (claro no dark) e venceria o .blog-prose por
+   especificidade — estas regras devolvem as cores exatas do site publicado. */
+.adm-root .rs-scope .pv-blog .blog-prose,
+.rs-scope .pv-blog .blog-prose { color: rgba(18, 48, 42, 0.85); }
+.adm-root .rs-scope .pv-blog .blog-prose h2, .rs-scope .pv-blog .blog-prose h2,
+.adm-root .rs-scope .pv-blog .blog-prose h3, .rs-scope .pv-blog .blog-prose h3 { color: #12302a; letter-spacing: 0; }
+.adm-root .rs-scope .pv-blog .blog-prose strong, .rs-scope .pv-blog .blog-prose strong { color: #12302a; }
+.adm-root .rs-scope .pv-blog .blog-prose blockquote, .rs-scope .pv-blog .blog-prose blockquote {
+  background: #f7f2e9; border-left: 3px solid #b8935a; color: rgba(18, 48, 42, 0.8); border-radius: 0; font-style: normal; font-size: 1rem;
+}
+.adm-root .rs-scope .pv-blog h1 { color: #faf8f4; }                       /* título no hero escuro */
+.adm-root .rs-scope .pv-blog h2 { color: #12302a; letter-spacing: 0; }    /* «Continuar a ler» etc. */
+.adm-root .rs-scope .pv-blog .bg-forest h2 { color: #faf8f4; }            /* CTA sobre verde */
+
 /* o admin.css traz .adm-rte { overflow: hidden } (cantos arredondados) — isso QUEBRA o
    position: sticky da toolbar (o sticky não atravessa ancestrais com overflow != visible).
    A toolbar tem de seguir o scroll para a Dra. formatar sem voltar ao topo. */

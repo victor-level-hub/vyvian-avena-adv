@@ -11,7 +11,6 @@ import { insights as api } from '../apiClient';
 import { admToast } from '../toasts';
 import { admConfirm, admPrompt } from '../dialogs';
 import { Icon, Tip, StepLoader, Confetti, Thumb } from '../rs/ui';
-import Navbar from '../../components/Navbar';
 import Footer from '../../components/Footer';
 import { POSTS } from '../../data/blog';
 import { capaSrcSet } from '../../lib/imagens';
@@ -1053,6 +1052,29 @@ function Lightbox({ images, start = 0, chosenId, onPick, onSave, salvando, onRep
    com breadcrumb «Blogue», rail lateral, prosa .blog-prose com drop cap, CTA
    e «Continuar a ler». O blogue é sempre CLARO — mesmo com a área privada em
    dark, aqui a Dra. vê exatamente o que o leitor verá. */
+/* Réplica ESTÁTICA do navbar do site no estado sólido (pós-scroll / páginas claras).
+   O Navbar real decide a transparência pelo scroll da JANELA — dentro deste overlay
+   (que tem scroll próprio) ficava sempre transparente, com o texto por cima. */
+function NavPreview() {
+  const links = ['Home', 'Sobre', 'Áreas de Atuação', 'Apoio', 'Blogue', 'Contacto'];
+  return (
+    <nav className="fixed top-0 left-0 right-0 z-40"
+         style={{ backgroundColor: '#faf8f4', boxShadow: '0 1px 12px rgba(0,0,0,0.08)', paddingTop: 12, paddingBottom: 12 }}>
+      <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
+        <img src="/logo-horizontal-verde.png" alt="Vyvian Avena Advogada"
+             style={{ height: 44, width: 'auto', objectFit: 'contain' }} />
+        <div className="hidden lg:flex items-center gap-8">
+          {links.map((l) => (
+            <span key={l} className={'text-sm font-body tracking-wide ' + (l === 'Blogue' ? 'text-gold' : 'text-forest')}>{l}</span>
+          ))}
+          <span className="flex items-center gap-1 text-xs font-body tracking-wide text-forest/60">Área Privada</span>
+          <span className="ml-2 px-5 py-2 text-sm font-body tracking-wide border border-gold text-gold">Consulta</span>
+        </div>
+      </div>
+    </nav>
+  );
+}
+
 function PreviewBlogue({ titulo, descricao, area, markdown, capaUrl, onClose }) {
   // Rede de segurança: artigos antigos podem ainda trazer tags de citação da pesquisa web.
   const mdLimpo = useMemo(() => (markdown || '').replace(/<\/?(?:cite|ref|citation|source)\b[^>]*>/gi, ''), [markdown]);
@@ -1077,17 +1099,15 @@ function PreviewBlogue({ titulo, descricao, area, markdown, capaUrl, onClose }) 
   }, []);
 
   return (
-    <div ref={scrollRef} role="dialog" aria-modal="true" aria-label="Pré-visualização do artigo"
+    <div ref={scrollRef} className="pv-blog" role="dialog" aria-modal="true" aria-label="Pré-visualização do artigo"
          style={{ position: 'fixed', inset: 0, zIndex: 150, background: '#faf8f4', overflowY: 'auto', animation: 'rsFadeIn .3s both' }}>
       {/* barra de progresso de leitura, como no blogue */}
       <div aria-hidden="true" style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 2, zIndex: 170, pointerEvents: 'none' }}>
         <div ref={barRef} style={{ height: '100%', width: '0%', background: '#b8935a' }} />
       </div>
 
-      {/* navbar real do site (só visual — sem navegação na pré-visualização) */}
-      <div style={{ pointerEvents: 'none' }} aria-hidden="true">
-        <Navbar />
-      </div>
+      {/* navbar do site no estado sólido (só visual) */}
+      <NavPreview />
 
       {/* Hero full-bleed — igual a BlogArtigo.jsx */}
       <section className="relative min-h-[480px] md:min-h-[560px] bg-forest flex items-end">

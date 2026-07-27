@@ -161,6 +161,12 @@ export async function handleInsights(request, env, path, session) {
   if (mt && m === "GET") return serveImage(env, +mt[1]);
   if (mt && m === "PUT") return replaceImage(request, env, +mt[1]);
 
+  // Banco de Imagens — a Dra. guarda imagens geradas para reutilizar.
+  if (path === "/api/insights/banco" && m === "GET") return listBank(env);
+  if (path === "/api/insights/banco" && m === "POST") return saveToBank(request, env);
+  mt = path.match(/^\/api\/insights\/banco\/(\d+)$/);
+  if (mt && m === "DELETE") return removeFromBank(env, +mt[1]);
+
   // Correções de imagem apontadas pela Dra. — entram no prompt de todas as gerações.
   if (path === "/api/insights/image-rules" && m === "GET") return listImageRules(env);
   if (path === "/api/insights/image-rules" && m === "POST") return addImageRule(request, env);
@@ -499,6 +505,43 @@ Coerência física obrigatória: ecrãs de telemóveis e computadores sempre vir
 pessoa que os está a usar — quem olha para um telemóvel vê o ecrã, e a câmara vê as
 COSTAS do aparelho. Nunca mostrar um ecrã virado para a câmara enquanto a pessoa olha
 para ele; mãos com cinco dedos e a segurar os objetos de forma natural.`;
+
+/* ---------------- Banco de Imagens ----------------
+   Guarda referências às imagens geradas (bytes continuam no R2). UNIQUE(image_id)
+   impede duplicados — quem tentar guardar de novo recebe a data original. */
+async function listBank(env) {
+  const rows = (await env.DB.prepare(
+    `SELECT b.id, b.image_id, b.criado_em, i.provider, i.article_id, a.titulo AS artigo_titulo
+     FROM image_bank b
+     JOIN insight_images i ON i.id = b.image_id
+     LEFT JOIN insight_articles a ON a.id = i.article_id
+     ORDER BY b.criado_em DESC, b.id DESC LIMIT 200`
+  ).all()).results || [];
+  return jsonResponse({ images: rows });
+}
+
+async function saveToBank(request, env) {
+  let body = {};
+  try { body = await request.json(); } catch {}
+  const ids = (Array.isArray(body.image_ids) ? body.image_ids : [body.image_id]).map(Number).filter(Boolean).slice(0, 12);
+  if (!ids.length) return jsonError("Indique as imagens a guardar", 400);
+
+  const resultados = [];
+  for (const id of ids) {
+    const img = await env.DB.prepare(`SELECT id FROM insight_images WHERE id = ?`).bind(id).first();
+    if (!img) { resultados.push({ image_id: id, estado: "inexistente" }); continue; }
+    const ja = await env.DB.prepare(`SELECT criado_em FROM image_bank WHERE image_id = ?`).bind(id).first();
+    if (ja) { resultados.push({ image_id: id, estado: "ja_existia", criado_em: ja.criado_em }); continue; }
+    await env.DB.prepare(`INSERT INTO image_bank (image_id) VALUES (?)`).bind(id).run();
+    resultados.push({ image_id: id, estado: "guardada" });
+  }
+  return jsonResponse({ ok: true, resultados });
+}
+
+async function removeFromBank(env, imageId) {
+  await env.DB.prepare(`DELETE FROM image_bank WHERE image_id = ?`).bind(imageId).run();
+  return jsonResponse({ ok: true });
+}
 
 /* ---------------- correções de imagem (apontadas pela Dra.) ----------------
    Guardadas no KV (SESSIONS, chave insights:img-correcoes) — sem migração.

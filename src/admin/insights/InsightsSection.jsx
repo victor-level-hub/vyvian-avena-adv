@@ -16,6 +16,7 @@ import { Icon, Reveal, Tip, Seg, StepLoader, Confetti, Level, PanelHead } from '
 const VISTAS = [
   { k: 'sugestoes', label: 'SUGESTÕES' },
   { k: 'tema', label: 'TEMA LIVRE' },
+  { k: 'imagens', label: 'IMAGENS' },
   { k: 'fontes', label: 'FONTES' },
 ];
 
@@ -76,7 +77,9 @@ export default function InsightsSection() {
         ? <Sugestoes onAbrirArtigo={setArtigoId} />
         : vista === 'tema'
           ? <TemaLivre onAbrirArtigo={setArtigoId} />
-          : <Fontes />}
+          : vista === 'imagens'
+            ? <BancoImagens onAbrirArtigo={setArtigoId} />
+            : <Fontes />}
       {artigoId != null && (
         <ArticleStudio articleId={artigoId} onClose={() => setArtigoId(null)} />
       )}
@@ -372,6 +375,118 @@ function TemaLivre({ onAbrirArtigo }) {
                   onRetry={() => { setErro(null); gerar(); }}
                   onCancel={() => { setGerando(false); setErro(null); }} />
       <Confetti fire={fire} key={fire} />
+    </>
+  );
+}
+
+// ============================================================ BANCO DE IMAGENS
+
+const fmtSoData = (iso) => {
+  if (!iso) return '';
+  const d = new Date(String(iso).replace(' ', 'T') + (String(iso).endsWith('Z') ? '' : 'Z'));
+  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+
+function BancoImagens({ onAbrirArtigo }) {
+  const [imagens, setImagens] = useState(null);
+  const [ampliada, setAmpliada] = useState(null); // item aberto em grande
+
+  const carregar = () => api.imageBank().then((d) => setImagens(d.images || [])).catch((e) => admToast(e.message, { kind: 'error' }));
+  useEffect(() => { carregar(); }, []);
+
+  const remover = async (item) => {
+    const ok = await admConfirm('Remover esta imagem do banco? (a imagem original não é apagada)', { danger: true, okLabel: 'Remover' });
+    if (!ok) return;
+    try {
+      await api.removeFromBank(item.image_id);
+      setImagens((xs) => xs.filter((x) => x.image_id !== item.image_id));
+      admToast('Imagem removida do banco.');
+    } catch (e) { admToast(e.message, { kind: 'error' }); }
+  };
+
+  return (
+    <>
+      <div style={{ marginBottom: 22 }}>
+        <span className="overline">Banco de imagens</span>
+        <div style={{ fontSize: 13.5, color: 'var(--fg-2)', marginTop: 6, maxWidth: '62ch', lineHeight: 1.6 }}>
+          As imagens geradas por IA que a Dra. guardou — com a marca de água aplicada, prontas a
+          reutilizar. Guarde novas imagens no editor de qualquer artigo (botão «Salvar imagens»
+          na sidebar ou «Salvar imagem» na ampliação).
+        </div>
+      </div>
+
+      {imagens == null ? (
+        <div className="glass" style={{ padding: 24 }}>
+          <span className="adm-skel" style={{ width: '55%', height: 12, display: 'block' }} />
+        </div>
+      ) : imagens.length === 0 ? (
+        <Reveal cls="glass" style={{ padding: '44px 30px', textAlign: 'center' }}>
+          <span style={{ width: 52, height: 52, borderRadius: 16, margin: '0 auto', background: 'var(--grad-gold-soft)', border: '1px solid var(--edge-2)', display: 'grid', placeItems: 'center', color: 'var(--gold-soft)' }}>
+            <Icon name="image" size={24} />
+          </span>
+          <h3 style={{ fontSize: 24, marginTop: 18 }}>Ainda sem imagens guardadas</h3>
+          <p style={{ fontSize: 13.5, color: 'var(--fg-2)', maxWidth: '54ch', margin: '12px auto 0', lineHeight: 1.6 }}>
+            Abra um artigo, marque as imagens de que gosta e use <strong style={{ color: 'var(--fg)' }}>Salvar imagens</strong> —
+            elas aparecem aqui para reutilizar quando quiser.
+          </p>
+        </Reveal>
+      ) : (
+        <>
+          <PanelHead over={`${imagens.length} ${imagens.length === 1 ? 'imagem' : 'imagens'}`} title="Guardadas"
+                     note="Clique numa imagem para a ver em grande. O caixote remove do banco (a original mantém-se no artigo)." />
+          <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))' }}>
+            {imagens.map((im, i) => (
+              <Reveal key={im.id} d={i * 40} y={14}>
+                <div className="glass" style={{ overflow: 'hidden', borderRadius: 'var(--r-md)' }}>
+                  <button type="button" onClick={() => setAmpliada(im)} style={{ display: 'block', width: '100%', padding: 0, cursor: 'zoom-in' }}
+                          aria-label="Ver em grande">
+                    <img src={`/api/insights/images/${im.image_id}`} alt="" loading="lazy"
+                         style={{ display: 'block', width: '100%', aspectRatio: '16/10', objectFit: 'cover' }} />
+                  </button>
+                  <div style={{ padding: '11px 13px 13px', display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div className="mono" style={{ fontSize: 10.5, color: 'var(--fg-3)', letterSpacing: '.06em' }}>
+                        Guardada a {fmtSoData(im.criado_em)}
+                      </div>
+                      {im.artigo_titulo && (
+                        <button type="button" onClick={() => im.article_id && onAbrirArtigo(im.article_id)}
+                                title="Abrir o artigo de origem"
+                                style={{ display: 'block', marginTop: 4, fontSize: 12, color: 'var(--fg-2)', textAlign: 'left', padding: 0,
+                                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', cursor: 'pointer' }}>
+                          {im.artigo_titulo}
+                        </button>
+                      )}
+                    </div>
+                    <button type="button" className="btn-quiet" title="Remover do banco" style={{ padding: 5, borderRadius: 7, flex: 'none' }}
+                            onClick={() => remover(im)}>
+                      <Icon name="trash" size={14} />
+                    </button>
+                  </div>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </>
+      )}
+
+      {ampliada && (
+        <div role="dialog" aria-modal="true" aria-label="Imagem ampliada" onClick={() => setAmpliada(null)}
+             style={{ position: 'fixed', inset: 0, zIndex: 170, display: 'grid', placeItems: 'center', padding: 24,
+                      background: 'rgba(4,12,10,.88)', backdropFilter: 'blur(16px)', animation: 'rsFadeIn .25s both' }}>
+          <div style={{ maxWidth: 'min(1100px,96vw)', width: '100%' }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+              <span className="chip chip-gold"><Icon name="image" size={11} />Guardada a {fmtSoData(ampliada.criado_em)}</span>
+              {ampliada.artigo_titulo && <span className="chip" style={{ maxWidth: '46ch', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'inline-block' }}>{ampliada.artigo_titulo}</span>}
+              <button type="button" className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setAmpliada(null)}>
+                <Icon name="close" size={13} />Fechar
+              </button>
+            </div>
+            <img src={`/api/insights/images/${ampliada.image_id}`} alt=""
+                 style={{ display: 'block', width: '100%', maxHeight: 'calc(100vh - 140px)', objectFit: 'contain', borderRadius: 16,
+                          border: '1px solid rgba(212,181,133,.3)', boxShadow: '0 40px 90px -30px rgba(0,0,0,.9)' }} />
+          </div>
+        </div>
+      )}
     </>
   );
 }

@@ -102,8 +102,9 @@ export default function ArticleStudio({ articleId, onClose }) {
   const [preview, setPreview] = useState(false);
   const [ampliada, setAmpliada] = useState(null);  // índice da imagem aberta no lightbox
   const [regras, setRegras] = useState(null);      // correções de imagem (erros a evitar)
-  const [corpo, setCorpo] = useState(() => new Set()); // imagens marcadas para o corpo do artigo
+  const [corpo, setCorpo] = useState(() => new Set()); // imagens marcadas (corpo do artigo / banco)
   const [inserindo, setInserindo] = useState(false);
+  const [salvando, setSalvando] = useState(false);     // a guardar no Banco de Imagens
   const [fire, setFire] = useState(0);
   const mdRef = useRef('');
 
@@ -152,6 +153,42 @@ export default function ArticleStudio({ articleId, onClose }) {
       admToast(`Não foi possível inserir as fotos: ${e.message}`, { kind: 'error' });
     } finally {
       setInserindo(false);
+    }
+  };
+
+  /* -------- Banco de Imagens --------
+     Duplicados são verificados pelo ID da imagem no servidor (UNIQUE em D1):
+     «Imagem salva com sucesso.» ou «Esta imagem já foi salva no dia X.» */
+  const fmtDataBanco = (iso) => {
+    if (!iso) return '';
+    const d = new Date(String(iso).replace(' ', 'T') + (String(iso).endsWith('Z') ? '' : 'Z'));
+    return Number.isNaN(d.getTime()) ? String(iso).slice(0, 10) : d.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  };
+
+  const salvarNoBanco = async (ids) => {
+    if (!ids.length || salvando) return;
+    setSalvando(true);
+    try {
+      const d = await api.saveToBank(ids);
+      const res = d.resultados || [];
+      const novas = res.filter((r) => r.estado === 'guardada').length;
+      const repetidas = res.filter((r) => r.estado === 'ja_existia');
+      if (ids.length === 1) {
+        const r = res[0];
+        if (r?.estado === 'guardada') admToast('Imagem salva com sucesso.');
+        else if (r?.estado === 'ja_existia') admToast(`Esta imagem já foi salva no dia ${fmtDataBanco(r.criado_em)}.`, { kind: 'info' });
+        else admToast('Imagem não encontrada.', { kind: 'error' });
+      } else {
+        const partes = [];
+        if (novas) partes.push(`${novas} ${novas === 1 ? 'imagem salva' : 'imagens salvas'} com sucesso`);
+        if (repetidas.length) partes.push(`${repetidas.length} já ${repetidas.length === 1 ? 'tinha sido salva' : 'tinham sido salvas'} (${repetidas.map((r) => fmtDataBanco(r.criado_em)).join(', ')})`);
+        admToast((partes.join(' · ') || 'Nada para salvar') + '.', { kind: novas ? undefined : 'info' });
+      }
+      if (novas) setFire(Date.now());
+    } catch (e) {
+      admToast(`Não foi possível salvar no Banco de Imagens: ${e.message}`, { kind: 'error' });
+    } finally {
+      setSalvando(false);
     }
   };
 
@@ -373,6 +410,13 @@ export default function ArticleStudio({ articleId, onClose }) {
                   <button type="button" className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={() => setAmpliada(0)}>
                     <Icon name="expand" size={13} />Ver ampliadas
                   </button>
+                  <button type="button" className={'btn btn-sm ' + (corpo.size ? 'btn-gold' : 'btn-ghost')}
+                          style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
+                          title="Guarda as imagens marcadas com + no Banco de Imagens (vista IMAGENS)"
+                          onClick={() => salvarNoBanco([...corpo])} disabled={!corpo.size || salvando}>
+                    <Icon name={salvando ? 'refresh' : 'save'} size={13} />
+                    {salvando ? 'A salvar…' : corpo.size ? `Salvar ${corpo.size} ${corpo.size === 1 ? 'imagem' : 'imagens'}` : 'Salvar imagens'}
+                  </button>
                   <button type="button" className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={gerarImagens}>
                     <Icon name="refresh" size={13} />Gerar todas novamente
                   </button>
@@ -382,7 +426,8 @@ export default function ArticleStudio({ articleId, onClose }) {
                   <span className="overline">Fotos no corpo do artigo</span>
                   <p style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 8, lineHeight: 1.55 }}>
                     Marque fotos com o botão <Icon name="plus" size={10} style={{ verticalAlign: '-1px' }} /> em cada miniatura —
-                    a IA coloca cada uma <strong style={{ color: 'var(--fg-2)' }}>após o parágrafo com que mais se relaciona</strong>.
+                    a mesma seleção serve para <strong style={{ color: 'var(--fg-2)' }}>«Salvar imagens»</strong> no Banco e para
+                    a IA colocar cada uma <strong style={{ color: 'var(--fg-2)' }}>após o parágrafo com que mais se relaciona</strong>.
                   </p>
                   <button type="button" className={'btn btn-sm ' + (corpo.size ? 'btn-gold' : 'btn-ghost')}
                           style={{ width: '100%', justifyContent: 'center', marginTop: 11 }}
@@ -444,6 +489,8 @@ export default function ArticleStudio({ articleId, onClose }) {
           start={ampliada}
           chosenId={escolhida}
           onPick={(id) => escolher(id)}
+          onSave={(id) => salvarNoBanco([id])}
+          salvando={salvando}
           onReport={(n) => reportarErroDialogo(`Reportar erro · Opção ${n}`)}
           onClose={() => setAmpliada(null)}
         />
@@ -593,7 +640,7 @@ function ImageRulesCard({ regras, onAdd, onRemove }) {
 /* ---------------- lightbox / carrossel das capas ----------------
    Ampliação a ecrã inteiro: setas, teclado (←/→/Esc), swipe no telemóvel,
    miniaturas com anel dourado na ativa e «Usar como capa» sem sair daqui. */
-function Lightbox({ images, start = 0, chosenId, onPick, onReport, onClose }) {
+function Lightbox({ images, start = 0, chosenId, onPick, onSave, salvando, onReport, onClose }) {
   const [i, setI] = useState(Math.max(0, Math.min(start, images.length - 1)));
   const [dir, setDir] = useState(1); // direção da transição (1 = próxima)
   const touchX = useRef(null);
@@ -673,6 +720,12 @@ function Lightbox({ images, start = 0, chosenId, onPick, onReport, onClose }) {
             <Icon name={escolhidaEsta ? 'check' : 'image'} size={13} s={escolhidaEsta ? 3 : 1.6} />
             {escolhidaEsta ? 'É a capa escolhida' : 'Usar como capa'}
           </button>
+          {onSave && (
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => onSave(img.id)} disabled={salvando}
+                    title="Guardar esta imagem no Banco de Imagens (vista IMAGENS) — duplicados são detetados pelo ID">
+              <Icon name={salvando ? 'refresh' : 'save'} size={13} />{salvando ? 'A salvar…' : 'Salvar imagem'}
+            </button>
+          )}
           {onReport && (
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => onReport(i + 1)}
                     title="Aponte um erro grotesco desta imagem — a IA nunca mais o repete">

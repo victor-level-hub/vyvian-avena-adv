@@ -182,6 +182,11 @@ export const insights = {
     return res.json();
   },
 
+  // Banco de Imagens — guardar/listar/remover imagens geradas para reutilização
+  imageBank: () => request('/api/insights/banco'),
+  saveToBank: (imageIds) => request('/api/insights/banco', { method: 'POST', body: { image_ids: imageIds } }),
+  removeFromBank: (imageId) => request(`/api/insights/banco/${imageId}`, { method: 'DELETE' }),
+
   // Correções de imagem (erros apontados pela Dra. — entram no prompt das próximas gerações)
   imageRules: () => request('/api/insights/image-rules'),
   addImageRule: (texto) => request('/api/insights/image-rules', { method: 'POST', body: { texto } }),

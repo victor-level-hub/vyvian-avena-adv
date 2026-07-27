@@ -127,6 +127,12 @@ export default {
           return await handleInsights(request, env, path, null);
         }
 
+        // Fila de publicação (consumida pelo GitHub Actions) — protegida por
+        // PUBLISH_KEY dentro do handler, não por sessão.
+        if (path === '/api/insights/fila-publicacao' || /^\/api\/insights\/articles\/\d+\/publicado$/.test(path)) {
+          return await handleInsights(request, env, path, null);
+        }
+
         // Rotas privadas — requerem sessão válida
         const session = await requireAuth(request, env);
         if (!session) {

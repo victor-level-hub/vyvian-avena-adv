@@ -192,6 +192,7 @@ export const insights = {
   evaluateArticle: (articleId) => request(`/api/insights/articles/${articleId}/avaliar`, { method: 'POST' }),
   generateAudio: (articleId) => request(`/api/insights/articles/${articleId}/audio`, { method: 'POST' }),
   setReviewed: (articleId, revisto) => request(`/api/insights/articles/${articleId}`, { method: 'PATCH', body: { revisto } }),
+  publishArticle: (articleId) => request(`/api/insights/articles/${articleId}/publicar`, { method: 'POST' }),
   async audioUrl(articleId) {
     const token = getToken();
     const res = await fetch(`/api/insights/articles/${articleId}/audio`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });

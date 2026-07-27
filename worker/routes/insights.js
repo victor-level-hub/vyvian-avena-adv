@@ -159,6 +159,11 @@ export async function handleInsights(request, env, path, session) {
   mt = path.match(/^\/api\/insights\/articles\/(\d+)\/audio$/);
   if (mt && m === "POST") return gerarAudio(env, +mt[1]);
   if (mt && m === "GET") return servirAudio(env, +mt[1]);
+  mt = path.match(/^\/api\/insights\/articles\/(\d+)\/publicar$/);
+  if (mt && m === "POST") return solicitarPublicacao(env, +mt[1]);
+  if (path === "/api/insights/fila-publicacao" && m === "GET") return filaPublicacao(request, env);
+  mt = path.match(/^\/api\/insights\/articles\/(\d+)\/publicado$/);
+  if (mt && m === "POST") return confirmarPublicacao(request, env, +mt[1]);
   mt = path.match(/^\/api\/insights\/articles\/(\d+)\/images$/);
   if (mt && m === "POST") return generateImages(request, env, +mt[1]);
   mt = path.match(/^\/api\/insights\/articles\/(\d+)\/escolher-imagem$/);
@@ -491,6 +496,58 @@ Responde EXCLUSIVAMENTE com JSON válido:
   await env.DB.prepare(`UPDATE insight_articles SET avaliacao = ? WHERE id = ?`)
     .bind(JSON.stringify(av), id).run();
   return jsonResponse({ ok: true, avaliacao: av });
+}
+
+/* ---------------- PUBLICAR (fila consumida pelo GitHub Actions) ----------------
+   A Dra. clica PUBLICAR (exige revisão + capa); o artigo entra na fila. O
+   workflow publicar.yml corre de 15 em 15 min (ou à mão): lê a fila com a
+   PUBLISH_KEY, escreve o .md + imagens no repo, gera a narração com
+   timestamps (leitura acompanhada), faz build e deploy, e confirma aqui. */
+function slugify(t) {
+  return String(t || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
+}
+
+async function solicitarPublicacao(env, id) {
+  const a = await env.DB.prepare(`SELECT * FROM insight_articles WHERE id = ?`).bind(id).first();
+  if (!a) return jsonError("Artigo não encontrado", 404);
+  if (a.publicado_em) return jsonError("Este artigo já foi publicado", 400);
+  if (!a.revisto_em) return jsonError("Falta a revisão da Dra. — marque «Revisto pela Dra.» primeiro", 400);
+  if (!a.imagem_escolhida) return jsonError("Escolha a imagem de capa primeiro", 400);
+  if (!a.titulo || a.titulo.length > 60) return jsonError("Título obrigatório com máx. 60 caracteres", 400);
+  if (!a.descricao || a.descricao.length > 155) return jsonError("Descrição SEO obrigatória com máx. 155 caracteres", 400);
+  const slug = a.slug || slugify(a.titulo);
+  if (!slug) return jsonError("Não foi possível gerar o URL (slug) a partir do título", 400);
+  await env.DB.prepare(
+    `UPDATE insight_articles SET slug = ?, publicar_em = datetime('now') WHERE id = ?`
+  ).bind(slug, id).run();
+  return getArticle(env, id);
+}
+
+const chaveOk = (request, env) =>
+  env.PUBLISH_KEY && new URL(request.url).searchParams.get("key") === env.PUBLISH_KEY;
+
+async function filaPublicacao(request, env) {
+  if (!chaveOk(request, env)) return jsonError("Chave inválida", 401);
+  const rows = (await env.DB.prepare(
+    `SELECT * FROM insight_articles WHERE publicar_em IS NOT NULL AND publicado_em IS NULL ORDER BY id`
+  ).all()).results || [];
+  const artigos = rows.map((a) => ({
+    id: a.id, slug: a.slug, titulo: a.titulo, descricao: a.descricao,
+    area: a.area, idioma: a.idioma, markdown: limparCitacoes(a.markdown || ""),
+    revisto_em: (a.revisto_em || "").slice(0, 10),
+    capa_image_id: a.imagem_escolhida,
+    body_image_ids: [...new Set([...(a.markdown || "").matchAll(/\/api\/insights\/images\/(\d+)/g)].map((m) => +m[1]))],
+  }));
+  return jsonResponse({ artigos });
+}
+
+async function confirmarPublicacao(request, env, id) {
+  if (!chaveOk(request, env)) return jsonError("Chave inválida", 401);
+  await env.DB.prepare(
+    `UPDATE insight_articles SET publicado_em = datetime('now') WHERE id = ? AND publicar_em IS NOT NULL`
+  ).bind(id).run();
+  return jsonResponse({ ok: true });
 }
 
 /* ---------------- narração ElevenLabs (quando o texto está finalizado) ----------------

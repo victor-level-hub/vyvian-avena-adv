@@ -1,0 +1,53 @@
+# Publica artigos aprovados no Insights: fila do Worker -> .md + imagens no repo,
+# narração ElevenLabs com timestamps (leitura acompanhada), build e deploy.
+# Corre de 15 em 15 minutos e também à mão (Run workflow).
+name: Publicar artigos
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch: {}
+permissions:
+  contents: write
+concurrency: publicar
+jobs:
+  publicar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm ci
+      - name: Preparar artigos da fila
+        id: fila
+        run: node scripts/publicar-artigos.mjs preparar
+        env:
+          PUBLISH_KEY: ${{ secrets.PUBLISH_KEY }}
+      - name: Narração com timestamps (leitura acompanhada)
+        if: steps.fila.outputs.total != '0'
+        run: |
+          for slug in $(node -e "console.log(JSON.parse(require('fs').readFileSync('.publicados.json')).map(a=>a.slug).join(' '))"); do
+            node scripts/gerar-audio-blogue.mjs --slug "$slug" --model turbo
+          done
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+      - name: Commit dos artigos
+        if: steps.fila.outputs.total != '0'
+        run: |
+          git config user.name "vyvian-publicador"
+          git config user.email "publicador@vyavenaadv.com"
+          git add src/content/blog public/blog public/blog-audio
+          git commit -m "Publicar artigo(s) do Insights [skip ci]"
+          git push
+      - name: Build
+        if: steps.fila.outputs.total != '0'
+        run: npm run build
+      - name: Deploy
+        if: steps.fila.outputs.total != '0'
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: Confirmar publicação no Worker
+        if: steps.fila.outputs.total != '0'
+        run: node scripts/publicar-artigos.mjs confirmar
+        env:
+          PUBLISH_KEY: ${{ secrets.PUBLISH_KEY }}

@@ -14,3 +14,4 @@ _to_delete/
 tokens.txt
 instagram-token.txt
 *.key
+.publicados.json

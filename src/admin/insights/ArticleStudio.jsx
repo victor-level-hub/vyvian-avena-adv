@@ -237,6 +237,22 @@ export default function ArticleStudio({ articleId, onClose }) {
     } catch (e) { admToast(e.message, { kind: 'error' }); }
   };
 
+  /* PUBLICAR — entra na fila; o GitHub Actions publica em até ~15 min */
+  const publicar = async () => {
+    const ok = await admConfirm(
+      `Publicar este artigo no blogue? Entra na fila de publicação e fica no ar em até ~15 minutos, em vyavenaadv.com/blog/ — com narração e leitura acompanhada geradas na publicação.`,
+      { okLabel: 'Publicar no blogue' }
+    );
+    if (!ok) return;
+    if (sujo) { const okG = await guardar(true); if (!okG) return; }
+    try {
+      const d = await api.publishArticle(articleId);
+      setData(d);
+      setFire(Date.now());
+      admToast('Na fila de publicação — o artigo entra no ar em até ~15 minutos.');
+    } catch (e) { admToast(e.message, { kind: 'error' }); }
+  };
+
   const reportarErroDialogo = async (contexto) => {
     // solta o foco do editor antes de abrir o diálogo (o TipTap retém o teclado)
     try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch {}
@@ -426,6 +442,15 @@ export default function ArticleStudio({ articleId, onClose }) {
               <Icon name={sujo ? 'save' : 'check'} size={14} s={sujo ? 1.6 : 3} />
               {guardando ? 'A guardar…' : sujo ? 'Guardar' : 'Guardado'}
             </button>
+            {a.publicado_em
+              ? <span className="chip chip-ok"><Icon name="check" size={11} s={3} />Publicado</span>
+              : a.publicar_em
+                ? <span className="chip chip-gold" data-tip="Na fila — o GitHub Actions publica em até ~15 minutos"><Icon name="refresh" size={11} />A publicar…</span>
+                : <button type="button" className={'btn btn-sm ' + (revisto ? 'btn-gold' : 'btn-ghost')}
+                          onClick={publicar} disabled={!revisto}
+                          data-tip={revisto ? 'Publica no blogue nos moldes dos artigos existentes' : 'Disponível depois de marcar «Revisto pela Dra.»'}>
+                    <Icon name="spark" size={14} />Publicar
+                  </button>}
           </span>
         </div>
 

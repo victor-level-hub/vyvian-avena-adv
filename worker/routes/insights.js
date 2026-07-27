@@ -640,7 +640,8 @@ Responde EXCLUSIVAMENTE com JSON válido:
     blocos.splice(Math.min(c.apos, blocos.length - 1) + 1, 0, md);
   }
 
-  await env.DB.prepare(`UPDATE insight_articles SET markdown = ? WHERE id = ?`)
+  // inserir fotos altera o conteúdo → a revisão da Dra. deixa de valer
+  await env.DB.prepare(`UPDATE insight_articles SET markdown = ?, revisto_em = NULL WHERE id = ?`)
     .bind(blocos.join("\n\n"), articleId).run();
   return getArticle(env, articleId);
 }
@@ -677,13 +678,21 @@ async function descartarImagem(env, articleId, imageId) {
 async function updateArticle(request, env, id) {
   let body = {};
   try { body = await request.json(); } catch {}
-  const a = await env.DB.prepare(`SELECT id FROM insight_articles WHERE id = ?`).bind(id).first();
+  const a = await env.DB.prepare(`SELECT * FROM insight_articles WHERE id = ?`).bind(id).first();
   if (!a) return jsonError("Artigo não encontrado", 404);
   const sets = [], vals = [];
-  if (typeof body.titulo === "string") { sets.push("titulo = ?"); vals.push(body.titulo.slice(0, 120)); }
-  if (typeof body.descricao === "string") { sets.push("descricao = ?"); vals.push(body.descricao.slice(0, 300)); }
-  if (typeof body.markdown === "string") { sets.push("markdown = ?"); vals.push(body.markdown); }
+  let conteudoMudou = false;
+  if (typeof body.titulo === "string") { sets.push("titulo = ?"); vals.push(body.titulo.slice(0, 120)); conteudoMudou = conteudoMudou || body.titulo.slice(0, 120) !== (a.titulo || ""); }
+  if (typeof body.descricao === "string") { sets.push("descricao = ?"); vals.push(body.descricao.slice(0, 300)); conteudoMudou = conteudoMudou || body.descricao.slice(0, 300) !== (a.descricao || ""); }
+  if (typeof body.markdown === "string") { sets.push("markdown = ?"); vals.push(body.markdown); conteudoMudou = conteudoMudou || body.markdown !== (a.markdown || ""); }
   if (typeof body.area === "string") { sets.push("area = ?"); vals.push(body.area.slice(0, 30)); }
+  // «Revisto pela Dra.» — marca/desmarca explícita…
+  if (typeof body.revisto === "boolean") {
+    sets.push("revisto_em = " + (body.revisto ? "datetime('now')" : "NULL"));
+  } else if (conteudoMudou && a.revisto_em) {
+    // …e limpa sozinha quando o conteúdo muda depois de revisto
+    sets.push("revisto_em = NULL");
+  }
   if (!sets.length) return jsonError("Nada para atualizar", 400);
   sets.push("atualizado_em = datetime('now')");
   await env.DB.prepare(`UPDATE insight_articles SET ${sets.join(", ")} WHERE id = ?`).bind(...vals, id).run();

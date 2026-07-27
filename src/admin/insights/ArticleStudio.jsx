@@ -376,6 +376,19 @@ export default function ArticleStudio({ articleId, onClose }) {
   const escolhida = a?.imagem_escolhida || null;
   const tituloLongo = titulo.length > 60;
   const temAviso = /(^|\n)\s*>/.test(mdRef.current || markdown);
+  const revisto = !!a?.revisto_em;
+
+  /* «Revisto pela Dra.» — a Dra. marca quando termina a leitura final; qualquer
+     alteração posterior ao conteúdo desmarca sozinha (worker). */
+  const alternarRevisto = async () => {
+    const alvo = !revisto;
+    if (alvo && sujo) { const ok = await guardar(true); if (!ok) return; } // marca sempre sobre o texto guardado
+    try {
+      const d = await api.setReviewed(articleId, alvo);
+      setData(d);
+      admToast(alvo ? 'Artigo marcado como revisto pela Dra.' : 'Revisão desmarcada.');
+    } catch (e) { admToast(e.message, { kind: 'error' }); }
+  };
 
   if (!data) {
     return (
@@ -527,8 +540,10 @@ export default function ArticleStudio({ articleId, onClose }) {
             <div className="glass" style={{ padding: 20 }}>
               <span className="overline">Publicação</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 12 }}>
-                <span style={{ width: 8, height: 8, borderRadius: 9, background: 'var(--warn)', boxShadow: '0 0 0 4px rgba(200,150,86,.18)' }} />
-                <span style={{ fontSize: 13.5 }}>Rascunho pronto a revisão</span>
+                <span style={{ width: 8, height: 8, borderRadius: 9,
+                               background: revisto ? 'var(--ok, #8fd0a2)' : 'var(--warn)',
+                               boxShadow: revisto ? '0 0 0 4px rgba(143,208,162,.18)' : '0 0 0 4px rgba(200,150,86,.18)' }} />
+                <span style={{ fontSize: 13.5 }}>{revisto ? 'Aprovado pela Dra. — pronto a publicar' : 'Rascunho pronto a revisão'}</span>
               </div>
               <p style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 11, lineHeight: 1.55 }}>
                 A publicação final no blogue segue fluxo manual — depois de aprovar, o artigo é colocado em produção pelo Victor.
@@ -540,7 +555,6 @@ export default function ArticleStudio({ articleId, onClose }) {
                   ['Capa escolhida', !!escolhida],
                   ['Descrição SEO ≤ 155', descricao.length > 0 && descricao.length <= 155],
                   ['Título ≤ 60 caracteres', titulo.length > 0 && titulo.length <= 60],
-                  ['Revisto pela Dra.', false],
                 ].map(([l, ok]) => (
                   <span key={l} style={{ display: 'flex', gap: 9, alignItems: 'center', fontSize: 12.5, color: ok ? 'var(--fg-2)' : 'var(--fg-3)' }}>
                     <span style={{ width: 16, height: 16, borderRadius: 5, flex: 'none', display: 'grid', placeItems: 'center',
@@ -550,6 +564,22 @@ export default function ArticleStudio({ articleId, onClose }) {
                     </span>{l}
                   </span>
                 ))}
+                {/* a única caixa que é da Dra.: clicável, guarda a data, e desmarca
+                    sozinha se o texto for alterado depois da revisão */}
+                <button type="button" onClick={alternarRevisto} aria-pressed={revisto}
+                        data-tip={revisto
+                          ? `Revisto a ${fmtDataBanco(a.revisto_em)} — clique para desmarcar. Alterar o texto desmarca sozinho.`
+                          : 'Terminou a leitura final? Clique para marcar o artigo como revisto.'}
+                        style={{ display: 'flex', gap: 9, alignItems: 'center', fontSize: 12.5, padding: 0, textAlign: 'left',
+                                 color: revisto ? 'var(--fg-2)' : 'var(--fg-3)', cursor: 'pointer', background: 'none', border: 'none' }}>
+                  <span style={{ width: 16, height: 16, borderRadius: 5, flex: 'none', display: 'grid', placeItems: 'center',
+                                 border: '1px solid ' + (revisto ? 'transparent' : 'var(--gold-soft)'),
+                                 background: revisto ? 'var(--grad-gold)' : 'transparent', color: '#1a1208',
+                                 boxShadow: revisto ? 'none' : '0 0 0 3px rgba(184,147,90,.12)' }}>
+                    {revisto && <Icon name="check" size={10} s={3.4} />}
+                  </span>
+                  Revisto pela Dra.{revisto && <em style={{ fontStyle: 'normal', color: 'var(--fg-3)', marginLeft: 4 }}>· {fmtDataBanco(a.revisto_em)}</em>}
+                </button>
               </div>
             </div>
           </div>

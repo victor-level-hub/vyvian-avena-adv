@@ -191,6 +191,7 @@ export const insights = {
   keywords: () => request('/api/insights/palavras'),
   evaluateArticle: (articleId) => request(`/api/insights/articles/${articleId}/avaliar`, { method: 'POST' }),
   generateAudio: (articleId) => request(`/api/insights/articles/${articleId}/audio`, { method: 'POST' }),
+  setReviewed: (articleId, revisto) => request(`/api/insights/articles/${articleId}`, { method: 'PATCH', body: { revisto } }),
   async audioUrl(articleId) {
     const token = getToken();
     const res = await fetch(`/api/insights/articles/${articleId}/audio`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });

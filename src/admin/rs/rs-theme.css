@@ -131,6 +131,10 @@
 .rs-scope .overline { font-size: 10.5px; font-weight: 800; letter-spacing: .26em; text-transform: uppercase; color: var(--gold); display: block; }
 
 /* ---------- inputs ---------- */
+/* REGRA (aprendida a 27 jul 2026): todo o campo de escrita tem de mostrar o
+   cursor a piscar — caret dourado explícito, nunca invisível sobre o fundo. */
+.rs-scope input, .rs-scope textarea, .rs-scope [contenteditable] { caret-color: var(--gold-soft); }
+.rs-scope[data-rs-theme=light] input, .rs-scope[data-rs-theme=light] textarea, .rs-scope[data-rs-theme=light] [contenteditable] { caret-color: var(--gold-deep); }
 .rs-scope .field { width: 100%; background: var(--panel); border: 1px solid var(--edge); border-radius: var(--r-md); padding: 13px 16px; color: var(--fg); font-size: 15px; transition: border-color .2s, box-shadow .2s, background .2s; }
 .rs-scope .field::placeholder { color: var(--fg-3); }
 .rs-scope .field:focus { outline: none; border-color: var(--gold-soft); box-shadow: 0 0 0 4px rgba(184, 147, 90, .14); }

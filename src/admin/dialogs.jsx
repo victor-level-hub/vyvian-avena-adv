@@ -39,9 +39,18 @@ export function DialogHost() {
     if (d && d.kind === 'prompt') setValue(d.defaultValue || '');
   }, [d]);
 
+  // Avisar o resto da app de que há um diálogo aberto (o RichEditor/TipTap
+  // desativa-se enquanto isto estiver ativo, para não roubar o foco/teclado).
+  useEffect(() => {
+    if (!d) return undefined;
+    window.dispatchEvent(new CustomEvent('adm-dialog-open'));
+    return () => window.dispatchEvent(new CustomEvent('adm-dialog-close'));
+  }, [d]);
+
   // Forçar o foco no campo do prompt: o autoFocus do React perde quando outro
   // componente retém o foco (ex.: o editor TipTap no estúdio do artigo) — sem
-  // isto, o que se escreve vai parar ao editor escondido atrás do diálogo.
+  // isto, o que se escreve vai parar ao editor escondido atrás do diálogo e o
+  // cursor (caret) não aparece no campo.
   const inputRef = useRef(null);
   useEffect(() => {
     if (!d || d.kind !== 'prompt') return undefined;
@@ -49,10 +58,12 @@ export function DialogHost() {
       const el = inputRef.current;
       if (el && document.activeElement !== el) { el.focus(); el.select(); }
     };
+    try { if (document.activeElement && document.activeElement.blur) document.activeElement.blur(); } catch {}
     foca();
     const t1 = setTimeout(foca, 50);
-    const t2 = setTimeout(foca, 220); // segunda ronda ganha a quem roubar o foco
-    return () => { clearTimeout(t1); clearTimeout(t2); };
+    const t2 = setTimeout(foca, 220);   // rondas extra ganham a quem roubar o foco
+    const t3 = setTimeout(foca, 600);
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); };
   }, [d]);
 
   useEffect(() => {
@@ -131,10 +142,22 @@ export function DialogHost() {
             placeholder={d.placeholder || ''}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') close(value); }}
+            onBlur={() => {
+              // num diálogo modal o campo não larga o foco — se algo o roubar
+              // (ex.: o editor atrás), recupera-o e o cursor volta a piscar.
+              setTimeout(() => {
+                const el = inputRef.current;
+                const alvo = document.activeElement;
+                if (!el) return;
+                if (alvo && alvo.closest && alvo.closest('.adm-overlay')) return; // botões do diálogo
+                el.focus();
+              }, 0);
+            }}
             style={{
               width: '100%', marginTop: '0.9rem', padding: '0.5rem 0.7rem',
               border: '1px solid rgba(0,0,0,0.2)', borderRadius: 4, fontSize: '0.9rem',
-              fontFamily: 'var(--sans)', background: '#fff',
+              fontFamily: 'var(--sans)', background: '#fff', color: '#2a2520',
+              caretColor: 'var(--gold, #b8935a)',
             }}
           />
         )}

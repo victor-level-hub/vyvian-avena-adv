@@ -45,6 +45,21 @@ export default function RichEditor({ initialMarkdown, onChangeMarkdown, placehol
     },
   });
 
+  // Enquanto um diálogo (admPrompt/admConfirm) estiver aberto, o editor
+  // desativa-se e larga o foco — o ProseMirror retém o teclado com gosto e,
+  // sem isto, o cursor nunca aparece no campo do diálogo (bug reportado).
+  useEffect(() => {
+    if (!editor) return undefined;
+    const abrir = () => { try { editor.commands.blur(); editor.setEditable(false); } catch {} };
+    const fechar = () => { try { editor.setEditable(true); } catch {} };
+    window.addEventListener('adm-dialog-open', abrir);
+    window.addEventListener('adm-dialog-close', fechar);
+    return () => {
+      window.removeEventListener('adm-dialog-open', abrir);
+      window.removeEventListener('adm-dialog-close', fechar);
+    };
+  }, [editor]);
+
   // se o markdown inicial mudar (outro artigo), recarrega o conteúdo
   useEffect(() => {
     if (!editor) return;

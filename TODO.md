@@ -22,7 +22,7 @@
 
 ## Ações do Victor / da Dra. (não é código)
 
-- [ ] Victor: `git pull` em `C:\Users\victor.sousa\Projetos\vyvian-avena-adv` para trazer `134dd49`…HEAD (ver git log) (redesign, filtros, lightbox, marca de água, tema livre, fotos no corpo, Banco de Imagens).
+- [ ] Victor: `git pull` em `C:\Users\victor.sousa\Projetos\vyvian-avena-adv` para trazer `134dd49`…`f00b22f` (e seguintes) (redesign, filtros, lightbox, marca de água, tema livre, fotos no corpo, Banco de Imagens).
 - [ ] Victor (opcional): `IG_SYNC_KEY` foi rodada na integração da Fase B e o valor não ficou guardado. O cron diário não a usa; só serve para forçar uma sincronização manual. Repor com `npx wrangler secret put IG_SYNC_KEY < ficheiro.txt` (e apagar o ficheiro a seguir).
 - [ ] Dra.: experimentar as abas **Insights** e **Instagram** e dar feedback.
 - [ ] Victor: **créditos Recraft quase no fim (~40)** — fallback de imagem; recarregar se quiser manter o plano B.
@@ -30,6 +30,8 @@
 - [ ] Registos em diretórios (OA → Consulto → Lawzana → Jusbrasil → EscolherAdvogado), 1–2 por semana.
 
 ## Concluídas recentemente
+
+- 27 jul 2026 — **Sessão Insights completa (v4)** (`134dd49`…`f00b22f`): redesign «Vyvian Avena Design System v3» das Redes Sociais (dark/light); filtros 60/90/120 dias + agrupamento dia/semana/mês com eixos em todos os gráficos; lightbox/carrossel das capas; marca de água automática (favicon gold/verde) em todas as imagens geradas; campo «Correções de imagem» (regras permanentes no prompt); TEMA LIVRE; fotos no corpo posicionadas pela IA; **Banco de Imagens** (vista IMAGENS, salvar no lightbox, «Usar imagem do banco» sem duplicados, remoção apaga do R2 quando sem uso, selos «NO ARTIGO X»); descartar opção individual; **Banco de Palavras SEO** (keyword_bank alimentado/consumido pela IA, visitas por página via beacon com pathname, métricas no cron); tooltips do site (TipLayer, nunca cortados); prompts com parágrafos curtos/negrito comedido/público PT+BR/termos de pesquisa/coerência de tratamento/alts com keywords; toolbar sticky; **Nota da IA** (0-10 texto+SEO com motivo e melhorias, pós-Guardar); pré-visualização = página real do blogue (navbar/rodapé/prosa/CTA/Continuar a ler, sempre clara) com player «Ouvir este artigo»; **Narração ElevenLabs** no editor (voz Claudia, player dourado 1/1.25/1.5/2x); «Revisto pela Dra.» funcional (data/hora, desmarca se o texto mudar); título/descrição auto-crescem; **PUBLICAR**: fila no Worker (PUBLISH_KEY) + GitHub Actions a cada 15 min (md no formato do blogue, imagens do R2, narração com timestamps/leitura acompanhada, build com gate SEO, deploy, confirmação). Segredos: ELEVENLABS_API_KEY e PUBLISH_KEY no Worker; CLOUDFLARE_API_TOKEN/ELEVENLABS_API_KEY/PUBLISH_KEY no GitHub Actions. Migrações 0019-0024.
 
 - 27 jul 2026 — **Player de narração na pré-visualização**: com narração gerada, a pré-visualização mostra o cartão «Ouvir este artigo» idêntico ao do blogue (play dourado, progresso clicável, 1/1.25/1.5x), no topo da prosa; leitura acompanhada palavra a palavra continua a nascer na publicação.
 - 27 jul 2026 — **«Revisto pela Dra.» funcional** (`9bb8c9f`): a caixa da checklist de publicação é clicável — marca a revisão final com data/hora (revisto_em, migração 0023), muda o estado para «Aprovado pela Dra. — pronto a publicar», e desmarca sozinha se o conteúdo mudar depois (guardar título/descrição/corpo diferente ou inserir fotos).

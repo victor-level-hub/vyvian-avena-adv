@@ -6,6 +6,8 @@
 
 - **27 jul 2026 · campos de escrita:** nunca deixar um campo de entrada sem cursor (caret) visível e sem foco garantido. Todo o input/textarea tem `caret-color` explícito e, em diálogos modais, o campo força e recupera o foco — o TipTap/ProseMirror rouba o teclado se o deixarem (diálogos emitem `adm-dialog-open/close` e o RichEditor desativa-se enquanto houver diálogo aberto).
 
+- **27 jul 2026 · tooltips:** NUNCA usar o tooltip padrão do browser (atributo `title`) — sempre o tooltip do site (TipLayer em `rs/ui.jsx`): elementos usam `data-tip`, a camada é um portal em `document.body` que herda o tema light/dark do `.rs-scope` de origem e prende a caixa aos limites da janela — um tooltip NUNCA pode sair cortado (cuidado com `overflow` de invólucros).
+
 ## Prioridade alta (código)
 
 - [ ] **PDF do plano de pagamento** no formato padrão da Dra. Vyvian, com envio automático ao cliente (área privada).
@@ -17,7 +19,7 @@
 
 ## Ações do Victor / da Dra. (não é código)
 
-- [ ] Victor: `git pull` em `C:\Users\victor.sousa\Projetos\vyvian-avena-adv` para trazer `134dd49`…`be2d716` (redesign, filtros, lightbox, marca de água, tema livre, fotos no corpo, Banco de Imagens).
+- [ ] Victor: `git pull` em `C:\Users\victor.sousa\Projetos\vyvian-avena-adv` para trazer `134dd49`…HEAD (ver git log) (redesign, filtros, lightbox, marca de água, tema livre, fotos no corpo, Banco de Imagens).
 - [ ] Victor (opcional): `IG_SYNC_KEY` foi rodada na integração da Fase B e o valor não ficou guardado. O cron diário não a usa; só serve para forçar uma sincronização manual. Repor com `npx wrangler secret put IG_SYNC_KEY < ficheiro.txt` (e apagar o ficheiro a seguir).
 - [ ] Dra.: experimentar as abas **Insights** e **Instagram** e dar feedback.
 - [ ] Victor: **créditos Recraft quase no fim (~40)** — fallback de imagem; recarregar se quiser manter o plano B.

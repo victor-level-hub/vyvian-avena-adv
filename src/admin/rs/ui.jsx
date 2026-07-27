@@ -3,6 +3,7 @@
 // Portadas de prototypes/redes-sociais/rs-ui.jsx — React puro, sem dependências.
 // Keyframes renomeados com prefixo rs (ver rs-theme.css).
 import React, { useState, useEffect, useRef } from 'react';
+import ReactDOM from 'react-dom';
 
 /* ---------------- ícones ---------------- */
 const RS_ICONS = {
@@ -96,21 +97,99 @@ export function Reveal({ children, d = 0, y = 14, cls = '', style, tag = 'div', 
 }
 
 /* ---------------- tooltip ---------------- */
-export function Tip({ label, children, w = 230 }) {
-  const [on, setOn] = useState(false);
-  return (
-    <span style={{ position: 'relative', display: 'inline-flex' }}
-          onMouseEnter={() => setOn(true)} onMouseLeave={() => setOn(false)}
-          onFocus={() => setOn(true)} onBlur={() => setOn(false)}>
-      {children}
-      <span role="tooltip" style={{
-        position: 'absolute', bottom: 'calc(100% + 10px)', left: '50%', width: w,
-        transform: `translateX(-50%) translateY(${on ? 0 : 5}px) scale(${on ? 1 : .96})`,
-        opacity: on ? 1 : 0, pointerEvents: 'none', transition: 'all .22s var(--ease-out)',
+/* REGRA PERMANENTE (27 jul 2026, pedido do Victor): tooltips NUNCA no padrão do
+   browser (atributo title) — sempre no padrão do site, cientes do tema light/dark,
+   e NUNCA cortados por bordas de cartões ou do ecrã. A TipLayer resolve os dois:
+   é um portal em document.body (position: fixed, fora de qualquer overflow) que
+   mostra o texto de data-tip do elemento sob o cursor/foco, herdando o tema do
+   .rs-scope de origem e prendendo a caixa aos limites da janela (margem 8px). */
+export function TipLayer() {
+  const [tip, setTip] = useState(null);   // { text, r, theme }
+  const [pos, setPos] = useState(null);   // { x, y }
+  const box = useRef(null);
+
+  useEffect(() => {
+    let atual = null;
+    const esconder = () => { if (atual) { atual = null; setTip(null); setPos(null); } };
+    const mostrar = (el) => {
+      const text = el.getAttribute('data-tip');
+      if (!text || !text.trim()) return;
+      atual = el;
+      const r = el.getBoundingClientRect();
+      const scope = el.closest('.rs-scope');
+      setPos(null);
+      setTip({
+        text,
+        r: { left: r.left, top: r.top, bottom: r.bottom, width: r.width },
+        theme: (scope && scope.getAttribute('data-rs-theme')) || 'dark',
+      });
+    };
+    const over = (e) => {
+      const el = e.target && e.target.closest ? e.target.closest('[data-tip]') : null;
+      if (el && el !== atual) mostrar(el);
+      else if (!el && atual) esconder();
+    };
+    const out = (e) => {
+      if (atual && !(e.relatedTarget && atual.contains(e.relatedTarget))) {
+        const prox = e.relatedTarget && e.relatedTarget.closest ? e.relatedTarget.closest('[data-tip]') : null;
+        if (!prox) esconder();
+      }
+    };
+    const focus = (e) => {
+      const el = e.target && e.target.closest ? e.target.closest('[data-tip]') : null;
+      if (el) mostrar(el); else esconder();
+    };
+    const down = () => esconder();
+    window.addEventListener('mouseover', over, true);
+    window.addEventListener('mouseout', out, true);
+    window.addEventListener('focusin', focus, true);
+    window.addEventListener('scroll', down, true);
+    window.addEventListener('mousedown', down, true);
+    return () => {
+      window.removeEventListener('mouseover', over, true);
+      window.removeEventListener('mouseout', out, true);
+      window.removeEventListener('focusin', focus, true);
+      window.removeEventListener('scroll', down, true);
+      window.removeEventListener('mousedown', down, true);
+    };
+  }, []);
+
+  // 2.ª passagem: mede a caixa e prende aos limites da janela (nunca cortada)
+  useEffect(() => {
+    if (!tip || !box.current) return;
+    const b = box.current.getBoundingClientRect();
+    const vw = window.innerWidth, vh = window.innerHeight;
+    let x = tip.r.left + tip.r.width / 2 - b.width / 2;
+    x = Math.max(8, Math.min(x, vw - b.width - 8));
+    let y = tip.r.top - b.height - 10;          // preferir acima do elemento
+    if (y < 8) y = tip.r.bottom + 10;           // sem espaço → abaixo
+    y = Math.max(8, Math.min(y, vh - b.height - 8));
+    setPos({ x, y });
+  }, [tip]);
+
+  if (!tip || typeof document === 'undefined') return null;
+  return ReactDOM.createPortal(
+    <span className="rs-scope" data-rs-theme={tip.theme}
+          style={{ position: 'fixed', left: 0, top: 0, width: 0, height: 0, zIndex: 400, pointerEvents: 'none',
+                   overflow: 'visible', margin: 0, padding: 0, background: 'none' }}>
+      <span ref={box} role="tooltip" style={{
+        position: 'fixed', left: pos ? pos.x : 8, top: pos ? pos.y : 8,
+        maxWidth: 'min(300px, calc(100vw - 16px))', visibility: pos ? 'visible' : 'hidden',
         background: 'var(--panel-flat)', border: '1px solid var(--edge-2)', borderRadius: 12,
-        padding: '10px 13px', fontSize: 12, lineHeight: 1.5, color: 'var(--fg-2)',
-        boxShadow: 'var(--shadow)', zIndex: 60, textTransform: 'none', letterSpacing: 0, fontWeight: 400,
-      }}>{label}</span>
+        padding: '9px 13px', fontSize: 12, lineHeight: 1.5, color: 'var(--fg-2)',
+        boxShadow: 'var(--shadow)', textTransform: 'none', letterSpacing: 0, fontWeight: 400,
+        whiteSpace: 'pre-line', animation: pos ? 'rsRiseInSm .2s var(--ease-out) both' : 'none',
+      }}>{tip.text}</span>
+    </span>,
+    document.body
+  );
+}
+
+/* Tip mantém a mesma API de antes, mas delega na TipLayer (via data-tip). */
+export function Tip({ label, children }) {
+  return (
+    <span data-tip={typeof label === 'string' ? label : ''} style={{ display: 'inline-flex' }}>
+      {children}
     </span>
   );
 }

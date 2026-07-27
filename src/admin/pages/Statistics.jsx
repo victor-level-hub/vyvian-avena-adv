@@ -7,7 +7,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { stats as statsApi } from '../apiClient';
 import InsightsSection from '../insights/InsightsSection';
-import { Icon, Ticker, Reveal, Tip, Tabs, Seg, Sparkles, Chart, Spark, Tilt, Thumb, PanelHead } from '../rs/ui';
+import { Icon, Ticker, Reveal, Tip, TipLayer, Tabs, Seg, Sparkles, Chart, Spark, Tilt, Thumb, PanelHead } from '../rs/ui';
 import '../rs/rs-theme.css';
 
 const SECTIONS = [
@@ -127,6 +127,7 @@ export default function Statistics() {
 
   return (
     <div ref={scopeRef} className="rs-scope" data-rs-theme={theme}>
+      <TipLayer />
       <div className="rs-bg" aria-hidden="true">
         <span className="aur a1" /><span className="aur a2" /><span className="aur a3" />
         <span className="grid" /><span className="dots" /><span className="vig" />
@@ -150,7 +151,7 @@ export default function Statistics() {
             </div>
             <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 4 }}
                     onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
-                    title={theme === 'dark' ? 'Mudar para o modo claro' : 'Mudar para o modo escuro'}
+                    data-tip={theme === 'dark' ? 'Mudar para o modo claro' : 'Mudar para o modo escuro'}
                     aria-label="Alternar tema">
               <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={14} />
               {theme === 'dark' ? 'Claro' : 'Escuro'}

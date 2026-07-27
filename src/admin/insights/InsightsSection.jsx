@@ -156,7 +156,7 @@ function TopicCard({ topic, pos, gerando, bloqueado, onGerar }) {
           <div style={{ display: 'flex', gap: 7, flexWrap: 'wrap', flex: 1, minWidth: 0 }}>
             {fontes.slice(0, 3).map((f, i) => (
               <a key={i} href={f.url} target="_blank" rel="noreferrer"
-                 title={(f.titulo ? `«${f.titulo}» — ` : '') + (f.url || '')}
+                 data-tip={(f.titulo ? `«${f.titulo}» — ` : '') + (f.url || '')}
                  style={{ fontSize: 11.5, color: 'var(--fg-3)', padding: '4px 9px', borderRadius: 7, background: 'var(--panel)', border: '1px solid var(--edge)' }}>
                 {f.nome || f.url}
               </a>
@@ -415,8 +415,8 @@ function BancoImagens({ onAbrirArtigo }) {
         <span className="overline">Banco de imagens</span>
         <div style={{ fontSize: 13.5, color: 'var(--fg-2)', marginTop: 6, maxWidth: '62ch', lineHeight: 1.6 }}>
           As imagens geradas por IA que a Dra. guardou — com a marca de água aplicada, prontas a
-          reutilizar. Guarde novas imagens no editor de qualquer artigo (botão «Salvar imagens»
-          na sidebar ou «Salvar imagem» na ampliação).
+          reutilizar. Guarde novas imagens no editor de qualquer artigo: abra «Ver ampliadas» e
+          use o botão «Salvar imagem».
         </div>
       </div>
 
@@ -431,7 +431,7 @@ function BancoImagens({ onAbrirArtigo }) {
           </span>
           <h3 style={{ fontSize: 24, marginTop: 18 }}>Ainda sem imagens guardadas</h3>
           <p style={{ fontSize: 13.5, color: 'var(--fg-2)', maxWidth: '54ch', margin: '12px auto 0', lineHeight: 1.6 }}>
-            Abra um artigo, marque as imagens de que gosta e use <strong style={{ color: 'var(--fg)' }}>Salvar imagens</strong> —
+            Abra um artigo, clique em «Ver ampliadas» e use <strong style={{ color: 'var(--fg)' }}>Salvar imagem</strong> —
             elas aparecem aqui para reutilizar quando quiser.
           </p>
         </Reveal>
@@ -455,14 +455,14 @@ function BancoImagens({ onAbrirArtigo }) {
                       </div>
                       {im.artigo_titulo && (
                         <button type="button" onClick={() => im.article_id && onAbrirArtigo(im.article_id)}
-                                title="Abrir o artigo de origem"
+                                data-tip="Abrir o artigo de origem"
                                 style={{ display: 'block', marginTop: 4, fontSize: 12, color: 'var(--fg-2)', textAlign: 'left', padding: 0,
                                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', cursor: 'pointer' }}>
                           {im.artigo_titulo}
                         </button>
                       )}
                     </div>
-                    <button type="button" className="btn-quiet" title="Remover do banco" style={{ padding: 5, borderRadius: 7, flex: 'none' }}
+                    <button type="button" className="btn-quiet" data-tip="Remover do banco" style={{ padding: 5, borderRadius: 7, flex: 'none' }}
                             onClick={() => remover(im)}>
                       <Icon name="trash" size={14} />
                     </button>
@@ -675,13 +675,13 @@ function Fontes() {
                         <span className="num" style={{ fontSize: 17, color: f.indicados ? 'var(--gold-soft)' : 'var(--fg-3)' }}>{f.indicados}</span>
                       </td>
                       <td style={{ fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.5, maxWidth: 330, cursor: 'text' }}
-                          onDoubleClick={() => editarResumo(f)} title="Duplo clique para editar">
+                          onDoubleClick={() => editarResumo(f)} data-tip="Duplo clique para editar">
                         {f.resumo || '—'}
                       </td>
                       <td>
                         <span style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                          <button type="button" className="btn-quiet" title="Editar resumo" style={{ padding: 7, borderRadius: 8 }} onClick={() => editarResumo(f)}><Icon name="edit" size={15} /></button>
-                          <button type="button" className="btn-quiet" title="Apagar" style={{ padding: 7, borderRadius: 8 }} onClick={() => remover(f)}><Icon name="trash" size={15} /></button>
+                          <button type="button" className="btn-quiet" data-tip="Editar resumo" style={{ padding: 7, borderRadius: 8 }} onClick={() => editarResumo(f)}><Icon name="edit" size={15} /></button>
+                          <button type="button" className="btn-quiet" data-tip="Apagar" style={{ padding: 7, borderRadius: 8 }} onClick={() => remover(f)}><Icon name="trash" size={15} /></button>
                         </span>
                       </td>
                     </tr>
@@ -706,7 +706,7 @@ function Fontes() {
                       <div className="mono" style={{ fontSize: 11, color: 'var(--fg-3)' }}>{TIPO_LABEL[f.tipo] || f.tipo} · {f.indicados} temas</div>
                     </div>
                     {manual && <span style={{ flex: 'none', fontSize: 8.5, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase', color: '#1a1208', background: 'var(--grad-gold)', padding: '3px 7px', borderRadius: 5 }}>adicionada</span>}
-                    <button type="button" className="btn-quiet" title="Apagar" style={{ padding: 6 }} onClick={() => remover(f)}><Icon name="trash" size={14} /></button>
+                    <button type="button" className="btn-quiet" data-tip="Apagar" style={{ padding: 6 }} onClick={() => remover(f)}><Icon name="trash" size={14} /></button>
                   </div>
                   {f.resumo && <p style={{ fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.55, marginTop: 11 }} onDoubleClick={() => editarResumo(f)}>{f.resumo}</p>}
                   <div style={{ display: 'flex', gap: 18, marginTop: 13, alignItems: 'center', flexWrap: 'wrap' }}>

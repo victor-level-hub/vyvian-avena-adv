@@ -435,18 +435,11 @@ export default function ArticleStudio({ articleId, onClose }) {
                   <button type="button" className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }} onClick={() => setAmpliada(0)}>
                     <Icon name="expand" size={13} />Ver ampliadas
                   </button>
-                  <button type="button" className={'btn btn-sm ' + (corpo.size ? 'btn-gold' : 'btn-ghost')}
-                          style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
-                          title="Guarda as imagens marcadas com + no Banco de Imagens (vista IMAGENS)"
-                          onClick={() => salvarNoBanco([...corpo])} disabled={!corpo.size || salvando}>
-                    <Icon name={salvando ? 'refresh' : 'save'} size={13} />
-                    {salvando ? 'A salvar…' : corpo.size ? `Salvar ${corpo.size} ${corpo.size === 1 ? 'imagem' : 'imagens'}` : 'Salvar imagens'}
-                  </button>
                   <button type="button" className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={gerarImagens}>
                     <Icon name="refresh" size={13} />Gerar todas novamente
                   </button>
                   <button type="button" className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
-                          title="Escolher imagens já guardadas no Banco de Imagens para juntar às opções deste artigo"
+                          data-tip="Escolher imagens já guardadas no Banco de Imagens para juntar às opções deste artigo"
                           onClick={() => setBancoAberto(true)}>
                     <Icon name="image" size={13} />Usar imagem do banco
                   </button>
@@ -456,8 +449,8 @@ export default function ArticleStudio({ articleId, onClose }) {
                   <span className="overline">Fotos no corpo do artigo</span>
                   <p style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 8, lineHeight: 1.55 }}>
                     Marque fotos com o botão <Icon name="plus" size={10} style={{ verticalAlign: '-1px' }} /> em cada miniatura —
-                    a mesma seleção serve para <strong style={{ color: 'var(--fg-2)' }}>«Salvar imagens»</strong> no Banco e para
-                    a IA colocar cada uma <strong style={{ color: 'var(--fg-2)' }}>após o parágrafo com que mais se relaciona</strong>.
+                    a IA coloca cada uma <strong style={{ color: 'var(--fg-2)' }}>após o parágrafo com que mais se relaciona</strong>.
+                    Para guardar no Banco de Imagens, use «Salvar imagem» dentro de «Ver ampliadas».
                   </p>
                   <button type="button" className={'btn btn-sm ' + (corpo.size ? 'btn-gold' : 'btn-ghost')}
                           style={{ width: '100%', justifyContent: 'center', marginTop: 11 }}
@@ -475,7 +468,7 @@ export default function ArticleStudio({ articleId, onClose }) {
                     <Icon name="image" size={13} />Gerar 4 opções de imagem
                   </button>
                   <button type="button" className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
-                          title="Escolher imagens já guardadas no Banco de Imagens"
+                          data-tip="Escolher imagens já guardadas no Banco de Imagens"
                           onClick={() => setBancoAberto(true)}>
                     <Icon name="image" size={13} />Usar imagem do banco
                   </button>
@@ -590,7 +583,7 @@ function CoverOption({ src, i, provider, chosen, onPick, onExpand, noCorpo, jaNo
         0{i + 1}
       </span>
       {onExpand && (
-        <span role="button" tabIndex={0} title="Ampliar" aria-label={`Ampliar a opção ${i + 1}`}
+        <span role="button" tabIndex={0} data-tip="Ampliar" aria-label={`Ampliar a opção ${i + 1}`}
               onClick={(e) => { e.stopPropagation(); e.preventDefault(); onExpand(); }}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onExpand(); } }}
               style={{ position: 'absolute', bottom: 7, right: 7, width: 24, height: 24, borderRadius: 7, display: 'grid', placeItems: 'center',
@@ -601,14 +594,14 @@ function CoverOption({ src, i, provider, chosen, onPick, onExpand, noCorpo, jaNo
       )}
       {onToggleCorpo && (
         jaNoArtigo
-          ? <span title="Já está no corpo do artigo"
+          ? <span data-tip="Já está no corpo do artigo"
                   style={{ position: 'absolute', bottom: 7, left: 7, height: 24, padding: '0 7px', borderRadius: 7, display: 'inline-flex', alignItems: 'center', gap: 4,
                            background: 'rgba(74,124,89,.55)', border: '1px solid rgba(143,208,162,.5)', color: '#d9f2e0',
                            fontSize: 8.5, fontWeight: 800, letterSpacing: '.08em', backdropFilter: 'blur(4px)' }}>
               <Icon name="check" size={9} s={3.4} />NO ARTIGO
             </span>
           : <span role="button" tabIndex={0} aria-pressed={noCorpo}
-                  title={noCorpo ? 'Retirar da seleção para o corpo do artigo' : 'Marcar para o corpo do artigo'}
+                  data-tip={noCorpo ? 'Retirar da seleção para o corpo do artigo' : 'Marcar para o corpo do artigo'}
                   onClick={(e) => { e.stopPropagation(); e.preventDefault(); onToggleCorpo(); }}
                   onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onToggleCorpo(); } }}
                   style={{ position: 'absolute', bottom: 7, left: 7, width: 24, height: 24, borderRadius: 7, display: 'grid', placeItems: 'center',
@@ -684,7 +677,7 @@ function BancoPicker({ onAdd, onClose, adotando, noArtigoIds }) {
             </div>
           ) : itens.length === 0 ? (
             <div style={{ padding: '34px 16px', textAlign: 'center', color: 'var(--fg-3)', fontSize: 13, lineHeight: 1.6 }}>
-              O banco ainda está vazio.<br />Guarde imagens com «Salvar imagens» na sidebar ou «Salvar imagem» na ampliação.
+              O banco ainda está vazio.<br />Guarde imagens com «Salvar imagem» dentro de «Ver ampliadas», em qualquer artigo.
             </div>
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 10 }}>
@@ -694,7 +687,7 @@ function BancoPicker({ onAdd, onClose, adotando, noArtigoIds }) {
                 return (
                   <button key={im.id} type="button" aria-pressed={marcada} disabled={jaNoArtigo}
                           onClick={() => { if (!jaNoArtigo) toggle(im.image_id); }}
-                          title={jaNoArtigo ? 'Esta imagem já está nas opções deste artigo' : im.artigo_titulo ? `De: ${im.artigo_titulo}` : 'Imagem guardada'}
+                          data-tip={jaNoArtigo ? 'Esta imagem já está nas opções deste artigo' : im.artigo_titulo ? `De: ${im.artigo_titulo}` : 'Imagem guardada'}
                           style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', padding: 0, display: 'block',
                                    aspectRatio: '4/3', cursor: jaNoArtigo ? 'not-allowed' : 'pointer',
                                    border: '1.5px solid ' + (marcada ? 'var(--gold-soft)' : 'var(--edge)'),
@@ -766,7 +759,7 @@ function ImageRulesCard({ regras, onAdd, onRemove }) {
         <input className="field" style={{ padding: '9px 12px', fontSize: 13 }} value={texto} maxLength={240}
                onChange={(e) => setTexto(e.target.value)}
                placeholder="Ex.: ecrã do telemóvel virado ao contrário" />
-        <button type="submit" className="btn btn-gold btn-sm" disabled={!texto.trim()} title="Guardar correção" aria-label="Guardar correção"
+        <button type="submit" className="btn btn-gold btn-sm" disabled={!texto.trim()} data-tip="Guardar correção" aria-label="Guardar correção"
                 style={{ padding: '7px 11px' }}>
           <Icon name="plus" size={13} />
         </button>
@@ -782,7 +775,7 @@ function ImageRulesCard({ regras, onAdd, onRemove }) {
                                      background: 'var(--panel)', border: '1px solid var(--edge)', animation: 'rsRiseInSm .35s var(--ease-out) both' }}>
               <span style={{ flex: 'none', marginTop: 3, width: 6, height: 6, borderRadius: 9, background: 'var(--gold)' }} />
               <span style={{ flex: 1, fontSize: 12, lineHeight: 1.5, color: 'var(--fg-2)' }}>{r.texto}</span>
-              <button type="button" className="btn-quiet" title="Remover esta correção" onClick={() => onRemove(r.id)}
+              <button type="button" className="btn-quiet" data-tip="Remover esta correção" onClick={() => onRemove(r.id)}
                       style={{ padding: 3, borderRadius: 6, flex: 'none' }}>
                 <Icon name="trash" size={13} />
               </button>
@@ -879,13 +872,13 @@ function Lightbox({ images, start = 0, chosenId, onPick, onSave, salvando, onRep
           </button>
           {onSave && (
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => onSave(img.id)} disabled={salvando}
-                    title="Guardar esta imagem no Banco de Imagens (vista IMAGENS) — duplicados são detetados pelo ID">
+                    data-tip="Guardar esta imagem no Banco de Imagens (vista IMAGENS) — duplicados são detetados pelo ID">
               <Icon name={salvando ? 'refresh' : 'save'} size={13} />{salvando ? 'A salvar…' : 'Salvar imagem'}
             </button>
           )}
           {onReport && (
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => onReport(i + 1)}
-                    title="Aponte um erro grotesco desta imagem — a IA nunca mais o repete">
+                    data-tip="Aponte um erro grotesco desta imagem — a IA nunca mais o repete">
               <Icon name="info" size={13} />Reportar erro
             </button>
           )}

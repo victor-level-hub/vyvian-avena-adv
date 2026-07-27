@@ -17,7 +17,7 @@
 
 ## Ações do Victor / da Dra. (não é código)
 
-- [ ] Victor: `git pull` em `C:\Users\victor.sousa\Projetos\vyvian-avena-adv` para trazer `134dd49`…`da9dc7b` (redesign, filtros, lightbox e marca de água).
+- [ ] Victor: `git pull` em `C:\Users\victor.sousa\Projetos\vyvian-avena-adv` para trazer `134dd49`…`0fb59e9` (redesign, filtros, lightbox, marca de água, tema livre, fotos no corpo, Banco de Imagens).
 - [ ] Victor (opcional): `IG_SYNC_KEY` foi rodada na integração da Fase B e o valor não ficou guardado. O cron diário não a usa; só serve para forçar uma sincronização manual. Repor com `npx wrangler secret put IG_SYNC_KEY < ficheiro.txt` (e apagar o ficheiro a seguir).
 - [ ] Dra.: experimentar as abas **Insights** e **Instagram** e dar feedback.
 - [ ] Victor: **créditos Recraft quase no fim (~40)** — fallback de imagem; recarregar se quiser manter o plano B.
@@ -26,6 +26,7 @@
 
 ## Concluídas recentemente
 
+- 27 jul 2026 — **Banco de Imagens** (`0fb59e9`): nova vista «IMAGENS» na pílula do Insights com as imagens guardadas pela Dra. (data, artigo de origem, ampliação, remoção); botão «Salvar imagens» na sidebar do editor (abaixo de «Ver ampliadas», usa a seleção «+») e «Salvar imagem» no lightbox; duplicados detetados pelo ID («Imagem salva com sucesso.» / «Esta imagem já foi salva no dia X.»); tabela D1 `image_bank` (migração 0019) e endpoints `/api/insights/banco`.
 - 27 jul 2026 — **Tema livre, fotos no corpo do artigo e fix definitivo do cursor** (`196e512`, `500b413`): vista «TEMA LIVRE» (a Dra. escreve o assunto → artigo no editor; lista de anteriores), fotos marcadas com «+» inseridas pela IA após o parágrafo mais relacionado (TipTap com Image; imagens públicas em GET), e caret dourado + editor desativado durante diálogos (causa-raiz do campo «não editável»).
 - 25 jul 2026 — **Insights: campo «Correções de imagem»**: a Dra. aponta erros grotescos das imagens (ex.: ecrã do telemóvel ao contrário) na sidebar do editor ou no botão «Reportar erro» do lightbox; cada nota vira regra permanente injetada no prompt de todas as gerações seguintes (KV, endpoints /api/insights/image-rules). Primeira regra registada: ecrã do telemóvel virado para quem o segura.
 - 25 jul 2026 — **Insights: lightbox das capas + marca de água com o favicon** (`da9dc7b`): ampliação a ecrã inteiro com setas/teclado/swipe, miniaturas e «Usar como capa»; marca de água no padrão do blogue (logo-coluna, canto inferior direito, dourado/verde conforme o canto) composta no browser e gravada no R2 via novo `PUT /api/insights/images/:id` — aplicada automaticamente a cada geração e retroativamente às 4 imagens do artigo de teste. Prompt de imagem corrigido: ecrãs de telemóvel virados para quem os usa.

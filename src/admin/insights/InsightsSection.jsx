@@ -395,12 +395,17 @@ function BancoImagens({ onAbrirArtigo }) {
   useEffect(() => { carregar(); }, []);
 
   const remover = async (item) => {
-    const ok = await admConfirm('Remover esta imagem do banco? (a imagem original não é apagada)', { danger: true, okLabel: 'Remover' });
+    const ok = await admConfirm(
+      'Remover esta imagem do banco? Se já não estiver em uso em nenhum artigo, o ficheiro é apagado definitivamente do armazenamento.',
+      { danger: true, okLabel: 'Remover' }
+    );
     if (!ok) return;
     try {
-      await api.removeFromBank(item.image_id);
+      const r = await api.removeFromBank(item.image_id);
       setImagens((xs) => xs.filter((x) => x.image_id !== item.image_id));
-      admToast('Imagem removida do banco.');
+      admToast(r.apagada
+        ? 'Imagem removida do banco e apagada do armazenamento.'
+        : 'Imagem removida do banco. O ficheiro mantém-se por ainda estar em uso num artigo.');
     } catch (e) { admToast(e.message, { kind: 'error' }); }
   };
 
@@ -433,7 +438,7 @@ function BancoImagens({ onAbrirArtigo }) {
       ) : (
         <>
           <PanelHead over={`${imagens.length} ${imagens.length === 1 ? 'imagem' : 'imagens'}`} title="Guardadas"
-                     note="Clique numa imagem para a ver em grande. O caixote remove do banco (a original mantém-se no artigo)." />
+                     note="Clique numa imagem para a ver em grande. O caixote remove do banco — e apaga o ficheiro do armazenamento se já não estiver em uso em nenhum artigo." />
           <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fill,minmax(220px,1fr))' }}>
             {imagens.map((im, i) => (
               <Reveal key={im.id} d={i * 40} y={14}>

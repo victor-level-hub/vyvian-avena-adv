@@ -105,6 +105,8 @@ export default function ArticleStudio({ articleId, onClose }) {
   const [corpo, setCorpo] = useState(() => new Set()); // imagens marcadas (corpo do artigo / banco)
   const [inserindo, setInserindo] = useState(false);
   const [salvando, setSalvando] = useState(false);     // a guardar no Banco de Imagens
+  const [bancoAberto, setBancoAberto] = useState(false); // modal «Usar imagem do banco»
+  const [adotando, setAdotando] = useState(false);
   const [fire, setFire] = useState(0);
   const mdRef = useRef('');
 
@@ -189,6 +191,29 @@ export default function ArticleStudio({ articleId, onClose }) {
       admToast(`Não foi possível salvar no Banco de Imagens: ${e.message}`, { kind: 'error' });
     } finally {
       setSalvando(false);
+    }
+  };
+
+  /* «Usar imagem do banco» — copia imagens guardadas para as opções deste artigo */
+  const adicionarDoBanco = async (ids) => {
+    if (!ids.length || adotando) return;
+    setAdotando(true);
+    try {
+      const d = await api.adoptFromBank(articleId, ids);
+      setData({ article: d.article, images: d.images, ronda: d.ronda });
+      const res = d.resultados || [];
+      const novas = res.filter((r) => r.estado === 'adicionada').length;
+      const jaLa = res.filter((r) => r.estado === 'ja_no_artigo').length;
+      const partes = [];
+      if (novas) partes.push(`${novas} ${novas === 1 ? 'imagem adicionada' : 'imagens adicionadas'} às opções do artigo`);
+      if (jaLa) partes.push(`${jaLa} já ${jaLa === 1 ? 'estava' : 'estavam'} neste artigo`);
+      admToast((partes.join(' · ') || 'Nada adicionado') + '.', { kind: novas ? undefined : 'info' });
+      if (novas) setFire(Date.now());
+      setBancoAberto(false);
+    } catch (e) {
+      admToast(`Não foi possível adicionar do banco: ${e.message}`, { kind: 'error' });
+    } finally {
+      setAdotando(false);
     }
   };
 
@@ -420,6 +445,11 @@ export default function ArticleStudio({ articleId, onClose }) {
                   <button type="button" className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }} onClick={gerarImagens}>
                     <Icon name="refresh" size={13} />Gerar todas novamente
                   </button>
+                  <button type="button" className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
+                          title="Escolher imagens já guardadas no Banco de Imagens para juntar às opções deste artigo"
+                          onClick={() => setBancoAberto(true)}>
+                    <Icon name="image" size={13} />Usar imagem do banco
+                  </button>
                   <div style={{ fontSize: 11, color: 'var(--fg-3)', marginTop: 9, textAlign: 'center' }}>1–2 min · Gemini, fallback Recraft</div>
 
                   <hr className="rule" style={{ margin: '16px 0 13px' }} />
@@ -443,6 +473,11 @@ export default function ArticleStudio({ articleId, onClose }) {
                   </p>
                   <button type="button" className="btn btn-gold btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 14 }} onClick={gerarImagens}>
                     <Icon name="image" size={13} />Gerar 4 opções de imagem
+                  </button>
+                  <button type="button" className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 8 }}
+                          title="Escolher imagens já guardadas no Banco de Imagens"
+                          onClick={() => setBancoAberto(true)}>
+                    <Icon name="image" size={13} />Usar imagem do banco
                   </button>
                   <div style={{ fontSize: 11, color: 'var(--fg-3)', marginTop: 9, textAlign: 'center' }}>1–2 min · Gemini, fallback Recraft</div>
                 </>
@@ -494,6 +529,12 @@ export default function ArticleStudio({ articleId, onClose }) {
           onReport={(n) => reportarErroDialogo(`Reportar erro · Opção ${n}`)}
           onClose={() => setAmpliada(null)}
         />
+      )}
+
+      {bancoAberto && (
+        <BancoPicker adotando={adotando}
+                     onAdd={(ids) => adicionarDoBanco(ids)}
+                     onClose={() => setBancoAberto(false)} />
       )}
 
       <StepLoader open={gerandoImgs} steps={PASSOS_IMAGENS} per={16000}
@@ -584,6 +625,110 @@ function CoverOption({ src, i, provider, chosen, onPick, onExpand, noCorpo, jaNo
         </span>
       )}
     </button>
+  );
+}
+
+/* ---------------- «Usar imagem do banco» ----------------
+   Modal com as imagens guardadas no Banco de Imagens (vista IMAGENS). A Dra.
+   seleciona quantas quiser e «Adicionar no artigo» copia-as para as opções
+   deste artigo — a partir daí podem ser capa ou entrar no corpo. */
+function BancoPicker({ onAdd, onClose, adotando }) {
+  const [itens, setItens] = useState(null);
+  const [sel, setSel] = useState(() => new Set());
+
+  useEffect(() => {
+    api.imageBank()
+      .then((d) => setItens(d.images || []))
+      .catch((e) => { admToast(e.message, { kind: 'error' }); setItens([]); });
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') { e.stopPropagation(); onClose(); } };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [onClose]);
+
+  const toggle = (id) => setSel((s) => {
+    const n = new Set(s);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+
+  return (
+    <div className="adm-overlay" role="dialog" aria-modal="true" aria-label="Usar imagem do banco" onClick={onClose}
+         style={{ position: 'fixed', inset: 0, zIndex: 175, display: 'grid', placeItems: 'center', padding: 18,
+                  background: 'rgba(4,12,10,.82)', backdropFilter: 'blur(14px)', animation: 'rsFadeIn .22s both' }}>
+      <div className="glass" onClick={(e) => e.stopPropagation()}
+           style={{ width: 'min(880px, 100%)', maxHeight: 'min(86vh, 740px)', display: 'flex', flexDirection: 'column',
+                    padding: '20px 22px 18px', borderRadius: 18, animation: 'rsRiseIn .3s var(--ease-out) both' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span className="overline">Banco de Imagens</span>
+          {itens?.length > 0 && <span className="chip">{itens.length} {itens.length === 1 ? 'guardada' : 'guardadas'}</span>}
+          <button type="button" className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }} onClick={onClose}>
+            <Icon name="close" size={13} />Fechar
+          </button>
+        </div>
+        <p style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 7, lineHeight: 1.5 }}>
+          Selecione as imagens que quer juntar às opções deste artigo — depois podem ser usadas como capa ou no corpo.
+        </p>
+
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', marginTop: 13, paddingRight: 4 }}>
+          {itens == null ? (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 10 }}>
+              {[0, 1, 2].map((i) => (
+                <div key={i} style={{ aspectRatio: '4/3', borderRadius: 12, overflow: 'hidden', position: 'relative', background: 'var(--panel)' }}>
+                  <span className="shimmer" style={{ position: 'absolute', inset: 0 }} />
+                </div>
+              ))}
+            </div>
+          ) : itens.length === 0 ? (
+            <div style={{ padding: '34px 16px', textAlign: 'center', color: 'var(--fg-3)', fontSize: 13, lineHeight: 1.6 }}>
+              O banco ainda está vazio.<br />Guarde imagens com «Salvar imagens» na sidebar ou «Salvar imagem» na ampliação.
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 10 }}>
+              {itens.map((im, k) => {
+                const marcada = sel.has(im.image_id);
+                return (
+                  <button key={im.id} type="button" aria-pressed={marcada}
+                          onClick={() => toggle(im.image_id)}
+                          title={im.artigo_titulo ? `De: ${im.artigo_titulo}` : 'Imagem guardada'}
+                          style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', padding: 0, display: 'block',
+                                   aspectRatio: '4/3', cursor: 'pointer',
+                                   border: '1.5px solid ' + (marcada ? 'var(--gold-soft)' : 'var(--edge)'),
+                                   boxShadow: marcada ? '0 0 0 3px rgba(184,147,90,.22)' : 'none',
+                                   transition: 'border-color .2s, box-shadow .2s, transform .25s var(--ease-out)',
+                                   animation: `rsScaleIn .4s ${k * 45}ms var(--ease-spring) both` }}>
+                    <img src={'/api/insights/images/' + im.image_id} alt=""
+                         style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+                                  opacity: marcada ? 1 : .88, transition: 'opacity .2s' }} />
+                    <span style={{ position: 'absolute', top: 7, right: 7, width: 22, height: 22, borderRadius: 7,
+                                   display: 'grid', placeItems: 'center',
+                                   background: marcada ? 'var(--grad-gold)' : 'rgba(6,18,15,.6)',
+                                   border: '1px solid rgba(212,181,133,.45)', color: marcada ? '#1a1208' : '#d4b585',
+                                   backdropFilter: 'blur(4px)' }}>
+                      <Icon name={marcada ? 'check' : 'plus'} size={11} s={marcada ? 3.2 : 1.8} />
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'flex', gap: 9, justifyContent: 'flex-end', alignItems: 'center', marginTop: 14, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 12, color: 'var(--fg-3)', marginRight: 'auto' }}>
+            {sel.size ? `${sel.size} ${sel.size === 1 ? 'selecionada' : 'selecionadas'}` : 'Clique nas imagens para selecionar'}
+          </span>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onClose}>Cancelar</button>
+          <button type="button" className={'btn btn-sm ' + (sel.size ? 'btn-gold' : 'btn-ghost')}
+                  disabled={!sel.size || adotando} onClick={() => onAdd([...sel])}>
+            <Icon name={adotando ? 'refresh' : 'image'} size={13} />
+            {adotando ? 'A adicionar…' : sel.size ? `Adicionar ${sel.size} no artigo` : 'Adicionar no artigo'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

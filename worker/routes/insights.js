@@ -166,6 +166,8 @@ export async function handleInsights(request, env, path, session) {
   if (path === "/api/insights/banco" && m === "POST") return saveToBank(request, env);
   mt = path.match(/^\/api\/insights\/banco\/(\d+)$/);
   if (mt && m === "DELETE") return removeFromBank(env, +mt[1]);
+  mt = path.match(/^\/api\/insights\/articles\/(\d+)\/imagens-do-banco$/);
+  if (mt && m === "POST") return adoptFromBank(request, env, +mt[1]);
 
   // Correções de imagem apontadas pela Dra. — entram no prompt de todas as gerações.
   if (path === "/api/insights/image-rules" && m === "GET") return listImageRules(env);
@@ -538,9 +540,99 @@ async function saveToBank(request, env) {
   return jsonResponse({ ok: true, resultados });
 }
 
+/* Remover do banco apaga também os bytes do R2 e o registo em insight_images —
+   MAS só quando a imagem já não está em uso em nenhum artigo: não é capa,
+   não aparece no markdown de nenhum artigo, não pertence à ronda atual de
+   opções do seu artigo e nenhuma outra linha partilha a mesma chave R2. */
 async function removeFromBank(env, imageId) {
   await env.DB.prepare(`DELETE FROM image_bank WHERE image_id = ?`).bind(imageId).run();
-  return jsonResponse({ ok: true });
+
+  const img = await env.DB.prepare(`SELECT * FROM insight_images WHERE id = ?`).bind(imageId).first();
+  if (!img) return jsonResponse({ ok: true, apagada: false, motivo: "inexistente" });
+
+  const emUso = await imagemEmUso(env, img);
+  if (emUso) return jsonResponse({ ok: true, apagada: false, motivo: emUso });
+
+  try { await env.RECIBOS.delete(img.r2_key); } catch { /* já não existia */ }
+  await env.DB.prepare(`DELETE FROM insight_images WHERE id = ?`).bind(imageId).run();
+  return jsonResponse({ ok: true, apagada: true });
+}
+
+// Devolve o motivo se a imagem ainda estiver em uso; null se puder ser apagada.
+async function imagemEmUso(env, img) {
+  const capa = await env.DB.prepare(
+    `SELECT id FROM insight_articles WHERE imagem_escolhida = ?`
+  ).bind(img.id).first();
+  if (capa) return "capa";
+
+  const corpo = await env.DB.prepare(
+    `SELECT id FROM insight_articles WHERE markdown LIKE ?`
+  ).bind(`%/api/insights/images/${img.id})%`).first();
+  if (corpo) return "corpo";
+
+  if (img.article_id) {
+    const atual = await env.DB.prepare(
+      `SELECT COALESCE(MAX(ronda), 0) AS r FROM insight_images WHERE article_id = ?`
+    ).bind(img.article_id).first();
+    if ((atual?.r || 0) === img.ronda) return "opcoes";
+  }
+
+  const partilha = await env.DB.prepare(
+    `SELECT id FROM insight_images WHERE r2_key = ? AND id != ?`
+  ).bind(img.r2_key, img.id).first();
+  if (partilha) return "partilhada";
+
+  return null;
+}
+
+/* A Dra. escolhe imagens do banco para juntar às opções de um artigo.
+   Cada imagem é COPIADA no R2 para uma chave própria do artigo (as chaves
+   determinísticas evitam duplicar a mesma imagem duas vezes na mesma ronda),
+   com nova linha em insight_images na ronda atual — a partir daí comporta-se
+   como qualquer opção gerada: pode ser capa ou entrar no corpo. */
+async function adoptFromBank(request, env, articleId) {
+  const a = await env.DB.prepare(`SELECT id FROM insight_articles WHERE id = ?`).bind(articleId).first();
+  if (!a) return jsonError("Artigo não encontrado", 404);
+
+  let body = {};
+  try { body = await request.json(); } catch {}
+  const ids = (Array.isArray(body.image_ids) ? body.image_ids : []).map(Number).filter(Boolean).slice(0, 12);
+  if (!ids.length) return jsonError("Indique as imagens do banco a adicionar", 400);
+
+  const atual = await env.DB.prepare(
+    `SELECT COALESCE(MAX(ronda), 0) AS r FROM insight_images WHERE article_id = ?`
+  ).bind(articleId).first();
+  const ronda = Math.max(1, atual?.r || 0);
+
+  const resultados = [];
+  for (const srcId of ids) {
+    const noBanco = await env.DB.prepare(`SELECT id FROM image_bank WHERE image_id = ?`).bind(srcId).first();
+    const src = await env.DB.prepare(`SELECT * FROM insight_images WHERE id = ?`).bind(srcId).first();
+    if (!noBanco || !src) { resultados.push({ image_id: srcId, estado: "inexistente" }); continue; }
+
+    const ext = (src.content_type || "").includes("png") ? "png" : "jpg";
+    const key = `insights/art-${articleId}/r${ronda}-banco${srcId}.${ext}`;
+
+    const ja = await env.DB.prepare(
+      `SELECT id FROM insight_images WHERE article_id = ? AND r2_key = ?`
+    ).bind(articleId, key).first();
+    if (ja) { resultados.push({ image_id: srcId, estado: "ja_no_artigo" }); continue; }
+
+    const obj = await env.RECIBOS.get(src.r2_key);
+    if (!obj) { resultados.push({ image_id: srcId, estado: "inexistente" }); continue; }
+    await env.RECIBOS.put(key, obj.body, { httpMetadata: { contentType: src.content_type || "image/jpeg" } });
+    await env.DB.prepare(
+      `INSERT INTO insight_images (article_id, r2_key, content_type, prompt, provider, ronda) VALUES (?,?,?,?,?,?)`
+    ).bind(articleId, key, src.content_type, `banco#${srcId}`, src.provider, ronda).run();
+    resultados.push({ image_id: srcId, estado: "adicionada" });
+  }
+
+  const imgs = (await env.DB.prepare(
+    `SELECT id, provider, ronda, criado_em FROM insight_images WHERE article_id = ? ORDER BY id ASC`
+  ).bind(articleId).all()).results || [];
+  const r = imgs.length ? Math.max(...imgs.map((i) => i.ronda)) : 0;
+  const artigo = await env.DB.prepare(`SELECT * FROM insight_articles WHERE id = ?`).bind(articleId).first();
+  return jsonResponse({ article: artigo, images: imgs.filter((i) => i.ronda === r), ronda: r, resultados });
 }
 
 /* ---------------- correções de imagem (apontadas pela Dra.) ----------------

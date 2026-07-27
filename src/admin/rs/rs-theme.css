@@ -296,3 +296,7 @@
 @media (prefers-reduced-motion: reduce) {
   .rs-scope *, .rs-studio *, .rs-preview * { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+/* selects do redesign (filtros de Clientes etc.) — mesmo aspeto dos inputs .field */
+.rs-scope select.field { appearance: none; -webkit-appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--gold-soft) 50%), linear-gradient(135deg, var(--gold-soft) 50%, transparent 50%); background-position: calc(100% - 18px) 55%, calc(100% - 13px) 55%; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 34px !important; }
+.rs-scope select.field option { background: var(--panel-flat); color: var(--fg); }

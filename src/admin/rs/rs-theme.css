@@ -198,7 +198,7 @@
 .rs-scope .prose li::before { content: ""; position: absolute; left: 0; top: .78em; width: 10px; height: 1.5px; background: var(--gold); }
 .rs-scope .prose ol { counter-reset: rs-ol; }
 .rs-scope .prose ol li::before { content: counter(rs-ol) "."; counter-increment: rs-ol; width: auto; height: auto; background: none; top: 0; font-family: Fraunces, Georgia, serif; color: var(--gold); font-size: 14px; }
-.rs-scope .prose blockquote { margin: 28px 0; padding: 20px 24px; border-left: 2px solid var(--gold); background: rgba(184, 147, 90, .09); border-radius: 0 14px 14px 0; font-style: italic; font-size: 15px; }
+.rs-scope .prose blockquote { margin: 28px 0; padding: 20px 24px; border-left: 2px solid var(--gold); background: rgba(184, 147, 90, .09); border-radius: 0 14px 14px 0; font-style: italic; font-size: 15px; color: var(--fg-2); }
 .rs-scope .prose blockquote p { margin: 0; }
 .rs-scope .prose strong { color: var(--fg); font-weight: 700; }
 .rs-scope .prose a { text-decoration: underline; text-underline-offset: 3px; }
@@ -233,7 +233,10 @@
 .rs-scope .adm-rte-area .tiptap p { margin: 0 0 19px; }
 .rs-scope .adm-rte-area .tiptap ul, .rs-scope .adm-rte-area .tiptap ol { margin: 0 0 21px; padding-left: 22px; display: grid; gap: 8px; }
 .rs-scope .adm-rte-area .tiptap li::marker { color: var(--gold); }
-.rs-scope .adm-rte-area .tiptap blockquote { margin: 28px 0; padding: 20px 24px; border-left: 2px solid var(--gold); background: rgba(184, 147, 90, .09); border-radius: 0 14px 14px 0; font-style: italic; font-size: 15px; }
+/* cor explícita: o admin.css traz color: var(--ink) (tinta escura do blogue claro),
+   que no tema dark ficava ilegível sobre o painel — var(--fg-2) segue o tema. */
+.rs-scope .adm-rte-area .tiptap blockquote { margin: 28px 0; padding: 20px 24px; border-left: 2px solid var(--gold); background: rgba(184, 147, 90, .09); border-radius: 0 14px 14px 0; font-style: italic; font-size: 15px; color: var(--fg-2); }
+.adm-root .rs-scope .adm-rte-area .ProseMirror blockquote { color: var(--fg-2); }
 .rs-scope .adm-rte-area .tiptap strong { color: var(--fg); }
 .rs-scope .adm-rte-area .tiptap a { color: var(--gold-soft); text-decoration: underline; }
 .rs-scope .adm-rte-area .tiptap hr { border: 0; height: 1px; background: var(--edge-2); margin: 26px 0; }

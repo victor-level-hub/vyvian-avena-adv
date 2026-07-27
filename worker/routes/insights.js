@@ -154,6 +154,8 @@ export async function handleInsights(request, env, path, session) {
   }
   mt = path.match(/^\/api\/insights\/articles\/(\d+)\/inserir-imagens$/);
   if (mt && m === "POST") return inserirImagens(request, env, +mt[1]);
+  mt = path.match(/^\/api\/insights\/articles\/(\d+)\/avaliar$/);
+  if (mt && m === "POST") return avaliarArtigo(env, +mt[1]);
   mt = path.match(/^\/api\/insights\/articles\/(\d+)\/images$/);
   if (mt && m === "POST") return generateImages(request, env, +mt[1]);
   mt = path.match(/^\/api\/insights\/articles\/(\d+)\/escolher-imagem$/);
@@ -370,10 +372,20 @@ PADRÃO EDITORIAL DO BLOGUE (obrigatório — é o padrão acordado com a Dra.):
   a lei muda; onde o tema tocar num ponto que possa mudar, remete para consulta com um
   bloco de citação (linha a começar por "> ") que o site apresenta como caixa de aviso.
 - Estrutura: 2-3 parágrafos de abertura (sem título), depois 4-6 secções "## Título",
-  parágrafos de 2-4 frases, prosa corrida e próxima do leitor (trata-o por "o leitor" ou
-  2.ª pessoa de cortesia), sem jargão desnecessário; usa listas com moderação.
+  prosa corrida e próxima do leitor (trata-o por "o leitor" ou 2.ª pessoa de cortesia),
+  sem jargão desnecessário; usa listas com moderação.
+- PARÁGRAFOS CURTOS (indicação expressa da Dra.): 1 a 3 frases por parágrafo, no máximo
+  ~55 palavras. Parágrafos longos desinteressam o leitor — quebra a ideia em MAIS
+  parágrafos em vez de a resumir; quebrar não é sumarizar.
+- NEGRITO comedido: no máximo 1 expressão curta em **negrito** por secção, apenas no que
+  o leitor não pode perder (um prazo-chave, um alerta). Nunca frases inteiras, nunca
+  negrito decorativo.
 - Uma secção final que enquadra quando procurar apoio jurídico (sem vender agressivamente).
-- Comprimento total: 900-1400 palavras.
+- Comprimento total: alvo 900-1400 palavras — a métrica de mercado para artigos jurídicos
+  informativos (5 a 7 minutos de leitura; abaixo disso o Google trata como conteúdo raso,
+  acima disso a taxa de conclusão de leitura cai). Ajusta ao tema: se o rascunho passar de
+  1400 palavras, SUMARIZA cortando redundância; se ficar abaixo de ~800, DETALHA com
+  exemplos práticos do dia a dia do público — nunca com palha.
 - Rigor absoluto: só factos confirmados nas fontes; nada de números inventados.
 
 Responde EXCLUSIVAMENTE com JSON válido:
@@ -415,6 +427,67 @@ Responde EXCLUSIVAMENTE com JSON válido:
   } catch (e) { console.error("keyword_bank:", e && e.message); }
 
   return getArticle(env, ins.meta.last_row_id);
+}
+
+/* ---------------- avaliação da IA (nota 0-10 do texto e da descrição SEO) ----------------
+   Corre depois de a Dra. guardar alterações: nota, motivo e sugestões de melhoria,
+   guardados em insight_articles.avaliacao (JSON) e devolvidos com o artigo. */
+async function avaliarArtigo(env, id) {
+  const a = await env.DB.prepare(`SELECT * FROM insight_articles WHERE id = ?`).bind(id).first();
+  if (!a) return jsonError("Artigo não encontrado", 404);
+
+  const prompt = `${PERFIL}
+
+És o editor-chefe do blogue da Dra. Vyvian. Avalia o artigo abaixo com rigor e devolve notas.
+
+TÍTULO: ${a.titulo}
+DESCRIÇÃO SEO (metas): ${a.descricao || "(vazia)"}
+CORPO (Markdown):
+${String(a.markdown || "").slice(0, 18000)}
+
+CRITÉRIOS:
+- "texto" (0-10): clareza e fluidez; parágrafos curtos (1-3 frases — longos penalizam);
+  negrito comedido; estrutura com secções "##"; rigor jurídico sem prazos/valores concretos;
+  aviso legal em bloco de citação; comprimento 900-1400 palavras; proximidade com o leitor.
+- "seo" (0-10): descrição com 120-155 caracteres que dê vontade de clicar; palavra-chave
+  pesquisável presente no título, na descrição e no início do texto; título ≤ 60 caracteres;
+  termos que o público (brasileiros E portugueses) realmente pesquisa.
+
+Sê honesto: 10 é raro. As "melhorias" devem ser acionáveis e específicas deste artigo
+(citando a secção ou frase a mudar), não genéricas. Escreve em PT-PT.
+
+Responde EXCLUSIVAMENTE com JSON válido:
+{
+  "texto": { "score": 0-10 com 1 casa decimal, "motivo": "1-2 frases", "melhorias": ["2 a 4 sugestões"] },
+  "seo":   { "score": 0-10 com 1 casa decimal, "motivo": "1-2 frases", "melhorias": ["2 a 4 sugestões"] }
+}`;
+
+  let av;
+  try {
+    let texto;
+    try {
+      const data = await gemini(env, MODEL_PESQUISA, {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
+      });
+      texto = geminiText(data);
+    } catch (e) {
+      texto = await pesquisaIA(env, prompt, { temperature: 0.2, maxTokens: 2048 });
+    }
+    av = extractJson(texto);
+    const norm = (x) => ({
+      score: Math.max(0, Math.min(10, Math.round((+((x || {}).score) || 0) * 10) / 10)),
+      motivo: String((x || {}).motivo || "").slice(0, 500),
+      melhorias: (Array.isArray((x || {}).melhorias) ? x.melhorias : []).slice(0, 4).map((s) => String(s).slice(0, 300)),
+    });
+    av = { texto: norm(av.texto), seo: norm(av.seo), avaliado_em: new Date().toISOString() };
+  } catch (e) {
+    return jsonError(`Falha na avaliação: ${e.message}`, 502);
+  }
+
+  await env.DB.prepare(`UPDATE insight_articles SET avaliacao = ? WHERE id = ?`)
+    .bind(JSON.stringify(av), id).run();
+  return jsonResponse({ ok: true, avaliacao: av });
 }
 
 // Artigos de tema livre (sem sugestão associada) — para a Dra. os reabrir depois.

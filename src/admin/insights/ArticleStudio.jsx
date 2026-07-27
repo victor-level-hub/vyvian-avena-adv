@@ -107,6 +107,8 @@ export default function ArticleStudio({ articleId, onClose }) {
   const [salvando, setSalvando] = useState(false);     // a guardar no Banco de Imagens
   const [bancoAberto, setBancoAberto] = useState(false); // modal «Usar imagem do banco»
   const [adotando, setAdotando] = useState(false);
+  const [avaliacao, setAvaliacao] = useState(null);      // { texto, seo, avaliado_em }
+  const [avaliando, setAvaliando] = useState(false);
   const [fire, setFire] = useState(0);
   const mdRef = useRef('');
 
@@ -248,8 +250,23 @@ export default function ArticleStudio({ articleId, onClose }) {
       setDescricao(d.article.descricao || '');
       setMarkdown(d.article.markdown || '');
       mdRef.current = d.article.markdown || '';
+      try { setAvaliacao(d.article.avaliacao ? JSON.parse(d.article.avaliacao) : null); } catch { setAvaliacao(null); }
     }).catch((e) => { admToast(e.message, { kind: 'error' }); onClose(); });
   }, [articleId, onClose]);
+
+  // Nota da IA — corre depois de cada «Guardar» explícito (texto/descrição novos)
+  const avaliar = async () => {
+    if (avaliando) return;
+    setAvaliando(true);
+    try {
+      const d = await api.evaluateArticle(articleId);
+      setAvaliacao(d.avaliacao);
+    } catch (e) {
+      admToast(`Avaliação falhou: ${e.message}`, { kind: 'error' });
+    } finally {
+      setAvaliando(false);
+    }
+  };
 
   // blob-URLs autenticadas para as imagens da ronda atual
   useEffect(() => {
@@ -291,7 +308,11 @@ export default function ArticleStudio({ articleId, onClose }) {
       const d = await api.saveArticle(articleId, { titulo, descricao, markdown: mdRef.current });
       setData(d);
       setSujo(false);
-      if (!silencioso) { setFire(Date.now()); admToast('Artigo guardado.'); }
+      if (!silencioso) {
+        setFire(Date.now());
+        admToast('Artigo guardado — a IA está a avaliar o novo texto…');
+        avaliar(); // nota 0-10 do texto e da descrição SEO (não bloqueia o guardar)
+      }
       return true;
     } catch (e) {
       admToast(`Não foi possível guardar: ${e.message}`, { kind: 'error' });
@@ -492,6 +513,8 @@ export default function ArticleStudio({ articleId, onClose }) {
               )}
             </div>
 
+            <AvaliacaoCard avaliacao={avaliacao} avaliando={avaliando} onAvaliar={avaliar} />
+
             <ImageRulesCard regras={regras} onAdd={adicionarRegra} onRemove={removerRegra} />
 
             <div className="glass" style={{ padding: 20 }}>
@@ -647,6 +670,71 @@ function CoverOption({ src, i, provider, chosen, onPick, onExpand, noCorpo, jaNo
         </span>
       )}
     </button>
+  );
+}
+
+/* ---------------- Nota da IA (0-10 · texto e descrição SEO) ----------------
+   Depois de a Dra. guardar alterações, a IA dá nota ao texto e à descrição SEO,
+   com o motivo e sugestões de melhoria acionáveis. */
+function NotaBarra({ rotulo, dados }) {
+  const s = dados?.score ?? null;
+  const cor = s == null ? 'var(--edge-2)' : s >= 7.5 ? 'var(--grad-gold)' : s >= 5 ? 'linear-gradient(90deg,#c89656,#b8935a)' : 'linear-gradient(90deg,#a04b3c,#8e1f1f)';
+  return (
+    <div style={{ marginTop: 13 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10 }}>
+        <span className="overline" style={{ fontSize: 9.5, letterSpacing: '.2em' }}>{rotulo}</span>
+        <span className="num" style={{ fontSize: 21, lineHeight: 1, color: 'var(--fg)' }}>
+          {s == null ? '—' : s.toFixed(1)}<span style={{ fontSize: 10.5, color: 'var(--fg-3)', fontWeight: 800 }}> /10</span>
+        </span>
+      </div>
+      <div style={{ height: 6, borderRadius: 9, background: 'var(--edge)', overflow: 'hidden', marginTop: 7 }}>
+        <span style={{ display: 'block', height: '100%', width: (s == null ? 0 : s * 10) + '%', background: cor,
+                       borderRadius: 9, transition: 'width .7s var(--ease-out)' }} />
+      </div>
+      {dados?.motivo && <p style={{ fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.55, marginTop: 8 }}>{dados.motivo}</p>}
+      {dados?.melhorias?.length > 0 && (
+        <div style={{ display: 'grid', gap: 5, marginTop: 8 }}>
+          {dados.melhorias.map((m, i) => (
+            <span key={i} style={{ display: 'flex', gap: 7, fontSize: 11.5, lineHeight: 1.5, color: 'var(--fg-3)' }}>
+              <span style={{ flex: 'none', marginTop: 5, width: 5, height: 5, borderRadius: 9, background: 'var(--gold-soft)' }} />
+              {m}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AvaliacaoCard({ avaliacao, avaliando, onAvaliar }) {
+  return (
+    <div className="glass" style={{ padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+        <span className="overline">Nota da IA</span>
+        {avaliando && <span className="chip"><Icon name="refresh" size={10} />a avaliar…</span>}
+      </div>
+      {!avaliacao && !avaliando ? (
+        <>
+          <p style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 8, lineHeight: 1.55 }}>
+            Ao clicar em <strong style={{ color: 'var(--fg-2)' }}>Guardar</strong>, a IA avalia o texto e a
+            descrição SEO de 0 a 10, com o motivo e sugestões de melhoria.
+          </p>
+          <button type="button" className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 11 }} onClick={onAvaliar}>
+            <Icon name="spark" size={13} />Avaliar agora
+          </button>
+        </>
+      ) : (
+        <>
+          <NotaBarra rotulo="Texto do artigo" dados={avaliacao?.texto} />
+          <hr className="rule" style={{ margin: '14px 0 1px' }} />
+          <NotaBarra rotulo="Descrição SEO" dados={avaliacao?.seo} />
+          <button type="button" className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 14 }}
+                  onClick={onAvaliar} disabled={avaliando}>
+            <Icon name="refresh" size={13} />{avaliando ? 'A avaliar…' : 'Reavaliar agora'}
+          </button>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -955,81 +1043,81 @@ function Lightbox({ images, start = 0, chosenId, onPick, onSave, salvando, onRep
 
 // ---------------------------------------------------------- Pré-visualização
 
+/* A pré-visualização mostra o artigo NO LAYOUT REAL DO BLOGUE PÚBLICO — que é
+   sempre claro (o site/blogue não tem modo escuro). Mesmo com a área privada em
+   dark, aqui reutilizam-se as classes do próprio site (bg-warmwhite, blog-prose,
+   Tailwind) para a Dra. ver exatamente o que o leitor verá. */
 function PreviewBlogue({ titulo, descricao, area, markdown, capaUrl, onClose }) {
   // Rede de segurança: artigos antigos podem ainda trazer tags de citação da pesquisa web.
   const mdLimpo = useMemo(() => (markdown || '').replace(/<\/?(?:cite|ref|citation|source)\b[^>]*>/gi, ''), [markdown]);
   const html = useMemo(() => marked.parse(mdLimpo), [mdLimpo]);
-  const toc = useMemo(() => {
-    const out = [];
-    for (const m of mdLimpo.matchAll(/^##\s+(.+)$/gm)) out.push(m[1].trim());
-    return out.slice(0, 8);
-  }, [mdLimpo]);
-  const hoje = new Date().toLocaleDateString('pt-PT', { day: 'numeric', month: 'short', year: 'numeric' });
+  const hoje = new Date().toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric' });
+  const areaLabel = AREAS_LABEL[area] || null;
 
   return (
-    <div className="rs-preview" role="dialog" aria-modal="true" aria-label="Pré-visualização do artigo"
-         style={{ position: 'fixed', inset: 0, zIndex: 150, background: '#0a1c18', overflowY: 'auto', animation: 'rsFadeIn .3s both' }}>
-      <div style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px',
-                    background: 'rgba(6,18,15,.82)', backdropFilter: 'blur(18px)', borderBottom: '1px solid rgba(212,181,133,.16)' }}>
+    <div role="dialog" aria-modal="true" aria-label="Pré-visualização do artigo"
+         style={{ position: 'fixed', inset: 0, zIndex: 150, background: '#faf8f4', overflowY: 'auto', animation: 'rsFadeIn .3s both' }}>
+      {/* barra do admin (fora do layout do blogue) */}
+      <div style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', alignItems: 'center', gap: 12, padding: '11px 20px',
+                    background: 'rgba(250,248,244,.92)', backdropFilter: 'blur(14px)', borderBottom: '1px solid rgba(18,48,42,.12)' }}>
         <Icon name="eye" size={15} style={{ color: '#b8935a' }} />
-        <span style={{ fontSize: 11.5, letterSpacing: '.16em', textTransform: 'uppercase', fontWeight: 800, color: 'rgba(244,238,226,.72)' }}>
-          Pré-visualização — assim ficará no blogue
+        <span style={{ fontSize: 11.5, letterSpacing: '.16em', textTransform: 'uppercase', fontWeight: 800, color: 'rgba(18,48,42,.65)' }}>
+          Pré-visualização — o layout real do blogue (sempre claro)
         </span>
-        <button type="button" className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }} onClick={onClose}>
+        <button type="button" onClick={onClose}
+                style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 16px', borderRadius: 999,
+                         border: '1px solid rgba(18,48,42,.25)', background: 'transparent', color: '#12302a',
+                         fontSize: 11, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', cursor: 'pointer' }}>
           <Icon name="close" size={13} />Fechar
         </button>
       </div>
 
-      {/* hero — contraste AA por construção: gradiente de 3 paradas + text-shadow */}
-      <div style={{ position: 'relative', minHeight: 'min(62vh,520px)', display: 'flex', alignItems: 'flex-end', overflow: 'hidden' }}>
-        <Thumb hue={1} src={capaUrl} dim={.34} style={{ position: 'absolute', inset: 0 }} />
-        <span style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top,rgba(6,18,15,.96) 4%,rgba(6,18,15,.78) 42%,rgba(6,18,15,.42) 100%)' }} />
-        <div style={{ position: 'relative', maxWidth: 860, margin: '0 auto', padding: '90px 24px 54px', width: '100%' }}>
-          <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase',
-                        color: '#d4b585', fontWeight: 800, animation: 'rsRiseIn .6s .1s var(--ease-out) both', flexWrap: 'wrap' }}>
-            <span>{AREAS_LABEL[area] || 'Blogue'}</span>
-            <span style={{ width: 22, height: 1, background: 'rgba(212,181,133,.6)' }} />
-            <span style={{ color: 'rgba(244,238,226,.62)' }}>{hoje}</span>
-            <span style={{ color: 'rgba(244,238,226,.62)' }}>· {minutosLeitura(markdown)} min</span>
+      {/* Hero full-bleed — igual a BlogArtigo.jsx */}
+      <section className="relative min-h-[420px] md:min-h-[520px] bg-forest flex items-end">
+        {capaUrl && (
+          <img src={capaUrl} alt="" className="absolute inset-0 w-full h-full object-cover opacity-[0.38]" />
+        )}
+        <div className="absolute inset-0"
+             style={{ background: 'linear-gradient(to top, #12302a 4%, rgba(18,48,42,0.55) 45%, rgba(18,48,42,0.25))' }} />
+        <div className="relative w-full max-w-[1152px] mx-auto px-6 md:px-12 pt-32 pb-14 md:pb-[64px]">
+          <div className="h-px w-12 bg-gold mb-6" />
+          <div className="font-body text-xs tracking-[0.15em] uppercase text-gold mb-5">
+            {areaLabel ? `${areaLabel} · ` : ''}{hoje} · {minutosLeitura(markdown)} min de leitura
           </div>
-          <h1 style={{ fontSize: 'clamp(30px,4.6vw,56px)', lineHeight: 1.06, color: '#f5f0e8', marginTop: 18, maxWidth: '22ch',
-                       fontFamily: 'Fraunces,Georgia,serif', fontWeight: 400, letterSpacing: '-.02em',
-                       textShadow: '0 2px 24px rgba(6,18,15,.85)', animation: 'rsRiseIn .7s .2s var(--ease-out) both', textWrap: 'balance' }}>
+          <h1 className="font-heading font-normal text-3xl md:text-[52px] leading-[1.12] text-warmwhite max-w-[880px]">
             {titulo}
           </h1>
         </div>
+      </section>
+
+      {/* Corpo: rail + prosa — igual ao blogue */}
+      <div className="max-w-[1152px] mx-auto px-6 md:px-12 pt-14 md:pt-20 pb-6 grid lg:grid-cols-[220px_1fr] gap-10 lg:gap-16">
+        <aside className="hidden lg:block sticky top-[120px] self-start">
+          <div className="font-body text-xs tracking-[0.15em] uppercase text-forest/40 mb-3">Neste artigo</div>
+          <p className="font-body text-[13.5px] leading-[1.7] text-forest/60">{descricao}</p>
+          <div className="h-px w-8 bg-gold my-6" />
+          <div className="font-body text-xs tracking-[0.15em] uppercase text-forest/40 mb-2">Escrito por</div>
+          <div className="font-heading text-[17px] text-forest">Dra. Vyvian Avena</div>
+          <div className="font-body text-[12.5px] text-forest/40">Advogada · Portugal e Brasil</div>
+        </aside>
+        <div className="max-w-[680px] min-w-0">
+          <article className="blog-prose" dangerouslySetInnerHTML={{ __html: html }} />
+        </div>
       </div>
 
-      <div className="pv-grid" style={{ maxWidth: 1080, margin: '0 auto', padding: '48px 24px 90px' }}>
-        <aside className="only-desk" style={{ position: 'sticky', top: 74, alignSelf: 'start' }}>
-          <span style={{ fontSize: 10, letterSpacing: '.22em', textTransform: 'uppercase', fontWeight: 800, color: '#b8935a' }}>Neste artigo</span>
-          <span className="rule-s" style={{ display: 'block', margin: '11px 0 14px' }} />
-          {toc.length ? (
-            <nav style={{ display: 'grid', gap: 11 }}>
-              {toc.map((t, i) => (
-                <span key={i} style={{ fontSize: 12.5, lineHeight: 1.45, color: 'rgba(244,238,226,.6)', paddingLeft: 11,
-                                       borderLeft: '1px solid rgba(212,181,133,' + (i ? '.16' : '.7') + ')' }}>{t}</span>
-              ))}
-            </nav>
-          ) : (
-            <p style={{ fontSize: 12.5, lineHeight: 1.55, color: 'rgba(244,238,226,.55)' }}>{descricao}</p>
-          )}
-        </aside>
-        <div>
-          <div className="prose" style={{ color: 'rgba(244,238,226,.74)' }} dangerouslySetInnerHTML={{ __html: html }} />
-          <div style={{ marginTop: 46, padding: 26, borderRadius: 18, border: '1px solid rgba(212,181,133,.2)', background: 'rgba(28,65,56,.4)',
-                        display: 'flex', gap: 18, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ width: 62, height: 62, borderRadius: '50%', background: 'linear-gradient(150deg,#1c4138,#0a1c18)',
-                           border: '1px solid rgba(212,181,133,.4)', display: 'grid', placeItems: 'center',
-                           fontFamily: 'Fraunces,serif', fontSize: 22, color: '#d4b585', flex: 'none' }}>VA</span>
-            <div style={{ flex: 1, minWidth: 200 }}>
-              <div style={{ fontSize: 10.5, letterSpacing: '.2em', textTransform: 'uppercase', color: '#b8935a', fontWeight: 800 }}>Autora</div>
-              <div style={{ fontFamily: 'Fraunces,serif', fontSize: 20, color: '#f5f0e8', marginTop: 5 }}>Dra. Vyvian Avena</div>
-              <p style={{ fontSize: 13, lineHeight: 1.6, color: 'rgba(244,238,226,.6)', marginTop: 7 }}>
-                Advogada em Portugal. Nacionalidade, vistos, direito da família e civil para quem recomeça longe de casa.
-              </p>
-            </div>
-          </div>
+      {/* CTA contextual (estático na pré-visualização) */}
+      <div className="max-w-[1152px] mx-auto px-6 md:px-12 pb-24 grid lg:grid-cols-[220px_1fr] gap-10 lg:gap-16">
+        <div className="hidden lg:block" />
+        <div className="bg-forest px-8 py-9 md:px-11 md:py-10 max-w-[680px]">
+          <h2 className="font-heading font-normal text-2xl text-warmwhite mb-2.5">
+            {areaLabel ? `Precisa de apoio em ${areaLabel}?` : 'Este tema toca a sua situação?'}
+          </h2>
+          <p className="font-body text-sm text-warmwhite/60 mb-7 leading-relaxed">
+            Descreva-nos o seu caso e ajudamos a identificar o enquadramento certo.
+          </p>
+          <span className="inline-flex items-center gap-2 px-6 py-2.5 bg-gold text-warmwhite text-sm font-body tracking-wide">
+            Agendar Consulta
+          </span>
         </div>
       </div>
     </div>

@@ -43,6 +43,14 @@ mkdirSync(join(RAIZ, "public", "blog"), { recursive: true });
 for (const a of artigos) {
   // capa -> /blog/<slug>.jpg
   await baixar(a.capa_image_id, join(RAIZ, "public", "blog", `${a.slug}.jpg`));
+  // variantes responsivas da capa (o seo-check exige -480/-800/-1200.webp)
+  try {
+    const { default: sharp } = await import("sharp");
+    for (const w of [480, 800, 1200]) {
+      await sharp(join(RAIZ, "public", "blog", `${a.slug}.jpg`)).resize(w).webp({ quality: 78 })
+        .toFile(join(RAIZ, "public", "blog", `${a.slug}-${w}.webp`));
+    }
+  } catch (e) { console.error("AVISO: variantes webp falharam:", e.message); }
   // fotos do corpo -> /blog/<slug>-corpo-N.jpg, reescritas no markdown como <img>
   let md = a.markdown;
   a.body_image_ids.forEach((id, i) => {

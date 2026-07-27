@@ -10,6 +10,8 @@
 
 ## Prioridade alta (código)
 
+- [ ] **Redesign v3 em TODA a Área Privada** (pedido 27 jul, fazer por partes — ordem: 1. Painel, 2. Clientes, 3. Parcelas, 4. Calendário, 5. Notificações): aplicar o mesmo design system das Redes Sociais — shell `.rs-scope` com toggle light/dark persistido ('rs-theme'), primitivas de `src/admin/rs/ui.jsx` (Icon/Ticker/Reveal/Tabs/Seg/Chart/StepLoader/Confetti/PanelHead/TipLayer…), tooltips data-tip (nunca title nativo, nunca cortados), caret dourado, seletores duplicados `.adm-root .rs-scope` contra o admin.css. Componentes novos que faltem: verificar PRIMEIRO o Arsenal do Victor (le-vel.games/componentes, abrir no browser) e depois o 21st.dev (plano Pro) — «não economizar nos componentes». Lógica e endpoints inalterados, como no redesign das Redes Sociais.
+
 - [ ] **PUBLICAR (fase final do Insights)**: botão no editor publica o artigo nos moldes do blogue real — Worker gera .md (frontmatter do blogue) + capa/fotos do R2 e commita via API do GitHub; GitHub Action no push roda gerar-audio-blogue (timestamps da leitura acompanhada), build e deploy wrangler. Requer segredos no GitHub: ELEVENLABS_API_KEY e CLOUDFLARE_API_TOKEN (Victor).
 - [ ] **Aba Site → lista de artigos publicados** (estilo lista de temas livres): data+hora de publicação, acessos até ao momento (site_page_views), resumo curto, link direto, seta para edição, e expansor com log de alterações (nova tabela artigo_log: publicado / imagem alterada / texto alterado de→para).
 

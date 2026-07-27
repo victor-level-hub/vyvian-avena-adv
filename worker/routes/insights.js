@@ -368,6 +368,8 @@ SEO E PALAVRAS-CHAVE (obrigatório):
   parágrafo e em 2-3 dos títulos "##". Nada de repetição forçada (keyword stuffing).
 - Inclui variações que os dois públicos pesquisam (PT-PT e PT-BR, ex.: «telemóvel/celular»,
   «arrendamento/aluguel») quando o tema o justificar.
+- Espalha 1-2 termos de pesquisa complementares que o público realmente usa (ex.:
+  «cidadania portuguesa», «nacionalidade portuguesa») em subtítulos "##", de forma natural.
 - Devolve no JSON 3 a 6 "palavras_chave" (a principal primeiro), cada uma com um score 0-100
   do potencial de pesquisa que estimas — vão para o banco de palavras do blogue.
 
@@ -385,9 +387,13 @@ PADRÃO EDITORIAL DO BLOGUE (obrigatório — é o padrão acordado com a Dra.):
 - PARÁGRAFOS CURTOS (indicação expressa da Dra.): 1 a 3 frases por parágrafo, no máximo
   ~55 palavras. Parágrafos longos desinteressam o leitor — quebra a ideia em MAIS
   parágrafos em vez de a resumir; quebrar não é sumarizar.
-- NEGRITO comedido: no máximo 1 expressão curta em **negrito** por secção, apenas no que
-  o leitor não pode perder (um prazo-chave, um alerta). Nunca frases inteiras, nunca
-  negrito decorativo.
+- NEGRITO comedido mas PRESENTE: 1 expressão curta em **negrito** por secção (não zero,
+  não mais), no que o leitor não pode perder — a expressão jurídica decisiva («dano grave,
+  irreparável e iminente»), um limiar («idade igual ou superior a 75 anos»), um alerta.
+  Nunca frases inteiras, nunca negrito decorativo.
+- COERÊNCIA DE TRATAMENTO do princípio ao fim: em PT-PT nunca deixes escapar «você» ou
+  construções brasileiras (usa «o leitor» ou «tem/pode» impessoal); em PT-BR nunca mistures
+  «tu»/«consigo». Relê o fecho do artigo — é onde o tratamento costuma escorregar.
 - Uma secção final que enquadra quando procurar apoio jurídico (sem vender agressivamente).
 - Comprimento total: alvo 900-1400 palavras — a métrica de mercado para artigos jurídicos
   informativos (5 a 7 minutos de leitura; abaixo disso o Google trata como conteúdo raso,
@@ -665,7 +671,9 @@ Regras:
 - Cada fotografia entra DEPOIS do bloco cujo conteúdo mais se relaciona com a cena.
 - Distribui as fotografias ao longo do artigo (nunca duas seguidas, nunca após o mesmo bloco).
 - Evita o bloco 0 (abertura) e o último bloco.
-- "alt" é uma descrição breve e natural da cena em português (8-14 palavras, sem aspas).
+- "alt" é uma descrição breve e natural da cena em português (8-14 palavras, sem aspas),
+  incluindo quando possível um termo de pesquisa relevante do artigo (ex.: «nacionalidade
+  portuguesa») em vez de descrições genéricas do ambiente.
 
 Responde EXCLUSIVAMENTE com JSON válido:
 {"colocacoes":[{"image_id":123,"apos_bloco":4,"alt":"..."}]}`;

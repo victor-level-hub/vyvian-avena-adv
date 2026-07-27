@@ -472,17 +472,19 @@ Responde EXCLUSIVAMENTE com JSON válido:
 
   let av;
   try {
-    let texto;
+    // 1.ª via: Gemini com resposta JSON forçada e margem para os tokens de
+    // raciocínio (2048 cortava o JSON a meio — «JSON incompleto na resposta»).
     try {
       const data = await gemini(env, MODEL_PESQUISA, {
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
+        generationConfig: { temperature: 0.2, maxOutputTokens: 8192, responseMimeType: "application/json" },
       });
-      texto = geminiText(data);
+      av = extractJson(geminiText(data));
     } catch (e) {
-      texto = await pesquisaIA(env, prompt, { temperature: 0.2, maxTokens: 2048 });
+      // 2.ª via: motor de reserva (Claude/Gemini com pesquisa) — também apanha
+      // o caso de o JSON da 1.ª via vir truncado, não só erros de rede.
+      av = extractJson(await pesquisaIA(env, prompt, { temperature: 0.2, maxTokens: 4000 }));
     }
-    av = extractJson(texto);
     const norm = (x) => ({
       score: Math.max(0, Math.min(10, Math.round((+((x || {}).score) || 0) * 10) / 10)),
       motivo: String((x || {}).motivo || "").slice(0, 500),

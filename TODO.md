@@ -10,6 +10,9 @@
 
 ## Prioridade alta (código)
 
+- [ ] **PUBLICAR (fase final do Insights)**: botão no editor publica o artigo nos moldes do blogue real — Worker gera .md (frontmatter do blogue) + capa/fotos do R2 e commita via API do GitHub; GitHub Action no push roda gerar-audio-blogue (timestamps da leitura acompanhada), build e deploy wrangler. Requer segredos no GitHub: ELEVENLABS_API_KEY e CLOUDFLARE_API_TOKEN (Victor).
+- [ ] **Aba Site → lista de artigos publicados** (estilo lista de temas livres): data+hora de publicação, acessos até ao momento (site_page_views), resumo curto, link direto, seta para edição, e expansor com log de alterações (nova tabela artigo_log: publicado / imagem alterada / texto alterado de→para).
+
 - [ ] **PDF do plano de pagamento** no formato padrão da Dra. Vyvian, com envio automático ao cliente (área privada).
 - [ ] **Filtro na lista de clientes** (área privada).
 

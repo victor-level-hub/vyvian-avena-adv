@@ -1,43 +1,41 @@
 // src/admin/pages/Dashboard.jsx
+// Painel — redesign «Vyvian Avena Design System v3» (rollout à Área Privada).
+// Mesmo shell/tema das Redes Sociais (RsShell); lógica e endpoints inalterados.
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getSession } from '../auth';
 import { dashboard as dashboardApi } from '../apiClient';
-import { CountUp } from '../numbers';
-import SelectMenu from '../dropdown';
-import Avatar from '../Avatar';
 import { SkeletonPage } from '../skeletons';
+import { RsShell, Icon, Ticker, Reveal, Seg, PanelHead } from '../rs/ui';
 
 function fmtMoney(amount, currency = 'EUR') {
   const symbol = currency === 'BRL' ? 'R$' : '€';
   const n = Number(amount || 0);
-  return symbol + '\u00A0' + n.toLocaleString('pt-PT', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+  return symbol + ' ' + n.toLocaleString('pt-PT', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
 function daysUntilDate(dateStr) {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const d = new Date(dateStr);
-  return Math.round((d - today) / (1000 * 60 * 60 * 24));
+  return Math.round((new Date(dateStr) - today) / 86400000);
 }
 
-function whenLabel(installment) {
-  if (installment.status === 'late') {
-    return `${Math.abs(daysUntilDate(installment.due_date))}d atraso`;
-  }
-  const days = daysUntilDate(installment.due_date);
+function whenLabel(i) {
+  if (i.status === 'late') return `${Math.abs(daysUntilDate(i.due_date))}d atraso`;
+  const days = daysUntilDate(i.due_date);
   if (days === 0) return 'Hoje';
   if (days === 1) return 'Amanhã';
   if (days < 0) return `${Math.abs(days)}d atraso`;
   return `${days} dias`;
 }
 
-function whenClass(installment) {
-  if (installment.status === 'late') return 'adm-badge adm-badge-over';
-  const days = daysUntilDate(installment.due_date);
-  if (days <= 1) return 'adm-badge adm-badge-warn';
-  if (days <= 5) return 'adm-badge adm-badge-soon';
-  return 'adm-badge adm-badge-pending';
+// cores do selo de prazo (paleta rs)
+function corPrazo(i) {
+  if (i.status === 'late') return { bg: 'rgba(160,75,60,.18)', bd: 'rgba(200,110,90,.45)', fg: '#e0a294' };
+  const d = daysUntilDate(i.due_date);
+  if (d <= 1) return { bg: 'rgba(200,150,86,.16)', bd: 'rgba(212,181,133,.45)', fg: 'var(--gold-soft)' };
+  if (d <= 5) return { bg: 'rgba(200,150,86,.10)', bd: 'var(--edge-2)', fg: 'var(--fg-2)' };
+  return { bg: 'var(--panel)', bd: 'var(--edge)', fg: 'var(--fg-3)' };
 }
 
 function greeting() {
@@ -47,21 +45,11 @@ function greeting() {
   return 'Boa noite';
 }
 
-function formatTodayLong() {
-  return new Date().toLocaleDateString('pt-PT', {
-    weekday: 'long', day: 'numeric', month: 'long',
-  });
-}
+const hojeLongo = () => new Date().toLocaleDateString('pt-PT', { weekday: 'long', day: 'numeric', month: 'long' });
 
-// Janela dos próximos vencimentos (dias). Default: 30 dias.
-const UPCOMING_WINDOWS = [
-  [7, '7 dias'],
-  [15, '15 dias'],
-  [30, '30 dias'],
-  [45, '45 dias'],
-  [60, '2 meses'],
-  [90, '3 meses'],
-  [180, '6 meses'],
+const JANELAS = [
+  { k: 7, label: '7D' }, { k: 15, label: '15D' }, { k: 30, label: '30D' },
+  { k: 60, label: '60D' }, { k: 90, label: '90D' }, { k: 180, label: '180D' },
 ];
 
 export default function Dashboard() {
@@ -83,121 +71,107 @@ export default function Dashboard() {
   if (!data) return null;
 
   const { counts, upcoming_revenue, upcoming, alerts } = data;
-
-  // Receita prevista em EUR (próximos 30d)
   const eurRev = upcoming_revenue.find((r) => r.currency === 'EUR');
   const brlRev = upcoming_revenue.find((r) => r.currency === 'BRL');
 
+  const kpis = [
+    { icon: 'trend', label: `Receita prevista (${upcomingDays}d)`, valor: <Ticker value={eurRev?.total || 0} prefix={'€ '} />, nota: brlRev ? `+ ${fmtMoney(brlRev.total, 'BRL')} em BRL` : 'Apenas EUR este período' },
+    { icon: 'users', label: 'Clientes ativos', valor: <Ticker value={counts.active_clients} />, nota: `${counts.paid_last_30d} parcelas pagas (30d)` },
+    { icon: 'info', label: 'Em atraso', valor: <Ticker value={counts.late} />, nota: counts.late === 0 ? 'Sem atrasos 🌿' : 'Requer ação', danger: counts.late > 0 },
+    { icon: 'clock', label: 'Próximos vencimentos', valor: <Ticker value={counts.pending + counts.due_today} />, nota: `${counts.due_today} hoje · ${counts.pending} a vir` },
+  ];
+
   return (
-    <>
-      <header className="adm-page-header">
-        <div>
-          <h1>{greeting()}, Dra. Vyvian</h1>
-          <div className="adm-sub">
-            {formatTodayLong()} · {counts.due_today} vencimento{counts.due_today === 1 ? '' : 's'} hoje
-          </div>
-        </div>
-        <div className="adm-user-pill">
-          <span>{session?.name || 'Vyvian Avena'}</span>
-          <Avatar className="adm-user-avatar" initials={session?.initials || 'V'} />
-        </div>
-      </header>
+    <RsShell overline="Área privada · Painel"
+             titulo={`${greeting()}, Dra. Vyvian`}
+             sub={`${hojeLongo()} · ${counts.due_today} vencimento${counts.due_today === 1 ? '' : 's'} hoje · ${session?.name || 'Vyvian Avena'}`}>
 
-      <div className="adm-kpi-grid">
-        <div className="adm-kpi">
-          <div className="adm-kpi-label">Receita prevista (30d) · EUR</div>
-          <div className="adm-kpi-value"><CountUp value={eurRev?.total || 0} format={(v) => fmtMoney(v, 'EUR')} /></div>
-          <div className="adm-kpi-delta adm-kpi-delta-muted">
-            {brlRev ? `+ ${fmtMoney(brlRev.total, 'BRL')} em BRL` : 'Apenas EUR este período'}
-          </div>
-        </div>
-        <div className="adm-kpi">
-          <div className="adm-kpi-label">Clientes ativos</div>
-          <div className="adm-kpi-value"><CountUp value={counts.active_clients} /></div>
-          <div className="adm-kpi-delta adm-kpi-delta-muted">
-            {counts.paid_last_30d} parcelas pagas (30d)
-          </div>
-        </div>
-        <div className="adm-kpi adm-kpi-alert">
-          <div className="adm-kpi-label">Em atraso</div>
-          <div className="adm-kpi-value"><CountUp value={counts.late} /></div>
-          <div className="adm-kpi-delta adm-kpi-delta-danger">
-            {counts.late === 0 ? 'Sem atrasos 🌿' : 'Requer ação'}
-          </div>
-        </div>
-        <div className="adm-kpi adm-kpi-warn">
-          <div className="adm-kpi-label">Próximos vencimentos</div>
-          <div className="adm-kpi-value"><CountUp value={counts.pending + counts.due_today} /></div>
-          <div className="adm-kpi-delta adm-kpi-delta-warn">
-            {counts.due_today} hoje · {counts.pending} a vir
-          </div>
-        </div>
+      {/* KPIs */}
+      <div style={{ display: 'grid', gap: 14, gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginBottom: 26 }}>
+        {kpis.map((k, i) => (
+          <Reveal key={k.label} d={i * 70}>
+            <div className="glass" style={{ padding: '18px 20px 17px', borderColor: k.danger ? 'rgba(200,110,90,.4)' : undefined }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ width: 30, height: 30, borderRadius: 9, display: 'grid', placeItems: 'center', flex: 'none',
+                               background: k.danger ? 'rgba(160,75,60,.18)' : 'var(--grad-gold-soft)',
+                               border: '1px solid var(--edge-2)', color: k.danger ? '#e0a294' : 'var(--gold-soft)' }}>
+                  <Icon name={k.icon} size={15} />
+                </span>
+                <span className="overline" style={{ fontSize: 9.5, letterSpacing: '.18em' }}>{k.label}</span>
+              </div>
+              <div className="num" style={{ fontSize: 38, lineHeight: 1.1, marginTop: 12, color: 'var(--fg)' }}>{k.valor}</div>
+              <div style={{ fontSize: 11.5, color: k.danger ? '#e0a294' : 'var(--fg-3)', marginTop: 6 }}>{k.nota}</div>
+            </div>
+          </Reveal>
+        ))}
       </div>
 
-      <div className="adm-grid-2">
-        <div className="adm-card adm-glow">
-          <div className="adm-card-title">
-            Próximos vencimentos
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.9rem' }}>
-              <SelectMenu
-                value={upcomingDays}
-                onChange={(v) => setUpcomingDays(Number(v))}
-                options={UPCOMING_WINDOWS.map(([v, label]) => ({ value: v, label }))}
-                tip="Janela de tempo dos próximos vencimentos"
-                tipPos="bottom"
-                ariaLabel="Janela de tempo"
-              />
-              <Link to="/admin/parcelas" className="adm-card-title-link">Ver todos →</Link>
-            </span>
+      {/* Próximos vencimentos + Atenção */}
+      <div style={{ display: 'grid', gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))' }}>
+        <Reveal d={100}>
+          <div className="glass" style={{ padding: '20px 22px 18px' }}>
+            <PanelHead over="Agenda financeira" title="Próximos vencimentos"
+                       right={<span style={{ display: 'inline-flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                                <Seg small items={JANELAS} value={upcomingDays} onChange={(v) => setUpcomingDays(Number(v))} />
+                                <Link to="/admin/parcelas" className="btn btn-ghost btn-sm" style={{ textDecoration: 'none' }}>
+                                  Ver todos<Icon name="chev" size={12} />
+                                </Link>
+                              </span>} />
+            {upcoming.length === 0 ? (
+              <div style={{ padding: '26px 4px', fontSize: 13, color: 'var(--fg-3)' }}>Nada nos próximos {upcomingDays} dias.</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 8 }}>
+                {upcoming.map((i, k) => {
+                  const c = corPrazo(i);
+                  return (
+                    <Reveal key={i.id} d={k * 40} y={10}>
+                      <Link to={`/admin/clientes/${i.client_id}`}
+                            style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 13px', borderRadius: 12,
+                                     border: '1px solid var(--edge)', background: 'var(--panel)', textDecoration: 'none', color: 'inherit' }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13.5, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{i.client_name}</div>
+                          <div style={{ fontSize: 11, color: 'var(--fg-3)', marginTop: 2 }}>Parcela {i.installment_number}/{i.total_installments}</div>
+                        </div>
+                        <span className="mono" style={{ fontSize: 13.5, color: 'var(--fg-2)', flex: 'none' }}>{fmtMoney(i.amount, i.currency)}</span>
+                        <span style={{ flex: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.08em', padding: '4px 9px', borderRadius: 999,
+                                       background: c.bg, border: `1px solid ${c.bd}`, color: c.fg }}>{whenLabel(i)}</span>
+                      </Link>
+                    </Reveal>
+                  );
+                })}
+              </div>
+            )}
           </div>
-          {upcoming.length === 0 ? (
-            <div className="adm-empty">Nada nos próximos {upcomingDays} dias.</div>
-          ) : (
-            <ul className="adm-due-list">
-              {upcoming.map((i) => (
-                <li key={i.id}>
-                  <Link to={`/admin/clientes/${i.client_id}`} style={{ color: 'inherit' }}>
-                    <div className="adm-due-name">
-                      {i.client_name}
-                      <small>
-                        Parcela {i.installment_number}/{i.total_installments}
-                      </small>
-                    </div>
-                  </Link>
-                  <div className="adm-due-val">{fmtMoney(i.amount, i.currency)}</div>
-                  <div className={whenClass(i)}>{whenLabel(i)}</div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        </Reveal>
 
-        <div className="adm-card adm-card-alert adm-glow">
-          <div className="adm-card-title adm-card-title-danger">
-            ⚠ Atenção — vencidas
+        <Reveal d={160}>
+          <div className="glass" style={{ padding: '20px 22px 18px', borderColor: alerts.length ? 'rgba(200,110,90,.4)' : undefined }}>
+            <PanelHead over="Atenção" title="Parcelas vencidas"
+                       note={alerts.length ? 'Clique num cliente para tratar a cobrança.' : undefined} />
+            {alerts.length === 0 ? (
+              <div style={{ padding: '26px 4px', fontSize: 13, color: 'var(--fg-3)' }}>Sem atrasos. 🌿</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 8 }}>
+                {alerts.map((i, k) => (
+                  <Reveal key={i.id} d={k * 40} y={10}>
+                    <Link to={`/admin/clientes/${i.client_id}`}
+                          style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '11px 13px', borderRadius: 12,
+                                   border: '1px solid rgba(200,110,90,.35)', background: 'rgba(160,75,60,.08)', textDecoration: 'none', color: 'inherit' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13.5, color: 'var(--fg)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{i.client_name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--fg-3)', marginTop: 2 }}>Parcela {i.installment_number}/{i.total_installments}</div>
+                      </div>
+                      <span className="mono" style={{ fontSize: 13.5, color: 'var(--fg-2)', flex: 'none' }}>{fmtMoney(i.amount, i.currency)}</span>
+                      <span style={{ flex: 'none', fontSize: 10, fontWeight: 800, letterSpacing: '.08em', padding: '4px 9px', borderRadius: 999,
+                                     background: 'rgba(160,75,60,.18)', border: '1px solid rgba(200,110,90,.45)', color: '#e0a294' }}>{whenLabel(i)}</span>
+                    </Link>
+                  </Reveal>
+                ))}
+              </div>
+            )}
           </div>
-          {alerts.length === 0 ? (
-            <div className="adm-empty">Sem atrasos. 🌿</div>
-          ) : (
-            <ul className="adm-due-list">
-              {alerts.map((i) => (
-                <li key={i.id}>
-                  <Link to={`/admin/clientes/${i.client_id}`} style={{ color: 'inherit' }}>
-                    <div className="adm-due-name">
-                      {i.client_name}
-                      <small>
-                        Parcela {i.installment_number}/{i.total_installments}
-                      </small>
-                    </div>
-                  </Link>
-                  <div className="adm-due-val">{fmtMoney(i.amount, i.currency)}</div>
-                  <div className="adm-badge adm-badge-over">{whenLabel(i)}</div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+        </Reveal>
       </div>
-    </>
+    </RsShell>
   );
 }

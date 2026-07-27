@@ -630,3 +630,61 @@ export function PanelHead({ over, title, right, note }) {
     </div>
   );
 }
+
+
+/* ---------------- RsShell — invólucro do redesign para qualquer página ----------------
+   Usado pelo rollout do design system a toda a Área Privada (Painel, Clientes,
+   Parcelas, Calendário, Notificações): fundo animado, spotlight, tema light/dark
+   persistido (mesma chave 'rs-theme' das Redes Sociais) e header padrão. */
+export function RsShell({ overline, titulo, sub, right, children }) {
+  const [theme, setTheme] = useState(() => localStorage.getItem('rs-theme') || 'dark');
+  const scopeRef = useRef(null);
+  useEffect(() => { localStorage.setItem('rs-theme', theme); }, [theme]);
+  useEffect(() => {
+    const el = scopeRef.current;
+    if (!el) return;
+    let raf = 0;
+    const onMove = (e) => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const r = el.getBoundingClientRect();
+        el.style.setProperty('--mx', `${((e.clientX - r.left) / r.width) * 100}%`);
+        el.style.setProperty('--my', `${((e.clientY - r.top) / r.height) * 100}%`);
+      });
+    };
+    el.addEventListener('mousemove', onMove);
+    return () => { el.removeEventListener('mousemove', onMove); if (raf) cancelAnimationFrame(raf); };
+  }, []);
+  return (
+    <div ref={scopeRef} className="rs-scope" data-rs-theme={theme}>
+      <TipLayer />
+      <div className="rs-bg" aria-hidden="true">
+        <span className="aur a1" /><span className="aur a2" /><span className="aur a3" />
+        <span className="grid" /><span className="dots" /><span className="vig" />
+      </div>
+      <div className="rs-wrap">
+        <header className="hdr">
+          <Sparkles />
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 240 }}>
+              <span className="overline">{overline}</span>
+              <h1 style={{ marginTop: 10 }}>{titulo}</h1>
+              <span className="rule-s" style={{ display: 'block', marginTop: 14 }} />
+              {sub && <p className="sub">{sub}</p>}
+            </div>
+            {right}
+            <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 4 }}
+                    onClick={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))}
+                    data-tip={theme === 'dark' ? 'Mudar para o modo claro' : 'Mudar para o modo escuro'}
+                    aria-label="Alternar tema">
+              <Icon name={theme === 'dark' ? 'sun' : 'moon'} size={14} />
+              {theme === 'dark' ? 'Claro' : 'Escuro'}
+            </button>
+          </div>
+        </header>
+        {children}
+      </div>
+    </div>
+  );
+}

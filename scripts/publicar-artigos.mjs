@@ -57,11 +57,12 @@ for (const a of artigos) {
     const nome = `${a.slug}-corpo-${i + 1}.jpg`;
     const re = new RegExp(`!\\[([^\\]]*)\\]\\(/api/insights/images/${id}\\)`, "g");
     md = md.replace(re, (_, alt) =>
-      `<img src="/blog/${nome}" alt="${(alt || a.titulo).replace(/"/g, "'")}" width="1376" height="768" loading="lazy" />`);
+      `\n\n<img src="/blog/${nome}" alt="${(alt || a.titulo).replace(/"/g, "'")}" width="1376" height="768" loading="lazy" />\n\n`);
   });
   for (let i = 0; i < a.body_image_ids.length; i++) {
     await baixar(a.body_image_ids[i], join(RAIZ, "public", "blog", `${a.slug}-corpo-${i + 1}.jpg`));
   }
+  md = md.replace(/\n{3,}/g, "\n\n"); // blocos sempre separados por linha em branco única
   const hoje = new Date().toISOString().slice(0, 10);
   const fm = [
     "---",

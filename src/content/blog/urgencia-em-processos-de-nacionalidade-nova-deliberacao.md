@@ -28,7 +28,9 @@ A deliberação também lista outras hipóteses específicas que podem justifica
 
 O documento deixa claro que os pedidos de urgência se aplicam a processos de atribuição ou aquisição da nacionalidade, abrangendo assim as diferentes vias de acesso à cidadania portuguesa.
 
-<img src="/blog/urgencia-em-processos-de-nacionalidade-nova-deliberacao-corpo-1.jpg" alt="Ambiente urbano em Portugal representando o contexto territorial dos processos de nacionalidade" width="1376" height="768" loading="lazy" />A presente deliberação revoga a deliberação do Conselho Diretivo de 27 de outubro de 2022, posteriormente retificada, consolidando as regras num único documento.
+<img src="/blog/urgencia-em-processos-de-nacionalidade-nova-deliberacao-corpo-1.jpg" alt="Ambiente urbano em Portugal representando o contexto territorial dos processos de nacionalidade" width="1376" height="768" loading="lazy" />
+
+A presente deliberação revoga a deliberação do Conselho Diretivo de 27 de outubro de 2022, posteriormente retificada, consolidando as regras num único documento.
 
 ## Situações que podem justificar urgência
 
@@ -44,7 +46,9 @@ A situação de menor que permaneça indocumentado, quando não adquire outra na
 
 Um dos pontos mais relevantes para muitos requerentes brasileiros é a previsão expressa de que idade igual ou superior a 75 anos é fundamento atendível, considerando o impacto da idade e da esperança média de vida na efetividade do direito ou legítima expectativa de aquisição da nacionalidade. Essa hipótese reconhece objetivamente o fator tempo como elemento de urgência.
 
-<img src="/blog/urgencia-em-processos-de-nacionalidade-nova-deliberacao-corpo-2.jpg" alt="Pessoa idosa em momento de reflexão sobre o seu pedido de nacionalidade" width="1376" height="768" loading="lazy" />## Como solicitar urgência no seu processo
+<img src="/blog/urgencia-em-processos-de-nacionalidade-nova-deliberacao-corpo-2.jpg" alt="Pessoa idosa em momento de reflexão sobre o seu pedido de nacionalidade" width="1376" height="768" loading="lazy" />
+
+## Como solicitar urgência no seu processo
 
 A urgência não é mais automática e deve ser solicitada pelo requerente através de requerimento. O pedido deve ser formalizado por escrito, dirigido ao conservador responsável pelo processo, e precisa fundamentar claramente a situação de urgência com base nos critérios da deliberação.
 
@@ -52,7 +56,9 @@ A decisão sobre o pedido de urgência compete ao Conservador de registos respon
 
 O requerente deve identificar-se completamente, indicar o número do processo de nacionalidade, invocar expressamente a deliberação de 20 de maio de 2026 e a alínea específica que se aplica ao seu caso, e apresentar documentação que comprove a situação alegada. A assinatura deve ser reconhecida por autenticidade em cartório, conforme orientações práticas que circulam entre profissionais da área.
 
-<img src="/blog/urgencia-em-processos-de-nacionalidade-nova-deliberacao-corpo-3.jpg" alt="Detalhe em plano aproximado de documentos oficiais e caneta para requerimento jurídico" width="1376" height="768" loading="lazy" />Os requisitos documentais e procedimentos específicos para cada situação de urgência podem variar. Consulte o IRN ou um advogado especializado para confirmar o que se aplica ao seu caso.
+<img src="/blog/urgencia-em-processos-de-nacionalidade-nova-deliberacao-corpo-3.jpg" alt="Detalhe em plano aproximado de documentos oficiais e caneta para requerimento jurídico" width="1376" height="768" loading="lazy" />
+
+Os requisitos documentais e procedimentos específicos para cada situação de urgência podem variar. Consulte o IRN ou um advogado especializado para confirmar o que se aplica ao seu caso.
 
 ## Prioridade para menores indocumentados
 
@@ -72,7 +78,9 @@ A deliberação também mantém o princípio da equidade. Tem tanto direito a qu
 
 A avaliação de se o seu caso se enquadra nos critérios de urgência e a preparação adequada do requerimento exigem análise técnica. Um advogado especializado em nacionalidade portuguesa pode verificar se a sua situação justifica o pedido, reunir a documentação comprobatória necessária e redigir o requerimento em conformidade com as exigências formais e materiais da deliberação.
 
-<img src="/blog/urgencia-em-processos-de-nacionalidade-nova-deliberacao-corpo-4.jpg" alt="Cliente em reunião com advogada para consulta sobre processo de cidadania" width="1376" height="768" loading="lazy" />Se você tem um processo de nacionalidade em andamento e se encontra numa das situações previstas na deliberação — especialmente se tem idade igual ou superior a 75 anos, enfrenta problema de saúde grave, risco de perda de emprego por questões de visto ou outra circunstância que possa causar dano irreparável — vale a pena consultar um profissional para avaliar a viabilidade e a forma correta de apresentar o pedido de urgência ao IRN.
+<img src="/blog/urgencia-em-processos-de-nacionalidade-nova-deliberacao-corpo-4.jpg" alt="Cliente em reunião com advogada para consulta sobre processo de cidadania" width="1376" height="768" loading="lazy" />
+
+Se você tem um processo de nacionalidade em andamento e se encontra numa das situações previstas na deliberação — especialmente se tem idade igual ou superior a 75 anos, enfrenta problema de saúde grave, risco de perda de emprego por questões de visto ou outra circunstância que possa causar dano irreparável — vale a pena consultar um profissional para avaliar a viabilidade e a forma correta de apresentar o pedido de urgência ao IRN.
 
 > \
 > Os critérios do IRN podem ser atualizados. Confirme sempre os requisitos em vigor no portal oficial ou com apoio jurídico especializado.

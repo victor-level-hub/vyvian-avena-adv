@@ -11,6 +11,7 @@ import { insights as api } from '../apiClient';
 import { admToast } from '../toasts';
 import { admConfirm, admPrompt } from '../dialogs';
 import { Icon, Tip, StepLoader, Confetti, Thumb } from '../rs/ui';
+import { Play, Pause } from 'lucide-react';
 import Footer from '../../components/Footer';
 import { POSTS } from '../../data/blog';
 import { capaSrcSet } from '../../lib/imagens';
@@ -619,6 +620,7 @@ export default function ArticleStudio({ articleId, onClose }) {
           titulo={titulo} descricao={descricao} area={a.area}
           markdown={mdRef.current || markdown}
           capaUrl={escolhida ? urls[escolhida] : null}
+          articleId={articleId} temAudio={!!a.audio_key}
           onClose={() => setPreview(false)}
         />
       )}
@@ -1187,7 +1189,7 @@ function NavPreview() {
   );
 }
 
-function PreviewBlogue({ titulo, descricao, area, markdown, capaUrl, onClose }) {
+function PreviewBlogue({ titulo, descricao, area, markdown, capaUrl, articleId, temAudio, onClose }) {
   // Rede de segurança: artigos antigos podem ainda trazer tags de citação da pesquisa web.
   const mdLimpo = useMemo(() => (markdown || '').replace(/<\/?(?:cite|ref|citation|source)\b[^>]*>/gi, ''), [markdown]);
   const html = useMemo(() => marked.parse(mdLimpo), [mdLimpo]);
@@ -1253,6 +1255,7 @@ function PreviewBlogue({ titulo, descricao, area, markdown, capaUrl, onClose }) 
           <div className="font-body text-[12.5px] text-forest/40">Advogada · Portugal e Brasil</div>
         </aside>
         <div className="max-w-[680px] min-w-0">
+          {temAudio && <AudioPreview articleId={articleId} />}
           <article className="blog-prose" dangerouslySetInnerHTML={{ __html: html }} />
         </div>
       </div>
@@ -1313,6 +1316,109 @@ function PreviewBlogue({ titulo, descricao, area, markdown, capaUrl, onClose }) 
                        boxShadow: '0 14px 40px rgba(0,0,0,.4), 0 0 0 3px rgba(18,48,42,.18)' }}>
         <Icon name="close" size={13} />Fechar pré-visualização
       </button>
+    </div>
+  );
+}
+
+/* «Ouvir este artigo» na pré-visualização — o MESMO cartão do blogue público
+   (AudioArtigo.jsx), a tocar a narração ElevenLabs gerada no editor. A leitura
+   acompanhada palavra a palavra só existe no site publicado (timestamps do
+   script de publicação). */
+const VELOC_PREVIEW = [1, 1.25, 1.5];
+const fmtTempo = (s) => {
+  if (!Number.isFinite(s)) return '0:00';
+  const m = Math.floor(s / 60), ss = Math.floor(s % 60);
+  return `${m}:${String(ss).padStart(2, '0')}`;
+};
+
+function AudioPreview({ articleId }) {
+  const [url, setUrl] = useState(null);
+  const [tocar, setTocar] = useState(false);
+  const [t, setT] = useState(0);
+  const [dur, setDur] = useState(0);
+  const [vel, setVel] = useState(0);
+  const audioRef = useRef(null);
+  const rafRef = useRef(0);
+
+  useEffect(() => {
+    let vivo = true;
+    api.audioUrl(articleId).then((u) => { if (vivo) setUrl(u); else if (u) URL.revokeObjectURL(u); });
+    return () => {
+      vivo = false;
+      cancelAnimationFrame(rafRef.current);
+      if (audioRef.current) audioRef.current.pause();
+    };
+  }, [articleId]);
+  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]); // eslint-disable-line
+
+  if (!url) return null;
+
+  const tique = () => {
+    const a = audioRef.current;
+    if (a) setT(a.currentTime);
+    rafRef.current = requestAnimationFrame(tique);
+  };
+  const play = () => {
+    let a = audioRef.current;
+    if (!a) {
+      a = new Audio(url);
+      a.preload = 'auto';
+      a.playbackRate = VELOC_PREVIEW[vel];
+      a.addEventListener('loadedmetadata', () => setDur(a.duration || 0));
+      a.addEventListener('ended', () => { setTocar(false); cancelAnimationFrame(rafRef.current); });
+      audioRef.current = a;
+    }
+    a.play();
+    setTocar(true);
+    cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(tique);
+  };
+  const pause = () => { audioRef.current?.pause(); setTocar(false); cancelAnimationFrame(rafRef.current); };
+  const mudarVel = () => {
+    const nv = (vel + 1) % VELOC_PREVIEW.length;
+    setVel(nv);
+    if (audioRef.current) audioRef.current.playbackRate = VELOC_PREVIEW[nv];
+  };
+  const procurar = (e) => {
+    const a = audioRef.current;
+    if (!a || !dur) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const frac = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
+    a.currentTime = frac * dur;
+    setT(a.currentTime);
+  };
+
+  return (
+    <div className="mb-10 border border-gold/35 bg-[#f7f2e9] px-5 py-4 md:px-6 md:py-5">
+      <div className="flex items-center gap-4">
+        <button type="button" onClick={tocar ? pause : play}
+                aria-label={tocar ? 'Pausar a narração' : 'Ouvir este artigo'}
+                className="shrink-0 w-12 h-12 rounded-full bg-gold text-forest flex items-center justify-center hover:bg-[#a07d4a] hover:text-warmwhite transition-colors duration-300">
+          {tocar ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 translate-x-[1px]" />}
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline justify-between gap-3">
+            <div className="font-heading text-[17px] text-forest leading-tight">Ouvir este artigo</div>
+            <div className="font-body text-[12px] text-forest/50 tabular-nums shrink-0">
+              {fmtTempo(t / VELOC_PREVIEW[vel])} / {fmtTempo(dur / VELOC_PREVIEW[vel])}
+            </div>
+          </div>
+          <div className="font-body text-[12.5px] text-forest/55 mt-0.5">Narração do artigo · voz sintetizada</div>
+          <div role="slider" aria-label="Posição da narração" aria-valuemin={0} aria-valuemax={Math.round(dur)} aria-valuenow={Math.round(t)}
+               tabIndex={0} onClick={procurar} className="mt-2.5 h-4 flex items-center cursor-pointer group">
+            <div className="relative h-[3px] w-full bg-forest/15">
+              <div className="absolute inset-y-0 left-0 bg-gold transition-[width] duration-150"
+                   style={{ width: `${dur ? (t / dur) * 100 : 0}%` }} />
+            </div>
+          </div>
+        </div>
+        <div className="shrink-0 flex flex-col items-end gap-1.5">
+          <button type="button" onClick={mudarVel} aria-label="Velocidade da narração"
+                  className="font-body text-[12px] tracking-wide text-forest/70 border border-forest/20 px-2 py-0.5 hover:border-gold hover:text-gold transition-colors duration-300 tabular-nums">
+            {VELOC_PREVIEW[vel]}x
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

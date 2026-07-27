@@ -1191,11 +1191,14 @@ function PreviewBlogue({ titulo, descricao, area, markdown, capaUrl, onClose }) 
       </div>
 
       {/* controlo do admin: fechar (flutuante, fora do layout do blogue) */}
+      {/* dourado com contorno claro: legível tanto sobre o corpo creme como
+          sobre o navbar/rodapé verde-escuro do site */}
       <button type="button" onClick={onClose}
               style={{ position: 'fixed', right: 18, bottom: 18, zIndex: 180, display: 'inline-flex', alignItems: 'center', gap: 8,
-                       padding: '11px 20px', borderRadius: 999, border: 'none', cursor: 'pointer',
-                       background: '#12302a', color: '#faf8f4', fontSize: 11.5, fontWeight: 800, letterSpacing: '.14em',
-                       textTransform: 'uppercase', boxShadow: '0 14px 40px rgba(18,48,42,.45)' }}>
+                       padding: '11px 20px', borderRadius: 999, cursor: 'pointer',
+                       background: '#b8935a', color: '#fff', border: '1px solid rgba(255,255,255,.55)',
+                       fontSize: 11.5, fontWeight: 800, letterSpacing: '.14em', textTransform: 'uppercase',
+                       boxShadow: '0 14px 40px rgba(0,0,0,.4), 0 0 0 3px rgba(18,48,42,.18)' }}>
         <Icon name="close" size={13} />Fechar pré-visualização
       </button>
     </div>

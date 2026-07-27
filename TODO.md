@@ -17,7 +17,7 @@
 
 ## Ações do Victor / da Dra. (não é código)
 
-- [ ] Victor: `git pull` em `C:\Users\victor.sousa\Projetos\vyvian-avena-adv` para trazer `134dd49`…`8368f11` (redesign, filtros, lightbox, marca de água, tema livre, fotos no corpo, Banco de Imagens).
+- [ ] Victor: `git pull` em `C:\Users\victor.sousa\Projetos\vyvian-avena-adv` para trazer `134dd49`…`be2d716` (redesign, filtros, lightbox, marca de água, tema livre, fotos no corpo, Banco de Imagens).
 - [ ] Victor (opcional): `IG_SYNC_KEY` foi rodada na integração da Fase B e o valor não ficou guardado. O cron diário não a usa; só serve para forçar uma sincronização manual. Repor com `npx wrangler secret put IG_SYNC_KEY < ficheiro.txt` (e apagar o ficheiro a seguir).
 - [ ] Dra.: experimentar as abas **Insights** e **Instagram** e dar feedback.
 - [ ] Victor: **créditos Recraft quase no fim (~40)** — fallback de imagem; recarregar se quiser manter o plano B.
@@ -26,6 +26,7 @@
 
 ## Concluídas recentemente
 
+- 27 jul 2026 — **Banco de Imagens v3** (`be2d716`): sem duplicados — «Usar imagem do banco» recusa imagens que já estão nas opções do artigo (origem na ronda atual ou cópia existente) e o modal esmaece-as com o selo «NO ARTIGO»; blockquote do editor legível no tema dark (`8368f11`).
 - 27 jul 2026 — **Banco de Imagens v2** (`082cf63`): remover do banco apaga o ficheiro do R2 quando a imagem já não está em uso em nenhum artigo (capa/corpo/opções atuais — senão mantém-se e o toast explica); botão «Usar imagem do banco» no editor abre modal com as guardadas, seleção múltipla e «Adicionar N no artigo» (cópia R2 com chave determinística — sem duplicados na ronda).
 - 27 jul 2026 — **Banco de Imagens** (`0fb59e9`): nova vista «IMAGENS» na pílula do Insights com as imagens guardadas pela Dra. (data, artigo de origem, ampliação, remoção); botão «Salvar imagens» na sidebar do editor (abaixo de «Ver ampliadas», usa a seleção «+») e «Salvar imagem» no lightbox; duplicados detetados pelo ID («Imagem salva com sucesso.» / «Esta imagem já foi salva no dia X.»); tabela D1 `image_bank` (migração 0019) e endpoints `/api/insights/banco`.
 - 27 jul 2026 — **Tema livre, fotos no corpo do artigo e fix definitivo do cursor** (`196e512`, `500b413`): vista «TEMA LIVRE» (a Dra. escreve o assunto → artigo no editor; lista de anteriores), fotos marcadas com «+» inseridas pela IA após o parágrafo mais relacionado (TipTap com Image; imagens públicas em GET), e caret dourado + editor desativado durante diálogos (causa-raiz do campo «não editável»).

@@ -11,6 +11,10 @@ import { insights as api } from '../apiClient';
 import { admToast } from '../toasts';
 import { admConfirm, admPrompt } from '../dialogs';
 import { Icon, Tip, StepLoader, Confetti, Thumb } from '../rs/ui';
+import Navbar from '../../components/Navbar';
+import Footer from '../../components/Footer';
+import { POSTS } from '../../data/blog';
+import { capaSrcSet } from '../../lib/imagens';
 
 const RichEditor = React.lazy(() => import('./RichEditor'));
 
@@ -1043,43 +1047,59 @@ function Lightbox({ images, start = 0, chosenId, onPick, onSave, salvando, onRep
 
 // ---------------------------------------------------------- Pré-visualização
 
-/* A pré-visualização mostra o artigo NO LAYOUT REAL DO BLOGUE PÚBLICO — que é
-   sempre claro (o site/blogue não tem modo escuro). Mesmo com a área privada em
-   dark, aqui reutilizam-se as classes do próprio site (bg-warmwhite, blog-prose,
-   Tailwind) para a Dra. ver exatamente o que o leitor verá. */
+/* A pré-visualização replica a PÁGINA REAL do artigo no blogue público
+   (ex.: /blog/cobrancas-indevidas-cidadania-portuguesa): navbar e footer do
+   próprio site (sem navegação), barra de progresso de leitura, hero full-bleed
+   com breadcrumb «Blogue», rail lateral, prosa .blog-prose com drop cap, CTA
+   e «Continuar a ler». O blogue é sempre CLARO — mesmo com a área privada em
+   dark, aqui a Dra. vê exatamente o que o leitor verá. */
 function PreviewBlogue({ titulo, descricao, area, markdown, capaUrl, onClose }) {
   // Rede de segurança: artigos antigos podem ainda trazer tags de citação da pesquisa web.
   const mdLimpo = useMemo(() => (markdown || '').replace(/<\/?(?:cite|ref|citation|source)\b[^>]*>/gi, ''), [markdown]);
   const html = useMemo(() => marked.parse(mdLimpo), [mdLimpo]);
   const hoje = new Date().toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric' });
   const areaLabel = AREAS_LABEL[area] || null;
+  const outros = POSTS.slice(0, 2);
+
+  // barra de progresso de leitura (2px dourada) — mede o scroll DESTE overlay
+  const scrollRef = useRef(null);
+  const barRef = useRef(null);
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return undefined;
+    const onScroll = () => {
+      const max = el.scrollHeight - el.clientHeight;
+      if (barRef.current) barRef.current.style.width = `${max > 0 ? (el.scrollTop / max) * 100 : 0}%`;
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
 
   return (
-    <div role="dialog" aria-modal="true" aria-label="Pré-visualização do artigo"
+    <div ref={scrollRef} role="dialog" aria-modal="true" aria-label="Pré-visualização do artigo"
          style={{ position: 'fixed', inset: 0, zIndex: 150, background: '#faf8f4', overflowY: 'auto', animation: 'rsFadeIn .3s both' }}>
-      {/* barra do admin (fora do layout do blogue) */}
-      <div style={{ position: 'sticky', top: 0, zIndex: 10, display: 'flex', alignItems: 'center', gap: 12, padding: '11px 20px',
-                    background: 'rgba(250,248,244,.92)', backdropFilter: 'blur(14px)', borderBottom: '1px solid rgba(18,48,42,.12)' }}>
-        <Icon name="eye" size={15} style={{ color: '#b8935a' }} />
-        <span style={{ fontSize: 11.5, letterSpacing: '.16em', textTransform: 'uppercase', fontWeight: 800, color: 'rgba(18,48,42,.65)' }}>
-          Pré-visualização — o layout real do blogue (sempre claro)
-        </span>
-        <button type="button" onClick={onClose}
-                style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 16px', borderRadius: 999,
-                         border: '1px solid rgba(18,48,42,.25)', background: 'transparent', color: '#12302a',
-                         fontSize: 11, fontWeight: 800, letterSpacing: '.12em', textTransform: 'uppercase', cursor: 'pointer' }}>
-          <Icon name="close" size={13} />Fechar
-        </button>
+      {/* barra de progresso de leitura, como no blogue */}
+      <div aria-hidden="true" style={{ position: 'fixed', top: 0, left: 0, right: 0, height: 2, zIndex: 170, pointerEvents: 'none' }}>
+        <div ref={barRef} style={{ height: '100%', width: '0%', background: '#b8935a' }} />
+      </div>
+
+      {/* navbar real do site (só visual — sem navegação na pré-visualização) */}
+      <div style={{ pointerEvents: 'none' }} aria-hidden="true">
+        <Navbar />
       </div>
 
       {/* Hero full-bleed — igual a BlogArtigo.jsx */}
-      <section className="relative min-h-[420px] md:min-h-[520px] bg-forest flex items-end">
+      <section className="relative min-h-[480px] md:min-h-[560px] bg-forest flex items-end">
         {capaUrl && (
           <img src={capaUrl} alt="" className="absolute inset-0 w-full h-full object-cover opacity-[0.38]" />
         )}
         <div className="absolute inset-0"
              style={{ background: 'linear-gradient(to top, #12302a 4%, rgba(18,48,42,0.55) 45%, rgba(18,48,42,0.25))' }} />
-        <div className="relative w-full max-w-[1152px] mx-auto px-6 md:px-12 pt-32 pb-14 md:pb-[64px]">
+        <div className="relative w-full max-w-[1152px] mx-auto px-6 md:px-12 pt-40 pb-14 md:pb-[72px]">
+          <span className="inline-flex items-center gap-2 font-body text-[13px] text-warmwhite/70 mb-7">
+            <Icon name="back" size={14} />Blogue
+          </span>
           <div className="h-px w-12 bg-gold mb-6" />
           <div className="font-body text-xs tracking-[0.15em] uppercase text-gold mb-5">
             {areaLabel ? `${areaLabel} · ` : ''}{hoje} · {minutosLeitura(markdown)} min de leitura
@@ -1105,8 +1125,8 @@ function PreviewBlogue({ titulo, descricao, area, markdown, capaUrl, onClose }) 
         </div>
       </div>
 
-      {/* CTA contextual (estático na pré-visualização) */}
-      <div className="max-w-[1152px] mx-auto px-6 md:px-12 pb-24 grid lg:grid-cols-[220px_1fr] gap-10 lg:gap-16">
+      {/* CTA contextual — igual ao blogue (estático na pré-visualização) */}
+      <div className="max-w-[1152px] mx-auto px-6 md:px-12 pb-2 grid lg:grid-cols-[220px_1fr] gap-10 lg:gap-16">
         <div className="hidden lg:block" />
         <div className="bg-forest px-8 py-9 md:px-11 md:py-10 max-w-[680px]">
           <h2 className="font-heading font-normal text-2xl text-warmwhite mb-2.5">
@@ -1115,11 +1135,52 @@ function PreviewBlogue({ titulo, descricao, area, markdown, capaUrl, onClose }) 
           <p className="font-body text-sm text-warmwhite/60 mb-7 leading-relaxed">
             Descreva-nos o seu caso e ajudamos a identificar o enquadramento certo.
           </p>
-          <span className="inline-flex items-center gap-2 px-6 py-2.5 bg-gold text-warmwhite text-sm font-body tracking-wide">
-            Agendar Consulta
-          </span>
+          <div className="flex flex-wrap gap-3">
+            <span className="inline-flex items-center gap-2 px-6 py-2.5 bg-gold text-warmwhite text-sm font-body tracking-wide">
+              Agendar Consulta
+            </span>
+          </div>
         </div>
       </div>
+
+      {/* Continuar a ler — com os artigos reais do blogue */}
+      {outros.length > 0 && (
+        <section className="max-w-[1152px] mx-auto px-6 md:px-12 pt-12 pb-24">
+          <div className="flex items-baseline justify-between mb-6">
+            <h2 className="font-heading font-normal text-[26px] md:text-[28px] text-forest">Continuar a ler</h2>
+            <span className="font-body text-sm text-gold">Todos os artigos</span>
+          </div>
+          {outros.map((p) => (
+            <div key={p.slug} className="grid grid-cols-[112px_1fr] md:grid-cols-[160px_1fr] gap-4 md:gap-8 items-center py-6 border-t border-border">
+              <div className="overflow-hidden aspect-[1200/630]">
+                <img src={p.imagem} srcSet={capaSrcSet(p.imagem)} sizes="160px" alt="" loading="lazy"
+                     className="w-full h-full object-cover" />
+              </div>
+              <div>
+                <div className="font-body text-xs tracking-[0.15em] uppercase text-forest/40 mb-1.5">{fmtSoDataPrev(p.data)} · {p.minutos} min</div>
+                <div className="font-heading text-[19px] md:text-[21px] leading-snug text-forest">{p.titulo}</div>
+              </div>
+            </div>
+          ))}
+        </section>
+      )}
+
+      {/* footer real do site (só visual) */}
+      <div style={{ pointerEvents: 'none' }} aria-hidden="true">
+        <Footer />
+      </div>
+
+      {/* controlo do admin: fechar (flutuante, fora do layout do blogue) */}
+      <button type="button" onClick={onClose}
+              style={{ position: 'fixed', right: 18, bottom: 18, zIndex: 180, display: 'inline-flex', alignItems: 'center', gap: 8,
+                       padding: '11px 20px', borderRadius: 999, border: 'none', cursor: 'pointer',
+                       background: '#12302a', color: '#faf8f4', fontSize: 11.5, fontWeight: 800, letterSpacing: '.14em',
+                       textTransform: 'uppercase', boxShadow: '0 14px 40px rgba(18,48,42,.45)' }}>
+        <Icon name="close" size={13} />Fechar pré-visualização
+      </button>
     </div>
   );
 }
+
+const fmtSoDataPrev = (iso) =>
+  iso ? new Date(iso + 'T12:00:00').toLocaleDateString('pt-PT', { day: 'numeric', month: 'long', year: 'numeric' }) : '';

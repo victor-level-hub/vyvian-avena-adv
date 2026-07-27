@@ -2,6 +2,10 @@
 *Espelho do doc `claude/TODO.md` do projeto claude.ai · atualizado a 24 jul 2026*
 *Regra: quem concluir/criar tarefas atualiza AMBOS (este ficheiro e o doc do projeto).*
 
+## Regras de qualidade (aprendidas — aplicar SEMPRE)
+
+- **27 jul 2026 · campos de escrita:** nunca deixar um campo de entrada sem cursor (caret) visível e sem foco garantido. Todo o input/textarea tem `caret-color` explícito e, em diálogos modais, o campo força e recupera o foco — o TipTap/ProseMirror rouba o teclado se o deixarem (diálogos emitem `adm-dialog-open/close` e o RichEditor desativa-se enquanto houver diálogo aberto).
+
 ## Prioridade alta (código)
 
 - [ ] **PDF do plano de pagamento** no formato padrão da Dra. Vyvian, com envio automático ao cliente (área privada).
@@ -22,6 +26,7 @@
 
 ## Concluídas recentemente
 
+- 27 jul 2026 — **Tema livre, fotos no corpo do artigo e fix definitivo do cursor** (`196e512`, `500b413`): vista «TEMA LIVRE» (a Dra. escreve o assunto → artigo no editor; lista de anteriores), fotos marcadas com «+» inseridas pela IA após o parágrafo mais relacionado (TipTap com Image; imagens públicas em GET), e caret dourado + editor desativado durante diálogos (causa-raiz do campo «não editável»).
 - 25 jul 2026 — **Insights: campo «Correções de imagem»**: a Dra. aponta erros grotescos das imagens (ex.: ecrã do telemóvel ao contrário) na sidebar do editor ou no botão «Reportar erro» do lightbox; cada nota vira regra permanente injetada no prompt de todas as gerações seguintes (KV, endpoints /api/insights/image-rules). Primeira regra registada: ecrã do telemóvel virado para quem o segura.
 - 25 jul 2026 — **Insights: lightbox das capas + marca de água com o favicon** (`da9dc7b`): ampliação a ecrã inteiro com setas/teclado/swipe, miniaturas e «Usar como capa»; marca de água no padrão do blogue (logo-coluna, canto inferior direito, dourado/verde conforme o canto) composta no browser e gravada no R2 via novo `PUT /api/insights/images/:id` — aplicada automaticamente a cada geração e retroativamente às 4 imagens do artigo de teste. Prompt de imagem corrigido: ecrãs de telemóvel virados para quem os usa.
 - 25 jul 2026 — **Filtros de período e agrupamento nas Redes Sociais** (`eb0634a`): períodos 1/7/15/30/60/90/120 dias, «Agrupar por» dias · semanas · meses (soma p/ visitas e curtidas, último valor p/ seguidores, diferença p/ novos), legenda do filtro em chip, rótulos do eixo Y nas linhas-guia e legenda «Eixo X / Eixo Y» em todos os gráficos e sparklines das abas Instagram e Site.

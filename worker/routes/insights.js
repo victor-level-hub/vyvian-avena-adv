@@ -472,7 +472,9 @@ async function getArticle(env, id) {
   const a = await env.DB.prepare(`SELECT * FROM insight_articles WHERE id = ?`).bind(id).first();
   if (!a) return jsonError("Artigo não encontrado", 404);
   const imgs = (await env.DB.prepare(
-    `SELECT id, provider, ronda, criado_em FROM insight_images WHERE article_id = ? ORDER BY id ASC`
+    `SELECT id, provider, ronda, criado_em,
+            CASE WHEN prompt LIKE 'banco#%' THEN CAST(substr(prompt, 7) AS INTEGER) ELSE NULL END AS banco_origem
+     FROM insight_images WHERE article_id = ? ORDER BY id ASC`
   ).bind(id).all()).results || [];
   const ronda = imgs.length ? Math.max(...imgs.map((i) => i.ronda)) : 0;
   return jsonResponse({ article: a, images: imgs.filter((i) => i.ronda === ronda), ronda });
@@ -610,6 +612,12 @@ async function adoptFromBank(request, env, articleId) {
     const src = await env.DB.prepare(`SELECT * FROM insight_images WHERE id = ?`).bind(srcId).first();
     if (!noBanco || !src) { resultados.push({ image_id: srcId, estado: "inexistente" }); continue; }
 
+    // a imagem nasceu neste artigo e ainda está nas opções atuais — copiar seria duplicar
+    if (src.article_id === articleId && src.ronda === ronda) {
+      resultados.push({ image_id: srcId, estado: "ja_no_artigo" });
+      continue;
+    }
+
     const ext = (src.content_type || "").includes("png") ? "png" : "jpg";
     const key = `insights/art-${articleId}/r${ronda}-banco${srcId}.${ext}`;
 
@@ -628,7 +636,9 @@ async function adoptFromBank(request, env, articleId) {
   }
 
   const imgs = (await env.DB.prepare(
-    `SELECT id, provider, ronda, criado_em FROM insight_images WHERE article_id = ? ORDER BY id ASC`
+    `SELECT id, provider, ronda, criado_em,
+            CASE WHEN prompt LIKE 'banco#%' THEN CAST(substr(prompt, 7) AS INTEGER) ELSE NULL END AS banco_origem
+     FROM insight_images WHERE article_id = ? ORDER BY id ASC`
   ).bind(articleId).all()).results || [];
   const r = imgs.length ? Math.max(...imgs.map((i) => i.ronda)) : 0;
   const artigo = await env.DB.prepare(`SELECT * FROM insight_articles WHERE id = ?`).bind(articleId).first();

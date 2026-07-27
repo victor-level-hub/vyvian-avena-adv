@@ -533,6 +533,7 @@ export default function ArticleStudio({ articleId, onClose }) {
 
       {bancoAberto && (
         <BancoPicker adotando={adotando}
+                     noArtigoIds={new Set((data.images || []).flatMap((im) => im.banco_origem ? [im.id, im.banco_origem] : [im.id]))}
                      onAdd={(ids) => adicionarDoBanco(ids)}
                      onClose={() => setBancoAberto(false)} />
       )}
@@ -632,7 +633,7 @@ function CoverOption({ src, i, provider, chosen, onPick, onExpand, noCorpo, jaNo
    Modal com as imagens guardadas no Banco de Imagens (vista IMAGENS). A Dra.
    seleciona quantas quiser e «Adicionar no artigo» copia-as para as opções
    deste artigo — a partir daí podem ser capa ou entrar no corpo. */
-function BancoPicker({ onAdd, onClose, adotando }) {
+function BancoPicker({ onAdd, onClose, adotando, noArtigoIds }) {
   const [itens, setItens] = useState(null);
   const [sel, setSel] = useState(() => new Set());
 
@@ -688,27 +689,38 @@ function BancoPicker({ onAdd, onClose, adotando }) {
           ) : (
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 10 }}>
               {itens.map((im, k) => {
+                const jaNoArtigo = noArtigoIds?.has(im.image_id);
                 const marcada = sel.has(im.image_id);
                 return (
-                  <button key={im.id} type="button" aria-pressed={marcada}
-                          onClick={() => toggle(im.image_id)}
-                          title={im.artigo_titulo ? `De: ${im.artigo_titulo}` : 'Imagem guardada'}
+                  <button key={im.id} type="button" aria-pressed={marcada} disabled={jaNoArtigo}
+                          onClick={() => { if (!jaNoArtigo) toggle(im.image_id); }}
+                          title={jaNoArtigo ? 'Esta imagem já está nas opções deste artigo' : im.artigo_titulo ? `De: ${im.artigo_titulo}` : 'Imagem guardada'}
                           style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', padding: 0, display: 'block',
-                                   aspectRatio: '4/3', cursor: 'pointer',
+                                   aspectRatio: '4/3', cursor: jaNoArtigo ? 'not-allowed' : 'pointer',
                                    border: '1.5px solid ' + (marcada ? 'var(--gold-soft)' : 'var(--edge)'),
                                    boxShadow: marcada ? '0 0 0 3px rgba(184,147,90,.22)' : 'none',
                                    transition: 'border-color .2s, box-shadow .2s, transform .25s var(--ease-out)',
                                    animation: `rsScaleIn .4s ${k * 45}ms var(--ease-spring) both` }}>
                     <img src={'/api/insights/images/' + im.image_id} alt=""
                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block',
-                                  opacity: marcada ? 1 : .88, transition: 'opacity .2s' }} />
-                    <span style={{ position: 'absolute', top: 7, right: 7, width: 22, height: 22, borderRadius: 7,
-                                   display: 'grid', placeItems: 'center',
-                                   background: marcada ? 'var(--grad-gold)' : 'rgba(6,18,15,.6)',
-                                   border: '1px solid rgba(212,181,133,.45)', color: marcada ? '#1a1208' : '#d4b585',
-                                   backdropFilter: 'blur(4px)' }}>
-                      <Icon name={marcada ? 'check' : 'plus'} size={11} s={marcada ? 3.2 : 1.8} />
-                    </span>
+                                  opacity: jaNoArtigo ? .38 : marcada ? 1 : .88, transition: 'opacity .2s',
+                                  filter: jaNoArtigo ? 'saturate(.55)' : 'none' }} />
+                    {jaNoArtigo ? (
+                      <span style={{ position: 'absolute', top: 7, left: 7, height: 22, padding: '0 8px', borderRadius: 7,
+                                     display: 'inline-flex', alignItems: 'center', gap: 4,
+                                     background: 'rgba(74,124,89,.55)', border: '1px solid rgba(143,208,162,.5)', color: '#d9f2e0',
+                                     fontSize: 8.5, fontWeight: 800, letterSpacing: '.08em', backdropFilter: 'blur(4px)' }}>
+                        <Icon name="check" size={9} s={3.4} />NO ARTIGO
+                      </span>
+                    ) : (
+                      <span style={{ position: 'absolute', top: 7, right: 7, width: 22, height: 22, borderRadius: 7,
+                                     display: 'grid', placeItems: 'center',
+                                     background: marcada ? 'var(--grad-gold)' : 'rgba(6,18,15,.6)',
+                                     border: '1px solid rgba(212,181,133,.45)', color: marcada ? '#1a1208' : '#d4b585',
+                                     backdropFilter: 'blur(4px)' }}>
+                        <Icon name={marcada ? 'check' : 'plus'} size={11} s={marcada ? 3.2 : 1.8} />
+                      </span>
+                    )}
                   </button>
                 );
               })}

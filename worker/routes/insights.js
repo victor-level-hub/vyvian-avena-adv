@@ -156,6 +156,9 @@ export async function handleInsights(request, env, path, session) {
   if (mt && m === "POST") return inserirImagens(request, env, +mt[1]);
   mt = path.match(/^\/api\/insights\/articles\/(\d+)\/avaliar$/);
   if (mt && m === "POST") return avaliarArtigo(env, +mt[1]);
+  mt = path.match(/^\/api\/insights\/articles\/(\d+)\/audio$/);
+  if (mt && m === "POST") return gerarAudio(env, +mt[1]);
+  if (mt && m === "GET") return servirAudio(env, +mt[1]);
   mt = path.match(/^\/api\/insights\/articles\/(\d+)\/images$/);
   if (mt && m === "POST") return generateImages(request, env, +mt[1]);
   mt = path.match(/^\/api\/insights\/articles\/(\d+)\/escolher-imagem$/);
@@ -488,6 +491,74 @@ Responde EXCLUSIVAMENTE com JSON válido:
   await env.DB.prepare(`UPDATE insight_articles SET avaliacao = ? WHERE id = ?`)
     .bind(JSON.stringify(av), id).run();
   return jsonResponse({ ok: true, avaliacao: av });
+}
+
+/* ---------------- narração ElevenLabs (quando o texto está finalizado) ----------------
+   Mesma voz do blogue público (Claudia, pt-PT — a de scripts/gerar-audio-blogue.mjs)
+   e modelo eleven_turbo_v2_5 (1 pedido até 40k chars, sem ffmpeg — obrigatório no
+   Worker). O MP3 fica no R2; a leitura acompanhada palavra a palavra do blogue
+   continua a ser gerada pelo script na publicação. */
+const ELEVEN_VOICE = "JGnWZj684pcXmK2SxYIv"; // Claudia - Friendly (pt-PT)
+const ELEVEN_MODEL = "eleven_turbo_v2_5";
+
+// markdown → texto falado (sem imagens, links, cardinais, asteriscos…)
+function textoFalado(titulo, markdown) {
+  const corpo = String(markdown || "")
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, " ")          // imagens fora
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")        // [texto](url) → texto
+    .replace(/^#{1,6}\s*/gm, "")                      // cardinais dos títulos
+    .replace(/^>\s?/gm, "")                           // marcas de citação
+    .replace(/[*_`~]/g, "")                           // ênfases
+    .replace(/^\s*[-•]\s+/gm, "")                     // marcas de lista
+    .replace(/\n{2,}/g, "\n\n")
+    .trim();
+  return `${String(titulo || "").trim()}.\n\n${corpo}`.slice(0, 38000);
+}
+
+async function gerarAudio(env, id) {
+  if (!env.ELEVENLABS_API_KEY) {
+    return jsonError("ELEVENLABS_API_KEY não configurada no Worker (wrangler secret put ELEVENLABS_API_KEY < ficheiro.txt).", 503);
+  }
+  const a = await env.DB.prepare(`SELECT * FROM insight_articles WHERE id = ?`).bind(id).first();
+  if (!a) return jsonError("Artigo não encontrado", 404);
+  if (!String(a.markdown || "").trim()) return jsonError("O artigo ainda não tem texto", 400);
+
+  const r = await fetch(`https://api.elevenlabs.io/v1/text-to-speech/${ELEVEN_VOICE}?output_format=mp3_44100_128`, {
+    method: "POST",
+    headers: { "xi-api-key": env.ELEVENLABS_API_KEY, "content-type": "application/json" },
+    body: JSON.stringify({
+      text: textoFalado(a.titulo, a.markdown),
+      model_id: ELEVEN_MODEL,
+      voice_settings: { stability: 0.5, similarity_boost: 0.75 },
+    }),
+  });
+  if (!r.ok) {
+    const t = await r.text();
+    return jsonError(`ElevenLabs: ${r.status} ${t.slice(0, 250)}`, 502);
+  }
+  const bytes = new Uint8Array(await r.arrayBuffer());
+  if (!bytes.length) return jsonError("ElevenLabs devolveu áudio vazio", 502);
+
+  // substitui a narração anterior (se existir) — nunca acumula MP3 órfãos
+  if (a.audio_key) { try { await env.RECIBOS.delete(a.audio_key); } catch {} }
+  const key = `insights/art-${id}/narracao-${Date.now()}.mp3`;
+  await env.RECIBOS.put(key, bytes, { httpMetadata: { contentType: "audio/mpeg" } });
+  await env.DB.prepare(
+    `UPDATE insight_articles SET audio_key = ?, audio_em = datetime('now') WHERE id = ?`
+  ).bind(key, id).run();
+
+  const art = await env.DB.prepare(`SELECT audio_key, audio_em FROM insight_articles WHERE id = ?`).bind(id).first();
+  return jsonResponse({ ok: true, bytes: bytes.length, ...art });
+}
+
+async function servirAudio(env, id) {
+  const a = await env.DB.prepare(`SELECT audio_key FROM insight_articles WHERE id = ?`).bind(id).first();
+  if (!a || !a.audio_key) return jsonError("Este artigo ainda não tem narração", 404);
+  const obj = await env.RECIBOS.get(a.audio_key);
+  if (!obj) return jsonError("Ficheiro de áudio não encontrado", 404);
+  return new Response(obj.body, {
+    headers: { "Content-Type": "audio/mpeg", "Cache-Control": "private, max-age=300" },
+  });
 }
 
 // Artigos de tema livre (sem sugestão associada) — para a Dra. os reabrir depois.

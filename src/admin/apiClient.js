@@ -190,6 +190,13 @@ export const insights = {
   discardImage: (articleId, imageId) => request(`/api/insights/articles/${articleId}/images/${imageId}`, { method: 'DELETE' }),
   keywords: () => request('/api/insights/palavras'),
   evaluateArticle: (articleId) => request(`/api/insights/articles/${articleId}/avaliar`, { method: 'POST' }),
+  generateAudio: (articleId) => request(`/api/insights/articles/${articleId}/audio`, { method: 'POST' }),
+  async audioUrl(articleId) {
+    const token = getToken();
+    const res = await fetch(`/api/insights/articles/${articleId}/audio`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) return null;
+    return URL.createObjectURL(await res.blob());
+  },
 
   // Correções de imagem (erros apontados pela Dra. — entram no prompt das próximas gerações)
   imageRules: () => request('/api/insights/image-rules'),

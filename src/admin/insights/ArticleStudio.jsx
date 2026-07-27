@@ -518,6 +518,10 @@ export default function ArticleStudio({ articleId, onClose }) {
 
             <AvaliacaoCard avaliacao={avaliacao} avaliando={avaliando} onAvaliar={avaliar} />
 
+            <NarracaoCard articleId={articleId} audioKey={data.article.audio_key} audioEm={data.article.audio_em}
+                          sujo={sujo} onAntesDeGerar={async () => { if (sujo) await guardar(true); }}
+                          onGerado={(d) => setData((prev) => ({ ...prev, article: { ...prev.article, audio_key: d.audio_key, audio_em: d.audio_em } }))} />
+
             <ImageRulesCard regras={regras} onAdd={adicionarRegra} onRemove={removerRegra} />
 
             <div className="glass" style={{ padding: 20 }}>
@@ -673,6 +677,84 @@ function CoverOption({ src, i, provider, chosen, onPick, onExpand, noCorpo, jaNo
         </span>
       )}
     </button>
+  );
+}
+
+/* ---------------- Narração ElevenLabs ----------------
+   Para quando a Dra. dá o texto por FINALIZADO: gera a narração com a voz do
+   blogue (Claudia, pt-PT) e deixa-a ouvível aqui mesmo. Se o texto mudar
+   depois, é preciso gerar novamente. */
+function NarracaoCard({ articleId, audioKey, audioEm, sujo, onAntesDeGerar, onGerado }) {
+  const [gerando, setGerando] = useState(false);
+  const [url, setUrl] = useState(null);
+
+  // carrega o MP3 (autenticado) quando já existe narração
+  useEffect(() => {
+    let vivo = true;
+    if (!audioKey) { setUrl(null); return undefined; }
+    api.audioUrl(articleId).then((u) => { if (vivo) setUrl(u); else if (u) URL.revokeObjectURL(u); });
+    return () => { vivo = false; };
+  }, [articleId, audioKey]);
+  useEffect(() => () => { if (url) URL.revokeObjectURL(url); }, [url]); // eslint-disable-line
+
+  const gerar = async () => {
+    const ok = await admConfirm(
+      audioKey
+        ? 'Gerar a narração novamente com o texto atual? A anterior é substituída.'
+        : 'O texto está finalizado? A narração é gerada a partir do texto ATUAL do artigo, com a voz do blogue (ElevenLabs). Se editar depois, terá de gerar novamente.',
+      { okLabel: audioKey ? 'Gerar novamente' : 'Sim, gerar narração' }
+    );
+    if (!ok) return;
+    setGerando(true);
+    try {
+      await onAntesDeGerar(); // não narrar texto desatualizado — guarda primeiro
+      const d = await api.generateAudio(articleId);
+      onGerado(d);
+      admToast('Narração gerada com a voz do blogue.');
+    } catch (e) {
+      admToast(`Não foi possível gerar a narração: ${e.message}`, { kind: 'error' });
+    } finally {
+      setGerando(false);
+    }
+  };
+
+  const dataFmt = audioEm ? (() => {
+    const d = new Date(String(audioEm).replace(' ', 'T') + (String(audioEm).endsWith('Z') ? '' : 'Z'));
+    return Number.isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' }) +
+      ' às ' + d.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
+  })() : '';
+
+  return (
+    <div className="glass" style={{ padding: 20 }}>
+      <span className="overline">Narração · ElevenLabs</span>
+      {!audioKey ? (
+        <>
+          <p style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 8, lineHeight: 1.55 }}>
+            Quando o texto estiver <strong style={{ color: 'var(--fg-2)' }}>finalizado</strong>, gere a narração
+            com a voz do blogue (Claudia · pt-PT) para o «Ouvir este artigo».
+          </p>
+          <button type="button" className="btn btn-gold btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 12 }}
+                  onClick={gerar} disabled={gerando}>
+            <Icon name={gerando ? 'refresh' : 'spark'} size={13} />
+            {gerando ? 'A gravar a narração…' : 'Gerar narração'}
+          </button>
+          {gerando && <div style={{ fontSize: 11, color: 'var(--fg-3)', marginTop: 9, textAlign: 'center' }}>~20-60 segundos · ElevenLabs</div>}
+        </>
+      ) : (
+        <>
+          <p style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 8, lineHeight: 1.5 }}>
+            Gerada a {dataFmt}.{sujo && <strong style={{ color: 'var(--warn)' }}> O texto foi alterado desde então — gere novamente.</strong>}
+          </p>
+          {url
+            ? <audio controls src={url} style={{ width: '100%', marginTop: 11, borderRadius: 10 }} />
+            : <div style={{ fontSize: 11.5, color: 'var(--fg-3)', marginTop: 11 }}>A carregar o áudio…</div>}
+          <button type="button" className="btn btn-ghost btn-sm" style={{ width: '100%', justifyContent: 'center', marginTop: 11 }}
+                  onClick={gerar} disabled={gerando}>
+            <Icon name="refresh" size={13} />{gerando ? 'A gravar a narração…' : 'Gerar novamente'}
+          </button>
+        </>
+      )}
+    </div>
   );
 }
 

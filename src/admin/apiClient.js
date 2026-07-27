@@ -187,6 +187,7 @@ export const insights = {
   saveToBank: (imageIds) => request('/api/insights/banco', { method: 'POST', body: { image_ids: imageIds } }),
   removeFromBank: (imageId) => request(`/api/insights/banco/${imageId}`, { method: 'DELETE' }),
   adoptFromBank: (articleId, imageIds) => request(`/api/insights/articles/${articleId}/imagens-do-banco`, { method: 'POST', body: { image_ids: imageIds } }),
+  discardImage: (articleId, imageId) => request(`/api/insights/articles/${articleId}/images/${imageId}`, { method: 'DELETE' }),
 
   // Correções de imagem (erros apontados pela Dra. — entram no prompt das próximas gerações)
   imageRules: () => request('/api/insights/image-rules'),

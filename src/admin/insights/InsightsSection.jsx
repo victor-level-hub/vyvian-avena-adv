@@ -461,6 +461,19 @@ function BancoImagens({ onAbrirArtigo }) {
                           {im.artigo_titulo}
                         </button>
                       )}
+                      {(im.usos || []).length > 0 && (
+                        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap', marginTop: 7 }}>
+                          {im.usos.map((u) => (
+                            <button key={u.article_id} type="button" onClick={() => onAbrirArtigo(u.article_id)}
+                                    data-tip={`Em uso (capa ou corpo) no artigo ${u.article_id} — «${u.titulo}». Clique para abrir.`}
+                                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', borderRadius: 7,
+                                             background: 'rgba(184,147,90,.16)', border: '1px solid var(--edge-2)', color: 'var(--gold-soft)',
+                                             fontSize: 9, fontWeight: 800, letterSpacing: '.08em', cursor: 'pointer' }}>
+                              <Icon name="image" size={9} />NO ARTIGO {u.article_id}
+                            </button>
+                          ))}
+                        </div>
+                      )}
                     </div>
                     <button type="button" className="btn-quiet" data-tip="Remover do banco" style={{ padding: 5, borderRadius: 7, flex: 'none' }}
                             onClick={() => remover(im)}>

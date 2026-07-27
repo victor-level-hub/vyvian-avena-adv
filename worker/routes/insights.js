@@ -168,6 +168,8 @@ export async function handleInsights(request, env, path, session) {
   if (mt && m === "DELETE") return removeFromBank(env, +mt[1]);
   mt = path.match(/^\/api\/insights\/articles\/(\d+)\/imagens-do-banco$/);
   if (mt && m === "POST") return adoptFromBank(request, env, +mt[1]);
+  mt = path.match(/^\/api\/insights\/articles\/(\d+)\/images\/(\d+)$/);
+  if (mt && m === "DELETE") return descartarImagem(env, +mt[1], +mt[2]);
 
   // Correções de imagem apontadas pela Dra. — entram no prompt de todas as gerações.
   if (path === "/api/insights/image-rules" && m === "GET") return listImageRules(env);
@@ -476,8 +478,25 @@ async function getArticle(env, id) {
             CASE WHEN prompt LIKE 'banco#%' THEN CAST(substr(prompt, 7) AS INTEGER) ELSE NULL END AS banco_origem
      FROM insight_images WHERE article_id = ? ORDER BY id ASC`
   ).bind(id).all()).results || [];
-  const ronda = imgs.length ? Math.max(...imgs.map((i) => i.ronda)) : 0;
-  return jsonResponse({ article: a, images: imgs.filter((i) => i.ronda === ronda), ronda });
+  const ativas = imgs.filter((i) => i.ronda > 0); // ronda -1 = opção descartada pela Dra.
+  const ronda = ativas.length ? Math.max(...ativas.map((i) => i.ronda)) : 0;
+  return jsonResponse({ article: a, images: ativas.filter((i) => i.ronda === ronda), ronda });
+}
+
+/* Descartar uma opção da ronda atual (pedido do Victor, 27 jul): a linha fica
+   com ronda = -1 — sai da grelha de opções mas o ficheiro e o registo mantêm-se
+   (o banco, o corpo de artigos e serveImage continuam a funcionar). Se era a
+   capa, a escolha é limpa. Os bytes só são apagados via remoção do banco. */
+async function descartarImagem(env, articleId, imageId) {
+  const img = await env.DB.prepare(
+    `SELECT id FROM insight_images WHERE id = ? AND article_id = ? AND ronda > 0`
+  ).bind(imageId, articleId).first();
+  if (!img) return jsonError("Imagem não encontrada neste artigo", 404);
+  await env.DB.prepare(`UPDATE insight_images SET ronda = -1 WHERE id = ?`).bind(imageId).run();
+  await env.DB.prepare(
+    `UPDATE insight_articles SET imagem_escolhida = NULL WHERE id = ? AND imagem_escolhida = ?`
+  ).bind(articleId, imageId).run();
+  return getArticle(env, articleId);
 }
 
 async function updateArticle(request, env, id) {
@@ -521,6 +540,24 @@ async function listBank(env) {
      LEFT JOIN insight_articles a ON a.id = i.article_id
      ORDER BY b.criado_em DESC, b.id DESC LIMIT 200`
   ).all()).results || [];
+
+  // «usos»: artigos onde a imagem está de facto em uso (capa ou corpo), contando
+  // também as cópias adotadas via «Usar imagem do banco» (prompt banco#id).
+  if (rows.length) {
+    const arts = (await env.DB.prepare(
+      `SELECT id, titulo, imagem_escolhida, markdown FROM insight_articles ORDER BY id DESC LIMIT 100`
+    ).all()).results || [];
+    const copias = (await env.DB.prepare(
+      `SELECT id, prompt FROM insight_images WHERE prompt LIKE 'banco#%'`
+    ).all()).results || [];
+    for (const b of rows) {
+      const ids = [b.image_id, ...copias.filter((c) => c.prompt === `banco#${b.image_id}`).map((c) => c.id)];
+      b.usos = arts
+        .filter((a) => ids.some((id) =>
+          a.imagem_escolhida === id || (a.markdown || "").includes(`/api/insights/images/${id})`)))
+        .map((a) => ({ article_id: a.id, titulo: a.titulo }));
+    }
+  }
   return jsonResponse({ images: rows });
 }
 
@@ -574,7 +611,7 @@ async function imagemEmUso(env, img) {
 
   if (img.article_id) {
     const atual = await env.DB.prepare(
-      `SELECT COALESCE(MAX(ronda), 0) AS r FROM insight_images WHERE article_id = ?`
+      `SELECT COALESCE(MAX(CASE WHEN ronda > 0 THEN ronda END), 0) AS r FROM insight_images WHERE article_id = ?`
     ).bind(img.article_id).first();
     if ((atual?.r || 0) === img.ronda) return "opcoes";
   }
@@ -602,7 +639,7 @@ async function adoptFromBank(request, env, articleId) {
   if (!ids.length) return jsonError("Indique as imagens do banco a adicionar", 400);
 
   const atual = await env.DB.prepare(
-    `SELECT COALESCE(MAX(ronda), 0) AS r FROM insight_images WHERE article_id = ?`
+    `SELECT COALESCE(MAX(CASE WHEN ronda > 0 THEN ronda END), 0) AS r FROM insight_images WHERE article_id = ?`
   ).bind(articleId).first();
   const ronda = Math.max(1, atual?.r || 0);
 
@@ -736,7 +773,7 @@ async function generateImages(request, env, articleId) {
   if (!article) return jsonError("Artigo não encontrado", 404);
 
   const prev = await env.DB.prepare(
-    `SELECT COALESCE(MAX(ronda), 0) AS r FROM insight_images WHERE article_id = ?`
+    `SELECT COALESCE(MAX(CASE WHEN ronda > 0 THEN ronda END), 0) AS r FROM insight_images WHERE article_id = ?`
   ).bind(articleId).first();
   const ronda = (prev?.r || 0) + 1;
 

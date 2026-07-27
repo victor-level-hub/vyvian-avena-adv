@@ -115,6 +115,16 @@ export default function ArticleStudio({ articleId, onClose }) {
   const [avaliando, setAvaliando] = useState(false);
   const [fire, setFire] = useState(0);
   const mdRef = useRef('');
+  const tituloRef = useRef(null);
+  const descRef = useRef(null);
+  // título/descrição crescem com o conteúdo — nunca mostram barra de rolagem
+  useEffect(() => {
+    for (const el of [tituloRef.current, descRef.current]) {
+      if (!el) continue;
+      el.style.height = 'auto';
+      el.style.height = el.scrollHeight + 'px';
+    }
+  }, [titulo, descricao, data]);
 
   useEffect(() => {
     api.imageRules().then((d) => setRegras(d.rules || [])).catch(() => setRegras([]));
@@ -461,9 +471,9 @@ export default function ArticleStudio({ articleId, onClose }) {
               <span className="overline">
                 Título{tituloLongo && <em style={{ color: 'var(--warn)', textTransform: 'none', letterSpacing: 0, fontWeight: 600, fontStyle: 'normal', marginLeft: 8 }}>({titulo.length}/60 — o SEO trava títulos acima de 60)</em>}
               </span>
-              <textarea rows={2} value={titulo} maxLength={120}
+              <textarea rows={1} ref={tituloRef} value={titulo} maxLength={120}
                         onChange={(e) => { setTitulo(e.target.value); setSujo(true); }}
-                        style={{ width: '100%', background: 'none', border: 0, resize: 'none', fontFamily: 'Fraunces,Georgia,serif',
+                        style={{ width: '100%', background: 'none', border: 0, resize: 'none', overflow: 'hidden', fontFamily: 'Fraunces,Georgia,serif',
                                  fontSize: 'clamp(24px,2.5vw,32px)', lineHeight: 1.2, letterSpacing: '-.02em', color: 'var(--fg)', marginTop: 10, outline: 'none' }} />
               <hr className="rule" style={{ margin: '14px 0 18px' }} />
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12 }}>
@@ -472,9 +482,9 @@ export default function ArticleStudio({ articleId, onClose }) {
                   {descricao.length}/155
                 </span>
               </div>
-              <textarea rows={2} value={descricao} maxLength={200}
+              <textarea rows={1} ref={descRef} value={descricao} maxLength={200}
                         onChange={(e) => { setDescricao(e.target.value); setSujo(true); }}
-                        style={{ width: '100%', background: 'none', border: 0, resize: 'none', fontSize: 14, lineHeight: 1.6, color: 'var(--fg-2)', marginTop: 8, outline: 'none' }} />
+                        style={{ width: '100%', background: 'none', border: 0, resize: 'none', overflow: 'hidden', fontSize: 14, lineHeight: 1.6, color: 'var(--fg-2)', marginTop: 8, outline: 'none' }} />
               <div style={{ height: 3, borderRadius: 9, background: 'var(--edge)', overflow: 'hidden', marginTop: 6 }}>
                 <span style={{ display: 'block', height: '100%', width: Math.min(100, (descricao.length / 155) * 100) + '%',
                                background: descricao.length > 155 ? 'var(--danger)' : 'var(--grad-gold)', transition: 'width .3s' }} />

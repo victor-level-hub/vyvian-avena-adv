@@ -38,6 +38,10 @@ const RS_ICONS = {
   expand: 'M9 4H4v5|M15 4h5v5|M9 20H4v-5|M15 20h5v-5',
   chevL: 'M15 6l-6 6 6 6',
   chevR: 'M9 6l6 6-6 6',
+  phone: 'M6.8 3h2.6l1.5 4.3-2 1.6a12.5 12.5 0 0 0 6.2 6.2l1.6-2 4.3 1.5v2.6A2.8 2.8 0 0 1 18.2 20 15.2 15.2 0 0 1 4 5.8 2.8 2.8 0 0 1 6.8 3Z',
+  download: 'M12 4v11|M7 10.5l5 5 5-5|M4.5 20h15',
+  bell: 'M18 9a6 6 0 1 0-12 0c0 5-2 6-2 6h16s-2-1-2-6|M10.3 19.5a2 2 0 0 0 3.4 0',
+  calendar: 'M4.5 6h15v14h-15V6Z|M8 3.5V7|M16 3.5V7|M4.5 10.5h15',
 };
 export function Icon({ name, size = 18, s = 1.6, style, cls }) {
   const d = RS_ICONS[name];

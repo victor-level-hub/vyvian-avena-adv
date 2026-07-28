@@ -1,15 +1,17 @@
 // src/admin/pages/Calendar.jsx
-// Calendário jurídico — merge de funcionalidades "event-manager" (pesquisa,
-// filtros, vistas Mês/Semana/Dia/Lista, hover com detalhes) com visual
-// glassmorphism, adaptado à paleta do site (verde-floresta + dourado).
+// Calendário jurídico — redesign «Vyvian Avena Design System v3» (rollout 4/5).
+// Funcionalidades intactas (pesquisa, filtros, vistas Mês/Semana/Dia/Lista,
+// hover com detalhes, CRUD de eventos e tipos); visual agora no RsShell com
+// tema claro/escuro partilhado e tooltips no padrão do site (data-tip).
 // Dados: tipos/eventos em D1 (API /api/calendar) + vencimentos (parcelas).
 import React, { useState, useEffect, useMemo } from 'react';
 import ModalClose from '../modal-close.jsx';
 import { Link } from 'react-router-dom';
 import { installments as installmentsApi, calendar as calendarApi } from '../apiClient';
 import { IconUser, IconFolder, IconFilter, IconSearch } from '../icons';
-import { admAlert } from '../dialogs';
+import { admAlert, admConfirm } from '../dialogs';
 import { SkeletonPage } from '../skeletons';
+import { RsShell, Icon, Reveal, Seg } from '../rs/ui';
 
 const MONTHS_PT = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
@@ -75,120 +77,112 @@ const EMPTY_EVENT = {
   client_name: '', case_reference: '',
 };
 
-// ── Estilos glass (scoped gcal-*) — paleta do site: floresta + dourado ──
+// ── Estilos glass (scoped gcal-*) — agora nas variáveis do design system rs,
+//    cientes do tema claro/escuro (.rs-scope[data-rs-theme]) ──
 const GLASS_CSS = `
-.gcal-wrap {
-  background:
-    radial-gradient(1100px 500px at 85% -10%, rgba(184,147,90,0.22), transparent 60%),
-    radial-gradient(800px 420px at -10% 110%, rgba(184,147,90,0.12), transparent 55%),
-    linear-gradient(140deg, #0d241e 0%, #123a2f 48%, #16463a 100%);
-  border-radius: 22px;
-  padding: 1.4rem;
-  color: #f4efe6;
-  box-shadow: 0 24px 70px rgba(10,30,25,0.45);
-}
-.gcal-glass {
-  background: rgba(255,255,255,0.07);
+.rs-scope .gcal-glass {
+  background: var(--panel);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  border: 1px solid rgba(255,255,255,0.13);
+  border: 1px solid var(--edge);
   border-radius: 16px;
 }
-.gcal-title { font-family: var(--serif, Fraunces, serif); font-size: 2rem; font-weight: 600; letter-spacing: 0.01em; color: #fff; }
-.gcal-sub { font-size: 0.82rem; color: rgba(244,239,230,0.65); }
-.gcal-btn {
-  background: rgba(255,255,255,0.09); color: #f4efe6; border: 1px solid rgba(255,255,255,0.16);
+.rs-scope .gcal-title { font-size: 1.45rem; font-weight: 600; letter-spacing: 0.01em; color: var(--fg); }
+.rs-scope .gcal-sub { font-size: 0.82rem; color: var(--fg-3); }
+.adm-root .rs-scope .gcal-btn {
+  background: var(--panel); color: var(--fg-2); border: 1px solid var(--edge-2);
   border-radius: 10px; padding: 0.42rem 0.85rem; font-size: 0.82rem; cursor: pointer;
-  transition: background 0.15s, border-color 0.15s; white-space: nowrap;
+  transition: background 0.15s, border-color 0.15s, color 0.15s; white-space: nowrap;
+  display: inline-flex; align-items: center; gap: 0.35rem;
 }
-.gcal-btn:hover { background: rgba(255,255,255,0.16); }
-.gcal-btn-gold {
-  background: linear-gradient(135deg, var(--gold, #b8935a), #d5b17c); color: #12302a;
-  border: none; font-weight: 600; box-shadow: 0 6px 18px rgba(184,147,90,0.35);
+.adm-root .rs-scope .gcal-btn:hover { background: var(--panel-2); color: var(--fg); }
+.adm-root .rs-scope .gcal-btn-gold {
+  background: var(--grad-gold); color: #1a1208;
+  border: none; font-weight: 700; box-shadow: 0 6px 18px rgba(184,147,90,0.35);
 }
-.gcal-btn-gold:hover { filter: brightness(1.06); background: linear-gradient(135deg, var(--gold, #b8935a), #d5b17c); }
-.gcal-pill { border-radius: 999px; padding: 0.32rem 0.9rem; font-size: 0.78rem; cursor: pointer; border: 1px solid transparent; color: rgba(244,239,230,0.7); background: transparent; transition: all 0.15s; }
-.gcal-pill:hover { color: #fff; }
-.gcal-pill.on { background: rgba(255,255,255,0.92); color: #12302a; font-weight: 700; box-shadow: 0 3px 10px rgba(0,0,0,0.25); }
-.gcal-input {
-  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16); border-radius: 10px;
-  color: #f4efe6; padding: 0.5rem 0.8rem 0.5rem 2.1rem; font-size: 0.85rem; line-height: 1.5; width: 100%;
-}
-.gcal-input::placeholder { color: rgba(244,239,230,0.45); }
-.gcal-input:focus { outline: none; border-color: rgba(213,177,124,0.6); }
+.adm-root .rs-scope .gcal-btn-gold:hover { filter: brightness(1.06); background: var(--grad-gold); color: #1a1208; }
 /* minmax(0,1fr): sem isto o nowrap dos chips fixa o mínimo da coluna e a grelha
    transborda do painel em janelas estreitas (fundo creme a aparecer à direita) */
-.gcal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
-.gcal-dh { text-align: center; font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: rgba(244,239,230,0.5); padding: 0.35rem 0; }
-.gcal-day {
+.rs-scope .gcal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px; }
+.rs-scope .gcal-dh { text-align: center; font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-3); padding: 0.35rem 0; }
+.rs-scope .gcal-day {
   min-height: 96px; border-radius: 12px; padding: 0.4rem 0.45rem; cursor: pointer;
-  background: rgba(255,255,255,0.045); border: 1px solid rgba(255,255,255,0.07);
+  background: var(--panel); border: 1px solid var(--edge);
   transition: background 0.15s, transform 0.12s, border-color 0.15s; position: relative;
 }
-.gcal-day:hover { background: rgba(255,255,255,0.11); }
-.gcal-day.muted { opacity: 0.38; }
-.gcal-day.today { border-color: rgba(213,177,124,0.75); box-shadow: inset 0 0 0 1px rgba(213,177,124,0.5); }
-.gcal-day.sel { background: rgba(213,177,124,0.18); border-color: rgba(213,177,124,0.6); }
-.gcal-daynum { font-size: 0.82rem; font-weight: 600; color: rgba(255,255,255,0.85); }
-.gcal-day.today .gcal-daynum {
+.rs-scope .gcal-day:hover { background: var(--panel-2); border-color: var(--edge-2); }
+.rs-scope .gcal-day.muted { opacity: 0.38; }
+.rs-scope .gcal-day.today { border-color: rgba(213,177,124,0.75); box-shadow: inset 0 0 0 1px rgba(213,177,124,0.5); }
+.rs-scope .gcal-day.sel { background: rgba(213,177,124,0.15); border-color: rgba(213,177,124,0.6); }
+.rs-scope .gcal-daynum { font-size: 0.82rem; font-weight: 600; color: var(--fg-2); }
+.rs-scope .gcal-day.today .gcal-daynum {
   display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center;
-  border-radius: 50%; background: linear-gradient(135deg, var(--gold,#b8935a), #d5b17c); color: #12302a;
+  border-radius: 50%; background: var(--grad-gold); color: #1a1208;
 }
-.gcal-chip { position: relative; display: block; margin-top: 3px; }
-.gcal-chip-label {
+.rs-scope .gcal-chip { position: relative; display: block; margin-top: 3px; }
+.rs-scope .gcal-chip-label {
   display: block; font-size: 0.63rem; line-height: 1.3; padding: 0.1rem 0.35rem; border-radius: 5px;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: #fff; cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--fg); cursor: pointer;
   transition: transform 0.12s;
 }
-.gcal-chip:hover .gcal-chip-label { transform: scale(1.04); }
-.gcal-pop {
+.rs-scope .gcal-chip:hover .gcal-chip-label { transform: scale(1.04); }
+.rs-scope .gcal-pop {
   display: none; position: absolute; top: calc(100% + 4px); left: 0; z-index: 80; width: 250px;
   max-width: 78vw;
-  background: rgba(13,36,30,0.97); border: 1px solid rgba(213,177,124,0.4); border-radius: 12px;
-  padding: 0.7rem 0.8rem; box-shadow: 0 16px 40px rgba(0,0,0,0.5); cursor: default; text-align: left;
+  background: var(--panel-flat); border: 1px solid var(--edge-2); border-radius: 12px;
+  padding: 0.7rem 0.8rem; box-shadow: var(--shadow); cursor: default; text-align: left;
 }
-.gcal-chip:hover .gcal-pop { display: block; }
+.rs-scope .gcal-chip:hover .gcal-pop { display: block; }
 /* popover não pode sair do painel: nas 2 últimas colunas alinha à direita,
    e com .up (últimas linhas da grelha) abre para cima */
-.gcal-day:nth-child(7n) .gcal-pop, .gcal-day:nth-child(7n-1) .gcal-pop { left: auto; right: 0; }
-.gcal-pop.up { top: auto; bottom: calc(100% + 4px); }
-.gcal-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 2px; }
-.gcal-amount { font-size: 0.66rem; font-weight: 700; color: #d5b17c; margin-top: 2px; }
-.gcal-amount.late { color: #e88; }
-.gcal-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; font-size: 0.72rem; color: rgba(244,239,230,0.72); margin-top: 0.9rem; }
-.gcal-legend span { display: inline-flex; align-items: center; gap: 5px; }
-.gcal-filterchip {
+.rs-scope .gcal-day:nth-child(7n) .gcal-pop, .rs-scope .gcal-day:nth-child(7n-1) .gcal-pop { left: auto; right: 0; }
+.rs-scope .gcal-pop.up { top: auto; bottom: calc(100% + 4px); }
+.rs-scope .gcal-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 2px; }
+.rs-scope .gcal-amount { font-size: 0.66rem; font-weight: 700; color: var(--gold); margin-top: 2px; }
+.rs-scope[data-rs-theme="dark"] .gcal-amount { color: var(--gold-soft); }
+.rs-scope[data-rs-theme="dark"] .gcal-amount.late { color: #e0a294; }
+.rs-scope[data-rs-theme="light"] .gcal-amount.late { color: var(--danger); }
+.rs-scope .gcal-legend { display: flex; flex-wrap: wrap; gap: 0.4rem 1rem; font-size: 0.72rem; color: var(--fg-3); margin-top: 0.9rem; }
+.rs-scope .gcal-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.adm-root .rs-scope .gcal-filterchip {
   display: inline-flex; align-items: center; gap: 0.4rem; border-radius: 999px; padding: 0.26rem 0.75rem;
-  font-size: 0.75rem; cursor: pointer; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.06);
-  color: rgba(244,239,230,0.85); transition: all 0.15s;
+  font-size: 0.75rem; cursor: pointer; border: 1px solid var(--edge-2); background: var(--panel);
+  color: var(--fg-2); transition: all 0.15s;
 }
-.gcal-filterchip.off { opacity: 0.45; }
-.gcal-row { border-radius: 12px; padding: 0.7rem 0.9rem; background: rgba(255,255,255,0.055); border: 1px solid rgba(255,255,255,0.08); transition: background 0.15s, transform 0.12s; }
-.gcal-row:hover { background: rgba(255,255,255,0.1); transform: translateY(-1px); }
-.gcal-modal-bg { position: fixed; inset: 0; background: rgba(8,22,18,0.72); backdrop-filter: blur(6px); display: flex; align-items: flex-start; justify-content: center; padding: 3rem 1rem; z-index: 1000; overflow-y: auto; }
-.gcal-modal {
+.adm-root .rs-scope .gcal-filterchip.off { opacity: 0.45; }
+.rs-scope .gcal-row { border-radius: 12px; padding: 0.7rem 0.9rem; background: var(--panel); border: 1px solid var(--edge); transition: background 0.15s, transform 0.12s; }
+.rs-scope .gcal-row:hover { background: var(--panel-2); transform: translateY(-1px); }
+.rs-scope .gcal-modal-bg { position: fixed; inset: 0; background: rgba(6,16,13,0.6); backdrop-filter: blur(6px); display: flex; align-items: flex-start; justify-content: center; padding: 3rem 1rem; z-index: 1000; overflow-y: auto; animation: rsFadeIn .25s both; }
+.rs-scope .gcal-modal {
   position: relative;
-  background: linear-gradient(150deg, rgba(19,50,41,0.96), rgba(13,36,30,0.98));
-  border: 1px solid rgba(213,177,124,0.35); border-radius: 18px; width: 100%; padding: 1.6rem;
-  box-shadow: 0 30px 80px rgba(0,0,0,0.55); color: #f4efe6;
+  background: var(--panel-flat);
+  border: 1px solid var(--edge-2); border-radius: 18px; width: 100%; padding: 1.6rem;
+  box-shadow: var(--shadow); color: var(--fg);
+  animation: rsRiseInSm .3s var(--ease-out) both;
 }
-.gcal-modal h2 { font-family: var(--serif, Fraunces, serif); color: #fff; }
-.gcal-modal label span { display: block; font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(244,239,230,0.6); margin-bottom: 0.3rem; }
-.gcal-modal input, .gcal-modal select, .gcal-modal textarea {
-  width: 100%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16);
-  border-radius: 9px; color: #f4efe6; padding: 0.5rem 0.7rem; font-size: 0.88rem; line-height: 1.5; font-family: 'Arial Unicode MS', Arial, 'Helvetica Neue', sans-serif;
+.adm-root .rs-scope .gcal-modal h2 { color: var(--fg); }
+.rs-scope .gcal-modal label span { display: block; font-size: 0.72rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-3); margin-bottom: 0.3rem; }
+.adm-root .rs-scope .gcal-modal input, .adm-root .rs-scope .gcal-modal select, .adm-root .rs-scope .gcal-modal textarea {
+  width: 100%; background: var(--panel); border: 1px solid var(--edge-2);
+  border-radius: 9px; color: var(--fg); caret-color: var(--fg); padding: 0.5rem 0.7rem; font-size: 0.88rem; line-height: 1.5; font-family: 'Arial Unicode MS', Arial, 'Helvetica Neue', sans-serif;
 }
-.gcal-modal input:focus, .gcal-modal select:focus, .gcal-modal textarea:focus { outline: none; border-color: rgba(213,177,124,0.6); }
-.gcal-modal select option { background: #12302a; color: #f4efe6; }
-.gcal-modal input[type="checkbox"] { width: auto; }
-.gcal-modal input[type="color"] { padding: 2px; height: 38px; }
-.gcal-badge { display: inline-block; border-radius: 999px; padding: 0.1rem 0.55rem; font-size: 0.68rem; font-weight: 600; }
-.gcal-badge.paid { background: rgba(80,160,110,0.25); color: #8fd6ae; }
-.gcal-badge.pending { background: rgba(213,177,124,0.22); color: #e8cfa4; }
-.gcal-badge.late { background: rgba(200,80,80,0.25); color: #f0a0a0; }
-.gcal-a { color: #d5b17c; text-decoration: none; }
-.gcal-a:hover { text-decoration: underline; }
-@media (max-width: 760px) { .gcal-day { min-height: 70px; } .gcal-title { font-size: 1.4rem; } }
+.adm-root .rs-scope .gcal-modal input:focus, .adm-root .rs-scope .gcal-modal select:focus, .adm-root .rs-scope .gcal-modal textarea:focus { outline: none; border-color: rgba(213,177,124,0.6); }
+.rs-scope .gcal-modal select option { background: var(--panel-flat); color: var(--fg); }
+.adm-root .rs-scope .gcal-modal input[type="checkbox"] { width: auto; }
+.adm-root .rs-scope .gcal-modal input[type="color"] { padding: 2px; height: 38px; }
+.rs-scope .gcal-badge { display: inline-block; border-radius: 999px; padding: 0.1rem 0.55rem; font-size: 0.68rem; font-weight: 700; letter-spacing: .04em; }
+.rs-scope .gcal-badge.paid { background: rgba(74,124,89,0.16); color: #2e6b46; border: 1px solid rgba(80,160,110,0.35); }
+.rs-scope[data-rs-theme="dark"] .gcal-badge.paid { color: #9fd0ae; }
+.rs-scope .gcal-badge.pending { background: rgba(200,150,86,0.16); color: var(--gold); border: 1px solid rgba(212,181,133,0.45); }
+.rs-scope[data-rs-theme="dark"] .gcal-badge.pending { color: var(--gold-soft); }
+.rs-scope .gcal-badge.late { background: rgba(160,75,60,0.16); color: var(--danger); border: 1px solid rgba(200,110,90,0.4); }
+.rs-scope[data-rs-theme="dark"] .gcal-badge.late { color: #e0a294; }
+.rs-scope .gcal-a { color: var(--gold); text-decoration: none; }
+.rs-scope[data-rs-theme="dark"] .gcal-a { color: var(--gold-soft); }
+.rs-scope .gcal-a:hover { text-decoration: underline; }
+.rs-scope .gcal-del { color: var(--danger); text-decoration: none; }
+.rs-scope[data-rs-theme="dark"] .gcal-del { color: #e0a294; }
+@media (max-width: 760px) { .rs-scope .gcal-day { min-height: 70px; } .rs-scope .gcal-title { font-size: 1.15rem; } }
 `;
 
 export default function Calendar() {
@@ -368,7 +362,7 @@ export default function Calendar() {
   };
 
   const deleteEvent = async (ev) => {
-    if (!confirm(`Apagar o evento "${ev.title}"?`)) return;
+    if (!await admConfirm(`Apagar o evento "${ev.title}"?`)) return;
     try { await calendarApi.deleteEvent(ev.id); await loadCalendar(); }
     catch (err) { admAlert('Erro: ' + err.message); }
   };
@@ -443,21 +437,21 @@ export default function Calendar() {
         </span>
         <span className={'gcal-pop' + (popUp ? ' up' : '')}>
           <span style={{ display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'flex-start' }}>
-            <strong style={{ fontSize: '0.85rem', color: '#fff' }}>{ev.title}</strong>
+            <strong style={{ fontSize: '0.85rem', color: 'var(--fg)' }}>{ev.title}</strong>
             <span className="gcal-dot" style={{ background: color, width: 10, height: 10, flexShrink: 0, marginTop: 3 }} />
           </span>
-          <span style={{ display: 'block', fontSize: '0.72rem', color: 'rgba(244,239,230,0.75)', marginTop: 3 }}>
+          <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--fg-2)', marginTop: 3 }}>
             {t?.label || ev.type_id} · {fmtDateShort(ev.start_date)}{ev.end_date ? ` → ${fmtDateShort(ev.end_date)}` : ''}
           </span>
-          {ev.description && <span style={{ display: 'block', fontSize: '0.72rem', color: 'rgba(244,239,230,0.62)', marginTop: 5 }}>{ev.description.slice(0, 140)}{ev.description.length > 140 ? '…' : ''}</span>}
+          {ev.description && <span style={{ display: 'block', fontSize: '0.72rem', color: 'var(--fg-3)', marginTop: 5 }}>{ev.description.slice(0, 140)}{ev.description.length > 140 ? '…' : ''}</span>}
           {(ev.client_name || ev.case_reference || Number(ev.amount) > 0) && (
-            <span style={{ display: 'block', fontSize: '0.72rem', marginTop: 5, color: 'rgba(244,239,230,0.85)' }}>
+            <span style={{ display: 'block', fontSize: '0.72rem', marginTop: 5, color: 'var(--fg-2)' }}>
               {ev.client_name && <><IconUser size={11} /> {ev.client_name}  </>}
               {ev.case_reference && <><IconFolder size={11} /> {ev.case_reference}  </>}
-              {Number(ev.amount) > 0 && <strong style={{ color: '#d5b17c' }}>{fmtMoney(ev.amount, ev.currency)}</strong>}
+              {Number(ev.amount) > 0 && <strong className="gcal-a">{fmtMoney(ev.amount, ev.currency)}</strong>}
             </span>
           )}
-          {ev.source === 'manual' && <span style={{ display: 'block', fontSize: '0.68rem', color: 'rgba(213,177,124,0.8)', marginTop: 6 }}>clique para editar</span>}
+          {ev.source === 'manual' && <span style={{ display: 'block', fontSize: '0.68rem', color: 'var(--gold)', marginTop: 6, opacity: 0.85 }}>clique para editar</span>}
         </span>
       </span>
     );
@@ -471,14 +465,14 @@ export default function Calendar() {
   );
 
   const renderListRows = (items) => items.length === 0
-    ? <div style={{ padding: '2rem', textAlign: 'center', color: 'rgba(244,239,230,0.55)' }}>Sem eventos no período.</div>
+    ? <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--fg-3)' }}>Sem eventos no período.</div>
     : (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {items.map((item, i) => item.kind === 'event' ? (
           <div key={'e' + item.ev.id + i} className="gcal-row" style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
             <span className="gcal-dot" style={{ background: typeById[item.ev.type_id]?.color || '#888', width: 10, height: 10, marginTop: 6, flexShrink: 0 }} />
             <div style={{ flex: 1, minWidth: 0 }}>
-              <strong style={{ color: '#fff' }}>{item.ev.title}</strong>
+              <strong style={{ color: 'var(--fg)' }}>{item.ev.title}</strong>
               <span className="gcal-sub"> · {typeById[item.ev.type_id]?.label}</span>
               <div className="gcal-sub" style={{ marginTop: 2 }}>
                 {fmtDate(item.ev.start_date)}{item.ev.end_date ? ` → ${fmtDate(item.ev.end_date)}` : ''}
@@ -488,12 +482,12 @@ export default function Calendar() {
               {item.ev.description && <div className="gcal-sub" style={{ marginTop: 2, fontSize: '0.76rem' }}>{item.ev.description.slice(0, 160)}{item.ev.description.length > 160 ? '…' : ''}</div>}
             </div>
             <div style={{ textAlign: 'right', flexShrink: 0 }}>
-              {Number(item.ev.amount) > 0 && <div style={{ color: '#d5b17c', fontWeight: 700, fontSize: '0.85rem' }}>{fmtMoney(item.ev.amount, item.ev.currency)}</div>}
+              {Number(item.ev.amount) > 0 && <div className="gcal-a" style={{ fontWeight: 700, fontSize: '0.85rem' }}>{fmtMoney(item.ev.amount, item.ev.currency)}</div>}
               {item.ev.status !== 'none' && <div style={{ marginTop: 3 }}><StatusBadge s={item.ev.status} /></div>}
               {item.ev.source === 'manual' && (
                 <div style={{ fontSize: '0.72rem', marginTop: 5 }}>
                   <a href="#" className="gcal-a" onClick={(e) => { e.preventDefault(); openEditEvent(item.ev); }} style={{ marginRight: 8 }}>Editar</a>
-                  <a href="#" onClick={(e) => { e.preventDefault(); deleteEvent(item.ev); }} style={{ color: '#f0a0a0', textDecoration: 'none' }}>Apagar</a>
+                  <a href="#" className="gcal-del" onClick={(e) => { e.preventDefault(); deleteEvent(item.ev); }}>Apagar</a>
                 </div>
               )}
             </div>
@@ -507,7 +501,7 @@ export default function Calendar() {
               <div className="gcal-sub" style={{ marginTop: 2 }}>{fmtDate(item.inst.due_date)}</div>
             </div>
             <div style={{ textAlign: 'right', flexShrink: 0 }}>
-              <div style={{ color: '#d5b17c', fontWeight: 700, fontSize: '0.85rem' }}>{fmtMoney(item.inst.amount, item.inst.currency)}</div>
+              <div className="gcal-a" style={{ fontWeight: 700, fontSize: '0.85rem' }}>{fmtMoney(item.inst.amount, item.inst.currency)}</div>
               <div style={{ marginTop: 3 }}><StatusBadge s={item.inst.status} /></div>
             </div>
           </div>
@@ -516,74 +510,73 @@ export default function Calendar() {
     );
 
   return (
-    <>
+    <RsShell overline="Área privada · Calendário" titulo="Calendário"
+             sub="Agenda jurídica, prazos e vencimentos"
+             right={<button type="button" className="btn btn-gold btn-sm" style={{ marginTop: 4 }}
+                            onClick={() => openCreateEvent(selectedKey)}>
+                      <Icon name="plus" size={13} />Evento
+                    </button>}>
       <style>{GLASS_CSS}</style>
-      <header className="adm-page-header">
-        <div>
-          <h1>Calendário</h1>
-          <div className="adm-sub">Agenda jurídica, prazos e vencimentos</div>
-        </div>
-      </header>
 
-      <div className="gcal-wrap">
-        {/* topo: título + navegação + vistas + ações */}
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.9rem', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', flexWrap: 'wrap' }}>
-            <div>
-              <div className="gcal-title">{viewTitle}</div>
-              <div className="gcal-sub">{numVenc} vencimentos · {fmtMoney(totalEur)} previstos (EUR)</div>
+      <div>
+        {/* topo: título da vista + navegação + vistas + ações */}
+        <Reveal>
+          <div className="glass" style={{ padding: '16px 18px', marginBottom: 14, display: 'flex', flexWrap: 'wrap', gap: '0.9rem', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', flexWrap: 'wrap' }}>
+              <div>
+                <div className="gcal-title">{viewTitle}</div>
+                <div className="gcal-sub">{numVenc} vencimentos · {fmtMoney(totalEur)} previstos (EUR)</div>
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button className="gcal-btn" onClick={() => navigate(-1)} data-tip="Período anterior"><Icon name="chevL" size={13} /></button>
+                <button className="gcal-btn" onClick={goToday}>Hoje</button>
+                <button className="gcal-btn" onClick={() => navigate(1)} data-tip="Período seguinte"><Icon name="chevR" size={13} /></button>
+              </div>
             </div>
-            <div style={{ display: 'flex', gap: 6 }}>
-              <button className="gcal-btn" onClick={() => navigate(-1)}>‹</button>
-              <button className="gcal-btn" onClick={goToday}>Hoje</button>
-              <button className="gcal-btn" onClick={() => navigate(1)}>›</button>
+
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <Seg small value={view}
+                   onChange={(v) => { setView(v); setSelectedDate(null); }}
+                   items={[{ k: 'month', label: 'MÊS' }, { k: 'week', label: 'SEMANA' }, { k: 'day', label: 'DIA' }, { k: 'list', label: 'LISTA' }, { k: 'next30', label: '30 DIAS' }]} />
+              <button className="gcal-btn" onClick={() => setShowFilters((v) => !v)} data-tip="Mostrar ou ocultar tipos de data no calendário">
+                <IconFilter size={12} /> Filtros{hiddenTypes.length > 0 ? ` (${activeTypes.length}/${types.length})` : ''}
+              </button>
+              <button className="gcal-btn" onClick={() => setTypeMgrOpen(true)} data-tip="Gerir os tipos de data (criar, editar, ocultar)">Tipos de data</button>
             </div>
           </div>
-
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div className="gcal-glass" style={{ display: 'flex', gap: 2, padding: 4, borderRadius: 999 }}>
-              {[['month', 'Mês'], ['week', 'Semana'], ['day', 'Dia'], ['list', 'Lista'], ['next30', '30 dias']].map(([k, l]) => (
-                <button key={k} className={'gcal-pill' + (view === k ? ' on' : '')} onClick={() => { setView(k); setSelectedDate(null); }}>{l}</button>
-              ))}
-            </div>
-            <button className="gcal-btn" onClick={() => setShowFilters((v) => !v)}>
-              <IconFilter size={12} /> Filtros{hiddenTypes.length > 0 ? ` (${activeTypes.length}/${types.length})` : ''}
-            </button>
-            <button className="gcal-btn" onClick={() => setTypeMgrOpen(true)}>Tipos de data</button>
-            <button className="gcal-btn gcal-btn-gold" onClick={() => openCreateEvent(selectedKey)}>＋ Evento</button>
-          </div>
-        </div>
+        </Reveal>
 
         {/* pesquisa */}
-        <div style={{ position: 'relative', marginTop: '1rem' }}>
-          <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', opacity: 0.5, fontSize: '0.9rem', display: 'flex' }}><IconSearch /></span>
+        <div style={{ position: 'relative', marginBottom: 4 }}>
+          <span style={{ position: 'absolute', left: 13, top: '50%', transform: 'translateY(-50%)', opacity: 0.5, fontSize: '0.9rem', display: 'flex', color: 'var(--fg-3)', pointerEvents: 'none' }}><IconSearch /></span>
           <input
-            className="gcal-input"
+            className="field"
             placeholder="Pesquisar eventos, clientes, processos…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            style={{ width: '100%', boxSizing: 'border-box', padding: '10px 34px 10px 38px', fontSize: 13.5 }}
           />
           {search && (
-            <button onClick={() => setSearch('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'rgba(244,239,230,0.6)', cursor: 'pointer', fontSize: '1rem' }}>✕</button>
+            <button onClick={() => setSearch('')} data-tip="Limpar pesquisa" style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', color: 'var(--fg-3)', cursor: 'pointer', fontSize: '1rem' }}>✕</button>
           )}
         </div>
 
         {/* painel de filtros */}
         {showFilters && (
           <div className="gcal-glass" style={{ marginTop: '0.8rem', padding: '0.8rem 0.9rem', display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
-            <button className="gcal-filterchip" onClick={() => setAllTypes(true)} style={{ borderColor: 'rgba(213,177,124,0.6)', color: '#e8cfa4', fontWeight: 600 }}>
+            <button className="gcal-filterchip" onClick={() => setAllTypes(true)} style={{ borderColor: 'rgba(213,177,124,0.6)', color: 'var(--gold)', fontWeight: 600 }}>
               ✓ Selecionar todos
             </button>
             <button className="gcal-filterchip" onClick={() => setAllTypes(false)} style={{ fontWeight: 600 }}>
               ✕ Desselecionar todos
             </button>
-            <span style={{ width: 1, alignSelf: 'stretch', background: 'rgba(255,255,255,0.15)', margin: '0 2px' }} />
+            <span style={{ width: 1, alignSelf: 'stretch', background: 'var(--edge-2)', margin: '0 2px' }} />
             {types.map((t) => {
               const on = isVisible(t);
               return (
-                <button key={t.id} className={'gcal-filterchip' + (on ? '' : ' off')} onClick={() => toggleType(t.id)} title={t.description || ''}
+                <button key={t.id} className={'gcal-filterchip' + (on ? '' : ' off')} onClick={() => toggleType(t.id)} data-tip={t.description || undefined}
                   style={on ? { borderColor: t.color, background: t.color + '2e' } : {}}>
-                  <span className="gcal-dot" style={{ background: on ? t.color : 'rgba(255,255,255,0.3)' }} />
+                  <span className="gcal-dot" style={{ background: on ? t.color : 'var(--fg-3)' }} />
                   {t.label}
                 </button>
               );
@@ -596,12 +589,12 @@ export default function Calendar() {
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: '0.7rem', alignItems: 'center' }}>
             <span className="gcal-sub">Ocultos:</span>
             {hiddenTypes.map((t) => (
-              <button key={t.id} className="gcal-filterchip off" onClick={() => toggleType(t.id)} title="Clique para voltar a mostrar">
+              <button key={t.id} className="gcal-filterchip off" onClick={() => toggleType(t.id)} data-tip="Clique para voltar a mostrar">
                 <span className="gcal-dot" style={{ background: t.color }} />{t.label} ✕
               </button>
             ))}
             {hiddenTypes.length > 1 && (
-              <button className="gcal-filterchip" onClick={() => setAllTypes(true)} style={{ borderColor: 'rgba(213,177,124,0.6)', color: '#e8cfa4', fontWeight: 600 }}>
+              <button className="gcal-filterchip" onClick={() => setAllTypes(true)} style={{ borderColor: 'rgba(213,177,124,0.6)', color: 'var(--gold)', fontWeight: 600 }}>
                 ✓ Mostrar todos
               </button>
             )}
@@ -667,7 +660,7 @@ export default function Calendar() {
                   {inst.length > 0 && (
                     <div style={{ marginTop: 4 }}>
                       {inst.map((i) => (
-                        <div key={i.id} style={{ fontSize: '0.63rem', color: '#d5b17c', fontWeight: 700 }}>
+                        <div key={i.id} className="gcal-a" style={{ fontSize: '0.63rem', fontWeight: 700 }}>
                           <span className="gcal-dot" style={{ background: i.status === 'paid' ? '#5fae7f' : i.status === 'late' ? '#d97b7b' : '#d5b17c' }} />
                           {fmtMoney(i.amount, i.currency, true)} · {(i.client_name || '').split(' ')[0]}
                         </div>
@@ -703,7 +696,7 @@ export default function Calendar() {
         {(view === 'month' || view === 'week') && selectedDate && (
           <div ref={dayDetailRef} className="gcal-glass" style={{ marginTop: '1rem', padding: '1.1rem', scrollMarginTop: '1rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '0.7rem' }}>
-              <strong style={{ fontFamily: 'var(--serif, Fraunces, serif)', fontSize: '1.1rem', color: '#fff' }}>Dia {fmtDate(selectedKey)}</strong>
+              <strong style={{ fontSize: '1.05rem', color: 'var(--fg)' }}>Dia {fmtDate(selectedKey)}</strong>
               <button className="gcal-btn gcal-btn-gold" onClick={() => openCreateEvent(selectedKey)}>＋ Adicionar evento neste dia</button>
             </div>
             {renderListRows([
@@ -733,7 +726,7 @@ export default function Calendar() {
                 </select>
               </label>
               <label style={{ display: 'flex', alignItems: 'flex-end' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', textTransform: 'none', fontSize: '0.85rem', color: '#f4efe6', marginBottom: '0.5rem' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', textTransform: 'none', fontSize: '0.85rem', color: 'var(--fg-2)', marginBottom: '0.5rem' }}>
                   <input type="checkbox" checked={!!evModal.form.is_all_day} onChange={evField('is_all_day')} disabled={busy} />
                   Dia inteiro
                 </span>
@@ -778,7 +771,7 @@ export default function Calendar() {
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.7rem', marginTop: '1.4rem' }}>
               <div>
                 {evModal.mode === 'edit' && evModal.source === 'manual' && (
-                  <button className="gcal-btn" style={{ borderColor: 'rgba(217,123,123,0.5)', color: '#f0a0a0' }} onClick={() => { const ev = events.find((x) => x.id === evModal.id); if (ev) deleteEvent(ev); setEvModal(null); }} disabled={busy}>Apagar</button>
+                  <button className="gcal-btn gcal-del" style={{ borderColor: 'rgba(200,110,90,0.5)' }} onClick={() => { const ev = events.find((x) => x.id === evModal.id); if (ev) deleteEvent(ev); setEvModal(null); }} disabled={busy}>Apagar</button>
                 )}
               </div>
               <div style={{ display: 'flex', gap: '0.7rem' }}>
@@ -811,24 +804,24 @@ export default function Calendar() {
                 <input type="checkbox" checked={isVisible(t)} onChange={() => toggleType(t.id)} style={{ width: 'auto' }} />
                 <span style={{ width: 12, height: 12, borderRadius: 3, background: t.color, flexShrink: 0 }} />
                 <div style={{ flex: 1 }}>
-                  <strong style={{ fontSize: '0.9rem', color: '#fff' }}>{t.label}</strong>
+                  <strong style={{ fontSize: '0.9rem', color: 'var(--fg)' }}>{t.label}</strong>
                   {!t.is_default && <span className="gcal-sub" style={{ marginLeft: 6, fontSize: '0.7rem' }}>personalizado</span>}
                   {t.description && <div className="gcal-sub" style={{ fontSize: '0.74rem' }}>{t.description}</div>}
                 </div>
                 {!t.is_default && (
                   <div style={{ fontSize: '0.75rem', flexShrink: 0 }}>
                     <a href="#" className="gcal-a" onClick={(e) => { e.preventDefault(); setTypeForm({ mode: 'edit', id: t.id, label: t.label, color: t.color, description: t.description || '' }); setTypeDeleting(null); }} style={{ marginRight: 8 }}>Editar</a>
-                    <a href="#" onClick={(e) => { e.preventDefault(); setTypeDeleting(t); setTypeForm(null); }} style={{ color: '#f0a0a0', textDecoration: 'none' }}>Apagar</a>
+                    <a href="#" className="gcal-del" onClick={(e) => { e.preventDefault(); setTypeDeleting(t); setTypeForm(null); }}>Apagar</a>
                   </div>
                 )}
               </div>
             ))}
 
             {typeDeleting && (
-              <div style={{ background: 'rgba(217,123,123,0.12)', border: '1px solid rgba(217,123,123,0.4)', borderRadius: 12, padding: '0.9rem 1rem', marginTop: '1rem' }}>
-                <div style={{ fontWeight: 600, marginBottom: '0.5rem', color: '#fff' }}>Apagar o tipo "{typeDeleting.label}" — o que fazer aos eventos deste tipo?</div>
+              <div style={{ background: 'rgba(160,75,60,0.1)', border: '1px solid rgba(200,110,90,0.4)', borderRadius: 12, padding: '0.9rem 1rem', marginTop: '1rem' }}>
+                <div style={{ fontWeight: 600, marginBottom: '0.5rem', color: 'var(--fg)' }}>Apagar o tipo "{typeDeleting.label}" — o que fazer aos eventos deste tipo?</div>
                 <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
-                  <button className="gcal-btn" style={{ color: '#f0a0a0' }} onClick={() => confirmDeleteType('delete')} disabled={busy}>Apagar eventos também</button>
+                  <button className="gcal-btn gcal-del" onClick={() => confirmDeleteType('delete')} disabled={busy}>Apagar eventos também</button>
                   <button className="gcal-btn" onClick={() => confirmDeleteType('move')} disabled={busy}>Mover para "Eventos pessoais"</button>
                   <button className="gcal-btn" onClick={() => setTypeDeleting(null)} disabled={busy}>Cancelar</button>
                 </div>
@@ -837,7 +830,7 @@ export default function Calendar() {
 
             {typeForm ? (
               <div className="gcal-glass" style={{ padding: '0.9rem 1rem', marginTop: '1rem' }}>
-                <div style={{ fontWeight: 600, marginBottom: '0.6rem', color: '#fff' }}>{typeForm.mode === 'create' ? 'Novo tipo de data' : `Editar "${typeForm.label}"`}</div>
+                <div style={{ fontWeight: 600, marginBottom: '0.6rem', color: 'var(--fg)' }}>{typeForm.mode === 'create' ? 'Novo tipo de data' : `Editar "${typeForm.label}"`}</div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: '0.7rem' }}>
                   <label><span>Label *</span>
                     <input type="text" value={typeForm.label} onChange={(e) => setTypeForm((f) => ({ ...f, label: e.target.value }))} disabled={busy} placeholder="Ex.: Conservatória, Notário…" />
@@ -866,6 +859,6 @@ export default function Calendar() {
           </div>
         </div>
       )}
-    </>
+    </RsShell>
   );
 }

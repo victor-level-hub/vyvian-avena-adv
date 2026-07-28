@@ -63,4 +63,4 @@ Com isto claro, estas regulações resolvem-se — e resolvem-se de forma que pr
 
 ---
 
-*Este artigo tem carácter informativo e não constitui aconselhamento jurídico. Cada situação concreta exige análise própria. A Dra. Vyvian Avena exerce em Portugal e no Brasil e acompanha regularmente regulações de responsabilidades parentais entre as duas jurisdições.*
+*Este artigo tem carácter informativo e não constitui aconselhamento jurídico. Cada situação concreta exige análise própria. A Dra. Vyvian Avena, advogada brasileira a exercer em Portugal e no Brasil, acompanha regularmente regulações de responsabilidades parentais entre as duas jurisdições.*

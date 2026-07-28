@@ -51,4 +51,4 @@ E sobretudo: **traga o problema inteiro para a primeira conversa.** A lista comp
 
 ---
 
-*Este artigo tem carácter informativo e não constitui aconselhamento jurídico. Cada situação concreta exige análise própria. A Dra. Vyvian Avena exerce em Portugal e no Brasil e acompanha regularmente processos que envolvem as duas jurisdições.*
+*Este artigo tem carácter informativo e não constitui aconselhamento jurídico. Cada situação concreta exige análise própria. A Dra. Vyvian Avena, advogada brasileira em Portugal e inscrita nos dois países, acompanha regularmente processos de divórcio que envolvem as duas jurisdições.*

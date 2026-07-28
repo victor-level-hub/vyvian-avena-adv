@@ -23,7 +23,7 @@ Atenção à **especificidade da resposta**. "Sim, trato de tudo um pouco" é um
 
 <img src="/blog/perguntar-consulta.webp" alt="Advogada explica o caso à cliente numa primeira consulta, enquanto esta toma notas" width="1376" height="768" loading="lazy" />
 
-Se o seu caso toca dois países — bens, família ou documentos repartidos entre Portugal e o Brasil, por exemplo — a pergunta afina-se: *"trabalha com as duas jurisdições, ou vai precisar de recorrer a um colega do outro lado?"* Ambos os modelos podem funcionar; o que importa é saber à partida qual é, porque afeta a coordenação, o custo e os tempos.
+Se o seu caso toca dois países — bens, família ou documentos repartidos entre Portugal e o Brasil, por exemplo — a pergunta afina-se: *"trabalha com as duas jurisdições, ou vai precisar de recorrer a um colega do outro lado?"* Há advogados inscritos num só país e há, por exemplo, advogadas brasileiras em Portugal inscritas nas duas Ordens, que acompanham as duas frentes diretamente. Ambos os modelos podem funcionar; o que importa é saber à partida qual é, porque afeta a coordenação, o custo e os tempos.
 
 ## "O que é que eu posso esperar, realisticamente?"
 
@@ -59,4 +59,4 @@ Depois das perguntas todas, faça a si próprio a única que não se faz em voz 
 
 ---
 
-*Este artigo tem carácter informativo e não constitui aconselhamento jurídico. A Dra. Vyvian Avena exerce em Portugal e no Brasil, com escritórios em Cacilhas, Santa Maria da Feira e Barra Olímpica.*
+*Este artigo tem carácter informativo e não constitui aconselhamento jurídico. A Dra. Vyvian Avena é advogada brasileira em Portugal, inscrita na Ordem dos Advogados de Portugal e na OAB, com escritórios em Cacilhas, Santa Maria da Feira e Barra Olímpica.*

@@ -12,11 +12,11 @@ const SITE_NAME = "Vyvian Avena Advogada";
 export const ROUTE_META = {
   "/": {
     title: "Vyvian Avena | Advogada de Família, Civil e Comercial",
-    desc: "Advocacia em Portugal e Brasil: Direito de Família, Civil e Comercial. Atendimento humanizado em Cacilhas, Santa Maria da Feira e Barra Olímpica.",
+    desc: "Advogada brasileira em Portugal e no Brasil: Direito de Família, Civil e Comercial. Atendimento humanizado em Cacilhas, Santa Maria da Feira e Barra Olímpica.",
   },
   "/sobre": {
     title: "Sobre a Dra. Vyvian Avena | Advogada em Portugal e Brasil",
-    desc: "Conheça a Dra. Vyvian Avena: experiência em dupla jurisdição Portugal-Brasil, especialização em Direito de Família e Civil, com abordagem humanizada.",
+    desc: "Conheça a Dra. Vyvian Avena, advogada brasileira em Portugal: dupla jurisdição Portugal-Brasil, Direito de Família e Civil e atendimento humanizado.",
   },
   "/areas": {
     title: "Áreas de Atuação | Família, Civil, Comercial e Nacionalidade",

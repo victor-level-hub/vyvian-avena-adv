@@ -98,6 +98,9 @@ export default function Sobre() {
               Formada em Direito em 2008 pela Universidade Estácio de Sá (Rio de Janeiro) e com Mestrado em Direito, na especialização de Ciências Jurídico-Empresariais, concluído em 2022 na Universidade Lusófona do Porto, a Dra. Vyvian Avena iniciou a sua carreira no Brasil, onde adquiriu uma sólida experiência em processos complexos de Direito de Família, incluindo divórcios, regulação de poder paternal e partilhas patrimoniais.
             </p>
             <p>
+              Advogada brasileira radicada em Portugal, encontra-se inscrita na Ordem dos Advogados de Portugal e na Ordem dos Advogados do Brasil — uma dupla inscrição que lhe permite acompanhar diretamente, sem intermediários, processos que envolvem as duas jurisdições.
+            </p>
+            <p>
               A sua abordagem distingue-se pelo atendimento humanizado, privilegiando a escuta ativa e a construção de soluções que respeitem as necessidades individuais de cada cliente.
             </p>
           </div>

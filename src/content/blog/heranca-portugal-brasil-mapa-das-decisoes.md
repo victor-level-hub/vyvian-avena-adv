@@ -51,4 +51,4 @@ Uma herança entre Portugal e o Brasil resolve-se — resolvem-se todas — mas 
 
 ---
 
-*Este artigo tem carácter informativo e não constitui aconselhamento jurídico. Cada situação concreta exige análise própria. A Dra. Vyvian Avena exerce em Portugal e no Brasil e acompanha regularmente sucessões que envolvem as duas jurisdições.*
+*Este artigo tem carácter informativo e não constitui aconselhamento jurídico. Cada situação concreta exige análise própria. A Dra. Vyvian Avena é advogada brasileira em Portugal, inscrita na Ordem dos Advogados portuguesa e na OAB, e acompanha regularmente sucessões que envolvem as duas jurisdições.*

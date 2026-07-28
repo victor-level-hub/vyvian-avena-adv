@@ -57,4 +57,4 @@ Uma partilha entre Portugal e o Brasil não é dois problemas jurídicos separad
 
 ---
 
-*Este artigo tem carácter informativo e não constitui aconselhamento jurídico. Cada situação concreta exige análise própria. A Dra. Vyvian Avena exerce em Portugal e no Brasil e desenha regularmente partilhas que envolvem as duas jurisdições.*
+*Este artigo tem carácter informativo e não constitui aconselhamento jurídico. Cada situação concreta exige análise própria. A Dra. Vyvian Avena, advogada brasileira radicada em Portugal e inscrita nas Ordens dos dois países, desenha regularmente partilhas que envolvem as duas jurisdições.*

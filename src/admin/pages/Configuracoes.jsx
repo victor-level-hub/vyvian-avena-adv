@@ -107,8 +107,9 @@ function UserModal({ user, onClose, onChanged }) {
   const input = { width: '100%', padding: '10px 14px', fontSize: 13.5, caretColor: 'var(--gold)' };
 
   return (
-    <div className="adm-overlay" role="dialog" aria-modal="true" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="glass" style={{ width: 'min(620px, 94vw)', maxHeight: '92vh', overflowY: 'auto', padding: '26px 28px', position: 'relative' }}>
+    <div className="adm-overlay" role="dialog" aria-modal="true" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+         style={{ position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '3rem 1rem', zIndex: 1000, overflowY: 'auto' }}>
+      <div className="glass" style={{ width: 'min(620px, 94vw)', height: 'fit-content', padding: '26px 28px', position: 'relative' }}>
         <ModalClose onClose={onClose} />
         <span className="overline">Configurações · Utilizadores</span>
         <h3 style={{ fontSize: 20, margin: '8px 0 18px' }}>{editar ? 'Editar utilizador' : 'Novo utilizador'}</h3>

@@ -11,6 +11,7 @@ import { admToast } from '../toasts';
 import { admConfirm, admAlert } from '../dialogs';
 import ModalClose from '../modal-close';
 import DateInput from '../datepicker';
+import SelectMenu from '../dropdown';
 import { RsShell, Icon, Reveal, Seg } from '../rs/ui';
 
 const STATUS_META = {
@@ -366,8 +367,9 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
   const ro = readOnly || busy;
 
   return (
-    <div className="adm-overlay" role="dialog" aria-modal="true" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="glass" style={{ width: 'min(880px, 94vw)', maxHeight: '92vh', overflowY: 'auto', padding: '26px 28px', position: 'relative' }}>
+    <div className="adm-overlay" role="dialog" aria-modal="true" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+         style={{ position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '3rem 1rem', zIndex: 1000, overflowY: 'auto' }}>
+      <div className="glass" style={{ width: 'min(880px, 94vw)', height: 'fit-content', padding: '26px 28px', position: 'relative' }}>
         <ModalClose onClose={onClose} />
 
         {loading ? (
@@ -408,8 +410,10 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
               <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', alignItems: 'flex-end' }}>
                 <div>
                   <span style={label}>Criado por</span>
-                  <Seg small items={AUTORES.map((a) => ({ k: a, label: a }))} value={form.criado_por}
-                       onChange={ro ? () => {} : set('criado_por')} />
+                  <SelectMenu value={form.criado_por} ariaLabel="Criado por"
+                              options={AUTORES.map((a) => ({ value: a, label: a }))}
+                              onChange={(v) => { if (!ro) set('criado_por')(v); }}
+                              style={{ minWidth: 150 }} />
                 </div>
                 <div>
                   <span style={label}>Grau de urgência</span>
@@ -423,8 +427,8 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
               </div>
 
               <div>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10 }}>
-                  <span style={label}>Descrição do pedido</span>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 10 }}>
+                  <span style={{ ...label, marginBottom: 0 }}>Descrição do pedido</span>
                   {!ro && <Gravador onAudio={onAudio} transcrevendo={transcrevendo} />}
                 </div>
                 <textarea className="field" style={area} value={form.descricao} onChange={(e) => set('descricao')(e.target.value)} disabled={ro}

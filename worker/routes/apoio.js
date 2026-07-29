@@ -74,7 +74,7 @@ export async function handleApoio(request, env, path, session) {
       const chunk = 0x8000;
       for (let i = 0; i < u8.length; i += chunk) b64 += String.fromCharCode.apply(null, u8.subarray(i, i + chunk));
       b64 = btoa(b64);
-      const out = await env.AI.run("@cf/openai/whisper-large-v3-turbo", { audio: b64 });
+      const out = await env.AI.run("@cf/openai/whisper-large-v3-turbo", { audio: b64, language: "pt" });
       return jsonResponse({ ok: true, text: (out?.text || "").trim() });
     } catch (e) {
       return jsonError("Falha na transcrição: " + e.message, 502);
@@ -251,6 +251,11 @@ ${ticket.descricao || "(sem descrição)"}`;
     let out = null;
     try { out = JSON.parse(raw.replace(/^```(?:json)?\s*/i, "").replace(/```$/, "").trim()); }
     catch { return jsonError("Resposta da IA não pôde ser interpretada.", 502); }
+    // o modelo às vezes devolve o plano como array de passos — normalizar para texto
+    const texto = (v) => v == null ? null : Array.isArray(v) ? v.map(String).join("\n") : typeof v === "object" ? JSON.stringify(v) : String(v);
+    out.plano = texto(out.plano);
+    out.justificacao = texto(out.justificacao);
+    out.complexidade = typeof out.complexidade === "string" ? out.complexidade.toLowerCase() : null;
     await env.DB.prepare(
       `UPDATE tickets SET complexidade = ?, complexidade_justificacao = ?, plano_ia = ?, updated_at = datetime('now') WHERE id = ?`
     ).bind(out.complexidade || null, out.justificacao || null, out.plano || null, id).run();

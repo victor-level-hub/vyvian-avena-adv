@@ -32,7 +32,7 @@ async function login(request, env) {
   }
 
   const user = await env.DB.prepare(
-    'SELECT id, email, password_hash, name, initials, role FROM users WHERE email = ?'
+    'SELECT id, email, password_hash, name, initials, role, cargo, phone, permissions, photo_key, status FROM users WHERE email = ?'
   ).bind(email).first();
 
   // Mensagem genérica para não revelar se o utilizador existe
@@ -73,6 +73,9 @@ async function login(request, env) {
     ttlSeconds
   );
 
+  let permissions = ['*'];
+  try { const p = JSON.parse(user.permissions || '["*"]'); if (Array.isArray(p)) permissions = p; } catch {}
+
   return jsonResponse({
     token,
     user: {
@@ -81,6 +84,10 @@ async function login(request, env) {
       name: user.name,
       initials: user.initials,
       role: user.role,
+      cargo: user.cargo || null,
+      phone: user.phone || null,
+      permissions,
+      has_photo: !!user.photo_key,
     },
   });
 }
@@ -100,13 +107,25 @@ async function me(request, env) {
   const session = await requireAuth(request, env);
   if (!session) return jsonError('Unauthorized', 401);
 
+  // dados frescos da BD (permissões podem ter mudado depois do login)
+  const u = await env.DB.prepare(
+    'SELECT id, email, name, initials, role, cargo, phone, permissions, photo_key FROM users WHERE id = ?'
+  ).bind(session.sub).first();
+  if (!u) return jsonError('Unauthorized', 401);
+  let permissions = ['*'];
+  try { const p = JSON.parse(u.permissions || '["*"]'); if (Array.isArray(p)) permissions = p; } catch {}
+
   return jsonResponse({
     user: {
-      id: session.sub,
-      email: session.email,
-      name: session.name,
-      initials: session.initials,
-      role: session.role,
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      initials: u.initials,
+      role: u.role,
+      cargo: u.cargo || null,
+      phone: u.phone || null,
+      permissions,
+      has_photo: !!u.photo_key,
     },
   });
 }

@@ -2,6 +2,7 @@
 import React from 'react';
 import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { isAuthenticated } from './auth';
+import { podeAceder, primeiraRotaPermitida } from './perms';
 import Sidebar from './Sidebar';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -13,6 +14,8 @@ import Installments from './pages/Installments';
 import Notifications from './pages/Notifications';
 import Statistics from './pages/Statistics';
 import Apoio from './pages/Apoio';
+import Configuracoes from './pages/Configuracoes';
+import Convite from './pages/Convite';
 import { DialogHost } from './dialogs';
 import { ToastHost } from './toasts';
 import CommandPalette from './cmdk';
@@ -24,6 +27,12 @@ function ProtectedRoute({ children }) {
   if (!isAuthenticated()) {
     return <Navigate to="/admin/login" state={{ from: location }} replace />;
   }
+  return children;
+}
+
+// ===== Gate de permissões por aba (ver perms.js) =====
+function PermGate({ perm, children }) {
+  if (!podeAceder(perm)) return <Navigate to={primeiraRotaPermitida()} replace />;
   return children;
 }
 
@@ -57,7 +66,7 @@ export default function AdminApp() {
         path="painel"
         element={
           <ProtectedRoute>
-            <AuthenticatedLayout><Dashboard /></AuthenticatedLayout>
+            <PermGate perm="painel"><AuthenticatedLayout><Dashboard /></AuthenticatedLayout></PermGate>
           </ProtectedRoute>
         }
       />
@@ -65,7 +74,7 @@ export default function AdminApp() {
         path="estatisticas"
         element={
           <ProtectedRoute>
-            <AuthenticatedLayout><Statistics /></AuthenticatedLayout>
+            <PermGate perm="estatisticas"><AuthenticatedLayout><Statistics /></AuthenticatedLayout></PermGate>
           </ProtectedRoute>
         }
       />
@@ -73,7 +82,7 @@ export default function AdminApp() {
         path="clientes"
         element={
           <ProtectedRoute>
-            <AuthenticatedLayout><Clients /></AuthenticatedLayout>
+            <PermGate perm="clientes"><AuthenticatedLayout><Clients /></AuthenticatedLayout></PermGate>
           </ProtectedRoute>
         }
       />
@@ -81,7 +90,7 @@ export default function AdminApp() {
         path="clientes/novo"
         element={
           <ProtectedRoute>
-            <AuthenticatedLayout><NewClient /></AuthenticatedLayout>
+            <PermGate perm="clientes"><AuthenticatedLayout><NewClient /></AuthenticatedLayout></PermGate>
           </ProtectedRoute>
         }
       />
@@ -89,7 +98,7 @@ export default function AdminApp() {
         path="clientes/:clientId"
         element={
           <ProtectedRoute>
-            <AuthenticatedLayout><ClientDetail /></AuthenticatedLayout>
+            <PermGate perm="clientes"><AuthenticatedLayout><ClientDetail /></AuthenticatedLayout></PermGate>
           </ProtectedRoute>
         }
       />
@@ -97,7 +106,7 @@ export default function AdminApp() {
         path="calendario"
         element={
           <ProtectedRoute>
-            <AuthenticatedLayout><Calendar /></AuthenticatedLayout>
+            <PermGate perm="calendario"><AuthenticatedLayout><Calendar /></AuthenticatedLayout></PermGate>
           </ProtectedRoute>
         }
       />
@@ -105,7 +114,7 @@ export default function AdminApp() {
         path="parcelas"
         element={
           <ProtectedRoute>
-            <AuthenticatedLayout><Installments /></AuthenticatedLayout>
+            <PermGate perm="parcelas"><AuthenticatedLayout><Installments /></AuthenticatedLayout></PermGate>
           </ProtectedRoute>
         }
       />
@@ -113,7 +122,7 @@ export default function AdminApp() {
         path="apoio"
         element={
           <ProtectedRoute>
-            <AuthenticatedLayout><Apoio /></AuthenticatedLayout>
+            <PermGate perm="apoio"><AuthenticatedLayout><Apoio /></AuthenticatedLayout></PermGate>
           </ProtectedRoute>
         }
       />
@@ -121,10 +130,21 @@ export default function AdminApp() {
         path="notificacoes"
         element={
           <ProtectedRoute>
-            <AuthenticatedLayout><Notifications /></AuthenticatedLayout>
+            <PermGate perm="notificacoes"><AuthenticatedLayout><Notifications /></AuthenticatedLayout></PermGate>
           </ProtectedRoute>
         }
       />
+
+      <Route
+        path="configuracoes"
+        element={
+          <ProtectedRoute>
+            <PermGate perm="configuracoes"><AuthenticatedLayout><Configuracoes /></AuthenticatedLayout></PermGate>
+          </ProtectedRoute>
+        }
+      />
+      {/* Registo por convite — público, sem sessão */}
+      <Route path="convite/:token" element={<Convite />} />
 
       {/* /admin → /admin/painel */}
       <Route path="" element={<Navigate to="/admin/painel" replace />} />

@@ -453,3 +453,45 @@ export const apoio = {
     return data;
   },
 };
+
+
+// ============ CONFIGURAÇÕES (utilizadores) ============
+export const config = {
+  listUsers: () => request('/api/config/users'),
+  createUser: (data) => request('/api/config/users', { method: 'POST', body: data }),
+  updateUser: (id, data) => request(`/api/config/users/${id}`, { method: 'PATCH', body: data }),
+  deleteUser: (id) => request(`/api/config/users/${id}`, { method: 'DELETE' }),
+  reenviarConvite: (id) => request(`/api/config/users/${id}/convite`, { method: 'POST' }),
+  async uploadFoto(id, file) {
+    const token = getToken();
+    const res = await fetch(`/api/config/users/${id}/foto`, {
+      method: 'POST',
+      headers: { 'Content-Type': file.type || 'image/jpeg', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: file,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { const e = new Error(data.error || `HTTP ${res.status}`); e.status = res.status; throw e; }
+    return data;
+  },
+  deleteFoto: (id) => request(`/api/config/users/${id}/foto`, { method: 'DELETE' }),
+  async fotoObjectUrl(id) {
+    const token = getToken();
+    const res = await fetch(`/api/config/users/${id}/foto`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) return null;
+    return URL.createObjectURL(await res.blob());
+  },
+};
+
+// ============ CONVITE (registo público) ============
+export const convite = {
+  info: (token) => request(`/api/public/convite/${token}`),
+  concluir: (token, data) => request(`/api/public/convite/${token}`, { method: 'POST', body: data }),
+  async uploadFoto(token, file) {
+    const res = await fetch(`/api/public/convite/${token}/foto`, {
+      method: 'POST', headers: { 'Content-Type': file.type || 'image/jpeg' }, body: file,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { const e = new Error(data.error || `HTTP ${res.status}`); e.status = res.status; throw e; }
+    return data;
+  },
+};

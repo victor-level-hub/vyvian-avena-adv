@@ -13,6 +13,7 @@ import { handleExtracao } from './routes/extracao.js'; // IA: extração de docu
 import { handleUploadTokens, handleClientDocuments, handlePublicUpload } from './routes/cliente_docs.js'; // Upload pelo cliente
 import { handleCalendar } from './routes/calendar.js'; // Calendário jurídico
 import { handleApoio } from './routes/apoio.js'; // Apoio Técnico (tickets)
+import { handleConfig, handlePublicConvite } from './routes/config.js'; // Configurações: utilizadores
 import { runDailyCron } from './cron.js'; // Fase 2
 import { jsonError, jsonResponse } from './lib/response.js';
 import { requireAuth } from './lib/auth.js';
@@ -122,6 +123,11 @@ export default {
           return await handlePublicUpload(request, env, path);
         }
 
+        // Registo por convite (público, valida pelo token do e-mail)
+        if (path.startsWith('/api/public/convite/')) {
+          return await handlePublicConvite(request, env, path);
+        }
+
         // Imagens dos artigos Insights — públicas em GET (destinam-se ao blogue;
         // sem dados sensíveis). Permite usá-las em <img>/markdown na pré-visualização.
         if (request.method === 'GET' && /^\/api\/insights\/images\/\d+$/.test(path)) {
@@ -180,6 +186,10 @@ export default {
         // NOVO: Apoio Técnico — tickets de erros/melhorias/demandas
         if (path.startsWith('/api/apoio')) {
           return await handleApoio(request, env, path, session);
+        }
+        // NOVO: Configurações — gestão de utilizadores
+        if (path.startsWith('/api/config')) {
+          return await handleConfig(request, env, path, session);
         }
         if (path.startsWith('/api/upload-tokens')) {
           return await handleUploadTokens(request, env, path, session);

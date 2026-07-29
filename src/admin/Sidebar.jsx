@@ -5,7 +5,8 @@ import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { logout, getSession } from './auth';
 import Avatar from './Avatar';
-import { IconHome, IconUsers, IconCoins, IconCalendar, IconBell, IconInstagram, IconSupport } from './icons';
+import { IconHome, IconUsers, IconCoins, IconCalendar, IconBell, IconInstagram, IconSupport, IconGear } from './icons';
+import { ROTA_PERM, podeAceder } from './perms';
 
 const NAV_ITEMS = [
   { to: '/admin/painel', label: 'Painel', Icon: IconHome },
@@ -15,6 +16,7 @@ const NAV_ITEMS = [
   { to: '/admin/notificacoes', label: 'Notificações', Icon: IconBell },
   { to: '/admin/estatisticas', label: 'Redes Sociais', Icon: IconInstagram },
   { to: '/admin/apoio', label: 'Apoio Técnico', Icon: IconSupport },
+  { to: '/admin/configuracoes', label: 'Configurações', Icon: IconGear },
 ];
 
 export default function Sidebar() {
@@ -71,7 +73,7 @@ export default function Sidebar() {
       <nav>
         <ul className="adm-nav" ref={navRef}>
           {ind && <span className="adm-nav-ind" style={{ top: ind.top, height: ind.height }} aria-hidden="true" />}
-          {NAV_ITEMS.map((item) => (
+          {NAV_ITEMS.filter((item) => podeAceder(ROTA_PERM[item.to])).map((item) => (
             <li key={item.to}>
               <NavLink
                 to={item.to}

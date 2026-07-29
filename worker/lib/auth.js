@@ -44,6 +44,29 @@ export async function verifyPassword(password, stored) {
 }
 
 // ============================================================
+// PASSWORD HASH (para criação/registo de utilizadores)
+// ============================================================
+// Gera no mesmo formato que verifyPassword aceita.
+
+export async function hashPassword(password, iterations = 100000) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(password),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveBits']
+  );
+  const derivedBits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt, iterations, hash: 'SHA-256' },
+    keyMaterial,
+    256
+  );
+  const b64 = (u8) => btoa(String.fromCharCode(...u8));
+  return `pbkdf2-sha256$${iterations}$${b64(salt)}$${b64(new Uint8Array(derivedBits))}`;
+}
+
+// ============================================================
 // JWT HS256
 // ============================================================
 

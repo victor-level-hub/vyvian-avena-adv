@@ -4,6 +4,8 @@
 
 ## Regras de qualidade (aprendidas — aplicar SEMPRE)
 
+- **29 jul 2026 · verificação pós-deploy:** o hash/MD5 do bundle NÃO chega — um `ReferenceError` (ex.: identificador indefinido, que o build não deteta) deixa a Área Privada inteira em branco e o bundle continua «igual ao local». Depois de CADA deploy do admin, verificar a RENDERIZAÇÃO em browser real: Playwright headless (`ignoreHTTPSErrors: true` no container), token falso em `sessionStorage` (`vyvian_admin_token` + `vyvian_admin_user`), abrir `/admin/painel` e exigir `.adm-sidebar` presente e zero `pageerror`. Nota: em `vite preview` local não há API — o Dashboard rebenta ao destruturar a resposta HTML; só a produção valida de verdade. Cache da edge: esperar ~1 min ou testar duas vezes após o deploy.
+
 - **27 jul 2026 · campos de escrita:** nunca deixar um campo de entrada sem cursor (caret) visível e sem foco garantido. Todo o input/textarea tem `caret-color` explícito e, em diálogos modais, o campo força e recupera o foco — o TipTap/ProseMirror rouba o teclado se o deixarem (diálogos emitem `adm-dialog-open/close` e o RichEditor desativa-se enquanto houver diálogo aberto).
 
 - **27 jul 2026 · tooltips:** NUNCA usar o tooltip padrão do browser (atributo `title`) — sempre o tooltip do site (TipLayer em `rs/ui.jsx`): elementos usam `data-tip`, a camada é um portal em `document.body` que herda o tema light/dark do `.rs-scope` de origem e prende a caixa aos limites da janela — um tooltip NUNCA pode sair cortado (cuidado com `overflow` de invólucros).

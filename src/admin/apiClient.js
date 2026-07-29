@@ -396,3 +396,60 @@ export const calendar = {
   updateType: (id, data) => request(`/api/calendar/types/${id}`, { method: 'PUT', body: data }),
   deleteType: (id, strategy) => request(`/api/calendar/types/${id}?strategy=${strategy || 'move'}`, { method: 'DELETE' }),
 };
+
+
+// ============ APOIO TÉCNICO (tickets) ============
+export const apoio = {
+  list: (params = {}) => {
+    const qs = new URLSearchParams();
+    if (params.status) qs.set('status', params.status);
+    if (params.urgencia) qs.set('urgencia', params.urgencia);
+    if (params.q) qs.set('q', params.q);
+    const s = qs.toString();
+    return request('/api/apoio/tickets' + (s ? `?${s}` : ''));
+  },
+  create: (data) => request('/api/apoio/tickets', { method: 'POST', body: data }),
+  get: (id) => request(`/api/apoio/tickets/${id}`),
+  update: (id, data) => request(`/api/apoio/tickets/${id}`, { method: 'PATCH', body: data }),
+  abrir: (id) => request(`/api/apoio/tickets/${id}/abrir`, { method: 'POST' }),
+  analisar: (id) => request(`/api/apoio/tickets/${id}/analisar`, { method: 'POST' }),
+  executar: (id) => request(`/api/apoio/tickets/${id}/executar`, { method: 'POST' }),
+
+  // upload binário (print colado, ficheiro ou áudio)
+  async uploadAnexo(id, blob, { tipo = 'anexo', nome } = {}) {
+    const token = getToken();
+    const qs = new URLSearchParams({ tipo });
+    if (nome) qs.set('nome', nome);
+    const res = await fetch(`/api/apoio/tickets/${id}/anexos?${qs}`, {
+      method: 'POST',
+      headers: { 'Content-Type': blob.type || 'application/octet-stream', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: blob,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { const e = new Error(data.error || `HTTP ${res.status}`); e.status = res.status; throw e; }
+    return data;
+  },
+  deleteAnexo: (anexoId) => request(`/api/apoio/anexos/${anexoId}`, { method: 'DELETE' }),
+  setTranscricao: (anexoId, transcricao) => request(`/api/apoio/anexos/${anexoId}`, { method: 'PATCH', body: { transcricao } }),
+
+  // URL autenticada não existe — buscar como blob com o Bearer:
+  async anexoObjectUrl(anexoId) {
+    const token = getToken();
+    const res = await fetch(`/api/apoio/anexos/${anexoId}`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return URL.createObjectURL(await res.blob());
+  },
+
+  // transcrição de áudio (Workers AI Whisper)
+  async transcrever(blob) {
+    const token = getToken();
+    const res = await fetch('/api/apoio/transcrever', {
+      method: 'POST',
+      headers: { 'Content-Type': blob.type || 'audio/webm', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: blob,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) { const e = new Error(data.error || `HTTP ${res.status}`); e.status = res.status; throw e; }
+    return data;
+  },
+};

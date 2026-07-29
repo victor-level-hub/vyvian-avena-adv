@@ -5,7 +5,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { logout, getSession } from './auth';
 import Avatar from './Avatar';
-import { IconHome, IconUsers, IconCoins, IconCalendar, IconBell, IconInstagram } from './icons';
+import { IconHome, IconUsers, IconCoins, IconCalendar, IconBell, IconInstagram, IconSupport } from './icons';
 
 const NAV_ITEMS = [
   { to: '/admin/painel', label: 'Painel', Icon: IconHome },
@@ -14,6 +14,7 @@ const NAV_ITEMS = [
   { to: '/admin/calendario', label: 'Calendário', Icon: IconCalendar },
   { to: '/admin/notificacoes', label: 'Notificações', Icon: IconBell },
   { to: '/admin/estatisticas', label: 'Redes Sociais', Icon: IconInstagram },
+  { to: '/admin/apoio', label: 'Apoio Técnico', Icon: IconSupport },
 ];
 
 export default function Sidebar() {

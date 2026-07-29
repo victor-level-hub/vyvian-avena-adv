@@ -15,6 +15,7 @@ const PAGES = [
   { id: 'parcelas', label: 'Parcelas e mensalidades', to: '/admin/parcelas' },
   { id: 'calendario', label: 'Calendário', to: '/admin/calendario' },
   { id: 'notificacoes', label: 'Notificações', to: '/admin/notificacoes' },
+  { id: 'apoio', label: 'Apoio Técnico', to: '/admin/apoio' },
 ];
 
 const norm = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');

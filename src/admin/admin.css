@@ -1887,3 +1887,6 @@ input, select, textarea, button {
 }
 .adm-ig-eng span { display: inline-flex; align-items: center; gap: 0.28rem; }
 .adm-ig-eng svg { color: var(--gold-deep); }
+
+/* Apoio Técnico — indicador de gravação de voz */
+@keyframes adm-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }

@@ -12,6 +12,7 @@ import Calendar from './pages/Calendar';
 import Installments from './pages/Installments';
 import Notifications from './pages/Notifications';
 import Statistics from './pages/Statistics';
+import Apoio from './pages/Apoio';
 import { DialogHost } from './dialogs';
 import { ToastHost } from './toasts';
 import CommandPalette from './cmdk';
@@ -105,6 +106,14 @@ export default function AdminApp() {
         element={
           <ProtectedRoute>
             <AuthenticatedLayout><Installments /></AuthenticatedLayout>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="apoio"
+        element={
+          <ProtectedRoute>
+            <AuthenticatedLayout><Apoio /></AuthenticatedLayout>
           </ProtectedRoute>
         }
       />

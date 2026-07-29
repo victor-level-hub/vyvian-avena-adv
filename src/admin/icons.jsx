@@ -114,6 +114,9 @@ export const IconShare = (p) => (
 );
 
 // Glifo do Instagram — traço no padrão do site (sidebar de Estatísticas + aba/placeholder da secção Instagram).
+export const IconSupport = (p) => (
+  <svg {...base(p)}><path d="M4 13v-1a8 8 0 0 1 16 0v1" /><path d="M4 13h2.5a1 1 0 0 1 1 1v3.5a1 1 0 0 1-1 1H5.5A1.5 1.5 0 0 1 4 17v-4Z" /><path d="M20 13h-2.5a1 1 0 0 0-1 1v3.5a1 1 0 0 0 1 1h1a1.5 1.5 0 0 0 1.5-1.5V13Z" /><path d="M20 17v1.5a2.5 2.5 0 0 1-2.5 2.5H13" /></svg>
+);
 export const IconInstagram = (p) => (
   <Svg {...p}><rect x="2" y="2" width="20" height="20" rx="5" ry="5" /><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" /><path d="M17.5 6.5h.01" /></Svg>
 );

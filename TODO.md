@@ -18,7 +18,7 @@
 - [ ] **Aba Site → lista de artigos publicados** (estilo lista de temas livres): data+hora de publicação, acessos até ao momento (site_page_views), resumo curto, link direto, seta para edição, e expansor com log de alterações (nova tabela artigo_log: publicado / imagem alterada / texto alterado de→para).
 
 - [ ] **PDF do plano de pagamento** no formato padrão da Dra. Vyvian, com envio automático ao cliente (área privada).
-- [ ] **Filtro na lista de clientes** (área privada).
+- [x] **Filtro na lista de clientes** (área privada) — CONCLUÍDO, já em produção (verificado 31 jul 2026: strings do componente confirmadas no chunk `AdminApp-*.js` servido por vyavenaadv.com). Pesquisa por nome/NIF/CPF/email + filtro de área + país (PT/BR) + situação de pagamento (atraso/a vencer/quitado/ofício/pro bono), tudo sincronizado no URL. Implementado em `77d1782` (filtros base) e `107648c` (redesign v3). Este item ficou desatualizado no TODO — o trabalho já existia antes de ser pedido de novo.
 
 ## Desenvolvimento — próximos
 

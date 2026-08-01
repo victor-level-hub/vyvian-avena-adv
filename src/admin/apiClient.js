@@ -133,6 +133,8 @@ export const stats = {
   site: (range = '7d') => request(`/api/stats/site?range=${encodeURIComponent(range)}`),
   // range: '1d' | '7d' | '15d' | '30d' — Instagram (seguidores + posts)
   instagram: (range = '30d') => request(`/api/stats/instagram?range=${encodeURIComponent(range)}`),
+  // range: '1d'…'120d' — Engajamento por plataforma (Instagram, Facebook)
+  engagement: (range = '30d') => request(`/api/stats/engagement?range=${encodeURIComponent(range)}`),
 };
 
 // ============ INSIGHTS (Redes Sociais → Insights) ============

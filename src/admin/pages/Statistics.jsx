@@ -7,11 +7,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { stats as statsApi } from '../apiClient';
 import InsightsSection from '../insights/InsightsSection';
+import EngagementSection from './Engagement';
 import { Icon, Ticker, Reveal, Tip, TipLayer, Tabs, Seg, Sparkles, Chart, Spark, Tilt, Thumb, PanelHead } from '../rs/ui';
 import '../rs/rs-theme.css';
 
 const SECTIONS = [
   { k: 'instagram', label: 'Instagram', icon: 'instagram' },
+  { k: 'engajamento', label: 'Engajamento', icon: 'heart' },
   { k: 'site', label: 'Site', icon: 'globe' },
   { k: 'insights', label: 'Insights', icon: 'spark' },
 ];
@@ -146,7 +148,9 @@ export default function Statistics() {
                   ? 'Acessos ao site · vyavenaadv.com — dados próprios, sem cookies.'
                   : section === 'insights'
                     ? 'Motor editorial — temas com potencial de engajamento, artigos e fontes.'
-                    : 'Instagram · @vyvianavenaadv — sincronização diária automática.'}
+                    : section === 'engajamento'
+                      ? 'Como o público reage ao conteúdo — por plataforma, publicação e formato.'
+                      : 'Instagram · @vyvianavenaadv — sincronização diária automática.'}
               </p>
             </div>
             <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 4 }}
@@ -165,6 +169,7 @@ export default function Statistics() {
 
         {section === 'site' ? <SiteSection goInsights={() => setSection('insights')} />
           : section === 'insights' ? <InsightsSection />
+          : section === 'engajamento' ? <EngagementSection />
           : <InstagramSection />}
       </div>
     </div>

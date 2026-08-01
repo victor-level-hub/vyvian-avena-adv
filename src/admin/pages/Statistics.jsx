@@ -27,6 +27,10 @@ const RANGES = [
   { k: '90d', label: '90 DIAS' },
   { k: '120d', label: '120 DIAS' },
 ];
+// O Instagram regista seguidores 1×/dia — "1 dia agrupado por hora" daria sempre um
+// único ponto achatado (nenhuma evolução). Por isso a aba Instagram começa nos 7 dias.
+// O "1 DIA" (horário) só faz sentido no Site, onde há tráfego hora a hora.
+const RANGES_DIARIO = RANGES.filter((r) => r.k !== '1d');
 
 const GRUPOS = [
   { k: 'day', label: 'DIAS' },
@@ -177,7 +181,7 @@ export default function Statistics() {
 }
 
 /* ---------------- barra de filtros: período + agrupamento + legenda ---------------- */
-function PeriodBar({ range, setRange, grupo, setGrupo, updated, nDays }) {
+function PeriodBar({ range, setRange, grupo, setGrupo, updated, nDays, ranges = RANGES }) {
   const hourly = range === '1d';
   const legenda = hourly
     ? 'Últimas 24 horas · agrupado por hora'
@@ -186,7 +190,7 @@ function PeriodBar({ range, setRange, grupo, setGrupo, updated, nDays }) {
     <div style={{ display: 'grid', gap: 12, marginBottom: 20 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--fg-3)' }}>Período</span>
-        <Seg items={RANGES} value={range} onChange={setRange} small />
+        <Seg items={ranges} value={range} onChange={setRange} small />
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
         {!hourly && <>
@@ -210,6 +214,9 @@ function PeriodBar({ range, setRange, grupo, setGrupo, updated, nDays }) {
 /* ---------------- cartão KPI (padrão sean0205/area-charts-1) ---------------- */
 function Kpi({ label, period, value, prefix, suffix, foot, delta, hero, hi, icon, color, spark, sparkId, fmt, d = 0, span = 1, eixoX, eixoY }) {
   const c = color || RS_C.gold2;
+  // A legenda de eixos só faz sentido quando há mesmo uma mini-linha desenhada
+  // (o Spark exige ≥2 pontos) — senão estaria a rotular um gráfico inexistente.
+  const temGrafico = Array.isArray(spark) && spark.length >= 2;
   return (
     <Reveal d={d} cls={'glass kpi' + (hi ? ' hi' : '') + (span > 1 ? ' b-' + span : '')}
             style={{ padding: hero ? '24px 26px 22px' : '20px 22px' }}>
@@ -250,9 +257,9 @@ function Kpi({ label, period, value, prefix, suffix, foot, delta, hero, hi, icon
             {foot}
           </div>
         )}
-        {(eixoX || eixoY) && (
-          <div style={{ marginTop: 8, fontSize: 9, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: 'var(--fg-3)', opacity: .85 }}>
-            {eixoX && <>X · {eixoX}</>}{eixoX && eixoY && <span style={{ opacity: .5 }}> &nbsp;—&nbsp; </span>}{eixoY && <>Y · {eixoY}</>}
+        {temGrafico && (eixoX || eixoY) && (
+          <div style={{ marginTop: 8, display: 'flex', flexWrap: 'wrap', gap: '2px 10px', fontSize: 9, fontWeight: 800, letterSpacing: '.13em', textTransform: 'uppercase', color: 'var(--fg-3)', opacity: .85 }}>
+            {eixoX && <span>Eixo X · {eixoX}</span>}{eixoY && <span>Eixo Y · {eixoY}</span>}
           </div>
         )}
       </div>
@@ -311,7 +318,7 @@ function InstagramSection() {
   );
   const postBuckets = useMemo(() => agruparPosts(data?.posts || [], gEfetivo), [data, gEfetivo]);
 
-  if (loading && !data) return <><PeriodBar range={range} setRange={setRange} grupo={grupo} setGrupo={setGrupo} nDays={nDays} /><KpiSkeleton /></>;
+  if (loading && !data) return <><PeriodBar range={range} setRange={setRange} grupo={grupo} setGrupo={setGrupo} nDays={nDays} ranges={RANGES_DIARIO} /><KpiSkeleton /></>;
   if (error) return <div className="glass" style={{ padding: 22, color: '#e39b9b', fontSize: 13.5 }}>{error}</div>;
   if (!data) return null;
 
@@ -328,7 +335,7 @@ function InstagramSection() {
   return (
     <>
       <PeriodBar range={range} setRange={setRange} grupo={grupo} setGrupo={setGrupo}
-                 nDays={nDays} updated={data.updated_at ? fmtWhen(data.updated_at) : null} />
+                 nDays={nDays} ranges={RANGES_DIARIO} updated={data.updated_at ? fmtWhen(data.updated_at) : null} />
 
       {!data.has_data ? (
         <Reveal cls="glass" style={{ padding: '44px 30px', textAlign: 'center' }}>

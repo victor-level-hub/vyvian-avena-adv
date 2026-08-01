@@ -26,8 +26,8 @@
 
 ## Ações do Victor / da Dra. (não é código)
 
-- [ ] Victor: `git pull` em `C:\Users\victor.sousa\Projetos\vyvian-avena-adv` para trazer `134dd49`…`75b12a2` (Insights v4, pipeline PUBLICAR e redesign v3 completo da Área Privada).
-- [ ] Victor (opcional): `IG_SYNC_KEY` foi rodada na integração da Fase B e o valor não ficou guardado. O cron diário não a usa; só serve para forçar uma sincronização manual. Repor com `npx wrangler secret put IG_SYNC_KEY < ficheiro.txt` (e apagar o ficheiro a seguir).
+- [x] Victor: `git pull` em `C:\Users\victor.sousa\Projetos\vyvian-avena-adv` para trazer `134dd49`…`75b12a2` (Insights v4, pipeline PUBLICAR e redesign v3 completo da Área Privada).
+- [x] `IG_SYNC_KEY` reposta a 1 ago (rodada nova, guardada no SEGREDOS.md) e usada para semear a aba Engajamento: migração 0027 aplicada ao D1 remoto (a aba dava «Internal server error» sem ela), diário de migrações sincronizado (0019–0027 marcadas como aplicadas — tinham entrado por `d1 execute` sem registo) e 30 dias de histórico recolhidos.
 - [ ] Dra.: experimentar as abas **Insights** e **Instagram** e dar feedback.
 - [ ] Victor: **créditos Recraft quase no fim (~40)** — fallback de imagem; recarregar se quiser manter o plano B.
 - [ ] Dra.: aprovar os 4 títulos novos do blogue.

@@ -14,6 +14,7 @@ import PoliticaCookies from './pages/PoliticaCookies';
 import NaoEncontrado from './pages/NaoEncontrado';
 import Blog from './pages/Blog';
 import BlogArtigo from './pages/BlogArtigo';
+import Links from './pages/Links';
 // Carregados sob demanda (React.lazy): a área privada e o upload tokenizado
 // não fazem parte do site público — mantê-los no bundle principal custava
 // ~80 KiB de JS não usado (e o Google Fonts do admin.css a bloquear o render)
@@ -38,6 +39,18 @@ function RouteSeo() {
 }
 
 function PublicSite() {
+  return (
+    <Routes>
+      {/* /links vive fora do Layout: é a página da bio do Instagram/Facebook
+          (substitui o Linktree) e não leva navegação nem footer do site.
+          Gere o próprio <Seo> — o RouteSeo fica no ramo com Layout. */}
+      <Route path="/links" element={<Links />} />
+      <Route path="/*" element={<SiteComLayout />} />
+    </Routes>
+  );
+}
+
+function SiteComLayout() {
   return (
     <>
       <ScrollToTop />

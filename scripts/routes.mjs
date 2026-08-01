@@ -24,6 +24,10 @@ export const STATIC_ROUTES = [
   { path: '/apoio', priority: '0.7', changefreq: 'monthly' },
   { path: '/contacto', priority: '0.8', changefreq: 'monthly' },
   { path: '/politica-cookies', priority: '0.3', changefreq: 'yearly' },
+  // Página de links da bio (Instagram/Facebook). Tem de ser prerenderizada:
+  // os crawlers do WhatsApp/Facebook não executam JS e as og: tags precisam
+  // de estar no HTML estático quando o URL é partilhado em mensagens.
+  { path: '/links', priority: '0.3', changefreq: 'monthly' },
 ];
 
 export async function getAreaSlugs() {

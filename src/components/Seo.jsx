@@ -42,6 +42,10 @@ export const ROUTE_META = {
     title: "Política de Cookies | Vyvian Avena Advogada",
     desc: "Informação sobre a utilização de cookies no sítio de Vyvian Avena Advogada e como pode gerir as suas preferências de privacidade.",
   },
+  "/links": {
+    title: "Links | Vyvian Avena — Advogada",
+    desc: "Fale com a Dra. Vyvian Avena — WhatsApp, consulta, email e telefone — e leia os artigos mais recentes do blogue. Advogada em Portugal e no Brasil.",
+  },
 };
 
 /**

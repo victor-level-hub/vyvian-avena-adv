@@ -6,6 +6,7 @@
 // ENGAJAMENTO (0027): /api/stats/engagement — métricas de conta por dia, ranking de
 // publicações, desempenho por formato e demografia, agrupado por plataforma.
 import { jsonResponse, jsonError } from '../lib/response.js';
+import { syncInstagram } from '../lib/instagram.js';
 
 const RANGES = {
   '1d':   { days: 1,   granularity: 'hour' },
@@ -18,6 +19,14 @@ const RANGES = {
 };
 
 export async function handleStats(request, env, path, session) {
+  // Sincronização imediata (botão «Atualizar agora» da aba Engajamento). Autenticada
+  // pela sessão — ao contrário de /api/stats/instagram/sync, que usa a IG_SYNC_KEY
+  // e serve para disparos externos. Corre o mesmo sync do cron diário.
+  if (path === '/api/stats/engagement/sync' && request.method === 'POST') {
+    const r = await syncInstagram(env);
+    return jsonResponse({ ok: true, ...r });
+  }
+
   if (request.method !== 'GET') return jsonError('Method not allowed', 405);
 
   if (path === '/api/stats/site') {

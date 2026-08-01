@@ -135,6 +135,8 @@ export const stats = {
   instagram: (range = '30d') => request(`/api/stats/instagram?range=${encodeURIComponent(range)}`),
   // range: '1d'…'120d' — Engajamento por plataforma (Instagram, Facebook)
   engagement: (range = '30d') => request(`/api/stats/engagement?range=${encodeURIComponent(range)}`),
+  // Botão «Atualizar agora» — corre o sync do Instagram e devolve o sumário.
+  engagementSync: () => request('/api/stats/engagement/sync', { method: 'POST' }),
 };
 
 // ============ INSIGHTS (Redes Sociais → Insights) ============
@@ -153,6 +155,11 @@ export const insights = {
   insertImages: (articleId, imageIds) =>
     request(`/api/insights/articles/${articleId}/inserir-imagens`, { method: 'POST', body: { image_ids: imageIds } }),
   saveArticle: (id, data) => request(`/api/insights/articles/${id}`, { method: 'PATCH', body: data }),
+  // Apagar um rascunho (artigos publicados não se apagam por aqui).
+  deleteArticle: (id) => request(`/api/insights/articles/${id}`, { method: 'DELETE' }),
+  // Correções por IA: a Dra. descreve a correção; a IA aplica-a ao artigo inteiro.
+  aiCorrect: (id, instrucoes) =>
+    request(`/api/insights/articles/${id}/corrigir`, { method: 'POST', body: { instrucoes } }),
 
   // Gera 4 opções de imagem (Gemini; fallback Recraft). Repetir = gerar todas de novo.
   generateImages: (articleId) => request(`/api/insights/articles/${articleId}/images`, { method: 'POST', body: {} }),

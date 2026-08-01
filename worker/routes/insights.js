@@ -123,6 +123,24 @@ export function limparCitacoes(s) {
 
 const hostDe = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch { return ""; } };
 
+// Aviso legal padrão no fecho do artigo (pedido da Dra., 1 ago): os artigos manuais
+// do blogue terminam todos com este parágrafo em itálico. A geração pedia-o ao modelo
+// por instrução — e o modelo às vezes não o escrevia. Passa a ser determinístico:
+// acrescentado por código sempre que o markdown ainda não traz um aviso equivalente.
+const TEM_AVISO = /(car[áa]cter|car[áa]ter)\s+informativo|n[ãa]o\s+constitui\s+aconselhamento/i;
+export function comAvisoLegal(markdown, idioma) {
+  const md = String(markdown || "").trimEnd();
+  if (!md || TEM_AVISO.test(md)) return md;
+  const carater = String(idioma || "").toLowerCase() === "pt-br" ? "caráter" : "carácter";
+  return (
+    md +
+    `\n\n---\n\n*Este artigo tem ${carater} informativo e não constitui aconselhamento jurídico. ` +
+    `Cada situação concreta exige análise própria. A Dra. Vyvian Avena é advogada luso-brasileira, ` +
+    `inscrita na Ordem dos Advogados portuguesa e na OAB, e acompanha regularmente casos que ` +
+    `envolvem as duas jurisdições.*`
+  );
+}
+
 // Contexto fixo da Dra. para os prompts.
 const PERFIL = `A Dra. Vyvian Avena é advogada luso-brasileira, inscrita na Ordem dos Advogados
 de Portugal, com escritório em Portugal e atuação também no Brasil (vyavenaadv.com,
@@ -151,7 +169,10 @@ export async function handleInsights(request, env, path, session) {
   if (mt) {
     if (m === "GET") return getArticle(env, +mt[1]);
     if (m === "PATCH") return updateArticle(request, env, +mt[1]);
+    if (m === "DELETE") return apagarArtigo(env, +mt[1]);
   }
+  mt = path.match(/^\/api\/insights\/articles\/(\d+)\/corrigir$/);
+  if (mt && m === "POST") return corrigirComIA(request, env, +mt[1]);
   mt = path.match(/^\/api\/insights\/articles\/(\d+)\/inserir-imagens$/);
   if (mt && m === "POST") return inserirImagens(request, env, +mt[1]);
   mt = path.match(/^\/api\/insights\/articles\/(\d+)\/avaliar$/);
@@ -428,7 +449,8 @@ Responde EXCLUSIVAMENTE com JSON válido:
   ).bind(topic ? topic.id : null, limparCitacoes(String(art.titulo)).slice(0, 120),
          limparCitacoes(String(art.descricao || "")).slice(0, 300),
          String(art.area || (topic && topic.area) || "").slice(0, 30) || null,
-         art.idioma === "pt-BR" ? "pt-BR" : "pt-PT", limparCitacoes(String(art.markdown))).run();
+         art.idioma === "pt-BR" ? "pt-BR" : "pt-PT",
+         comAvisoLegal(limparCitacoes(String(art.markdown)), art.idioma)).run();
   if (topic) {
     await env.DB.prepare(`UPDATE insight_topics SET estado='artigo_gerado' WHERE id = ?`).bind(topic.id).run();
   }
@@ -526,9 +548,12 @@ async function solicitarPublicacao(env, id) {
   if (!a.descricao || a.descricao.length > 155) return jsonError("Descrição SEO obrigatória com máx. 155 caracteres", 400);
   const slug = a.slug || slugify(a.titulo);
   if (!slug) return jsonError("Não foi possível gerar o URL (slug) a partir do título", 400);
+  // Rede de segurança para rascunhos gerados antes do aviso legal determinístico:
+  // nenhum artigo segue para o blogue sem o parágrafo de fecho.
+  const mdFinal = comAvisoLegal(a.markdown, a.idioma);
   await env.DB.prepare(
-    `UPDATE insight_articles SET slug = ?, publicar_em = datetime('now') WHERE id = ?`
-  ).bind(slug, id).run();
+    `UPDATE insight_articles SET slug = ?, markdown = ?, publicar_em = datetime('now') WHERE id = ?`
+  ).bind(slug, mdFinal, id).run();
   return getArticle(env, id);
 }
 
@@ -680,11 +705,18 @@ Responde EXCLUSIVAMENTE com JSON válido:
 
   let plano;
   try {
-    const data = await gemini(env, MODEL_PESQUISA, {
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.2, maxOutputTokens: 2048 },
-    });
-    plano = extractJson(geminiText(data));
+    // Mesmo padrão da Nota da IA (ver avaliação): margem para os tokens de
+    // raciocínio (2048 cortava o JSON a meio — «JSON incompleto na resposta»),
+    // resposta JSON forçada, e motor de reserva se ainda assim vier truncado.
+    try {
+      const data = await gemini(env, MODEL_PESQUISA, {
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.2, maxOutputTokens: 8192, responseMimeType: "application/json" },
+      });
+      plano = extractJson(geminiText(data));
+    } catch {
+      plano = extractJson(await pesquisaIA(env, prompt, { temperature: 0.2, maxTokens: 4000 }));
+    }
   } catch (e) {
     return jsonError(`Falha a posicionar as imagens: ${e.message}`, 502);
   }
@@ -740,6 +772,108 @@ async function descartarImagem(env, articleId, imageId) {
     `UPDATE insight_articles SET imagem_escolhida = NULL WHERE id = ? AND imagem_escolhida = ?`
   ).bind(articleId, imageId).run();
   return getArticle(env, articleId);
+}
+
+/* Apagar um artigo guardado nos rascunhos (pedido da Dra., 1 ago).
+   Regras:
+   - Artigos já publicados no blogue não se apagam por aqui (o .md vive no repo;
+     removê-lo é uma operação de código, não desta base de dados).
+   - A narração (R2) é apagada. As imagens do artigo são apagadas do R2 e da tabela,
+     EXCETO as que estão no Banco de Imagens — essas pertencem ao banco (e podem já
+     estar em uso noutros artigos), por isso ficam. */
+async function apagarArtigo(env, id) {
+  const a = await env.DB.prepare(`SELECT * FROM insight_articles WHERE id = ?`).bind(id).first();
+  if (!a) return jsonError("Artigo não encontrado", 404);
+  if (a.publicado_em) {
+    return jsonError("Este artigo já está publicado no blogue — não pode ser apagado daqui.", 409);
+  }
+
+  if (a.audio_key) { try { await env.RECIBOS.delete(a.audio_key); } catch { /* já não existia */ } }
+
+  const imgs = (await env.DB.prepare(
+    `SELECT i.id, i.r2_key, (SELECT 1 FROM image_bank b WHERE b.image_id = i.id) AS no_banco
+     FROM insight_images i WHERE i.article_id = ?`
+  ).bind(id).all()).results || [];
+  for (const im of imgs) {
+    if (im.no_banco) continue; // o banco fica dono da imagem
+    if (im.r2_key) { try { await env.RECIBOS.delete(im.r2_key); } catch { /* best-effort */ } }
+    await env.DB.prepare(`DELETE FROM insight_images WHERE id = ?`).bind(im.id).run();
+  }
+
+  await env.DB.prepare(`DELETE FROM insight_articles WHERE id = ?`).bind(id).run();
+  if (a.topic_id) {
+    // o tema volta a ficar disponível nas sugestões
+    await env.DB.prepare(`UPDATE insight_topics SET estado='sugerido' WHERE id = ? AND estado='artigo_gerado'`)
+      .bind(a.topic_id).run().catch(() => {});
+  }
+  return jsonResponse({ ok: true, apagado: id });
+}
+
+/* Correções por IA dentro do editor (pedido da Dra., 1 ago): em vez de reescrever à
+   mão o que a fonte externa diz, a Dra. descreve a correção («o prazo na secção 3
+   está errado, é X», «troca o tom da abertura») e a IA aplica-a ao artigo inteiro,
+   mantendo tudo o resto intacto. O resultado volta ao editor como rascunho — a
+   revisão («Revisto pela Dra.») é limpa porque o conteúdo mudou. */
+async function corrigirComIA(request, env, id) {
+  let body = {};
+  try { body = await request.json(); } catch {}
+  const instrucoes = String(body.instrucoes || "").trim().slice(0, 2000);
+  if (instrucoes.length < 5) return jsonError("Descreva a correção a fazer", 400);
+
+  const a = await env.DB.prepare(`SELECT * FROM insight_articles WHERE id = ?`).bind(id).first();
+  if (!a) return jsonError("Artigo não encontrado", 404);
+
+  const prompt = `${PERFIL}
+
+És o editor de texto da Dra. Vyvian. Ela pediu correções num artigo do blogue.
+
+TÍTULO ATUAL: ${a.titulo}
+DESCRIÇÃO SEO ATUAL: ${a.descricao || "(vazia)"}
+IDIOMA: ${a.idioma || "pt-PT"}
+
+ARTIGO ATUAL (Markdown):
+${a.markdown}
+
+CORREÇÕES PEDIDAS PELA DRA. (aplica-as com rigor; se citarem factos/lei, verifica nas fontes oficiais):
+${instrucoes}
+
+Regras:
+- Aplica APENAS as correções pedidas e o estritamente necessário para o texto continuar coeso.
+- NÃO reescrevas secções que não foram tocadas pelo pedido; preserva a estrutura, as imagens
+  (linhas ![...](...)) exatamente onde estão, os blocos de citação e o aviso legal final.
+- Mantém o idioma (${a.idioma || "pt-PT"}) e o tratamento do leitor coerentes do início ao fim.
+- Se alguma correção pedir algo juridicamente errado ou impossível de confirmar, NÃO inventes:
+  aplica o que for verificável e explica no campo "notas" o que ficou por aplicar e porquê.
+
+Responde EXCLUSIVAMENTE com JSON válido:
+{
+  "markdown": "artigo completo corrigido em Markdown",
+  "titulo": "só se o pedido implicar mudar o título; senão repete o atual (máx. 60 caracteres)",
+  "descricao": "só se o pedido implicar mudar a descrição; senão repete a atual (120-155 caracteres)",
+  "notas": "1-3 frases: o que foi alterado e, se aplicável, o que ficou por aplicar"
+}`;
+
+  let out;
+  try {
+    out = extractJson(await pesquisaIA(env, prompt, {
+      temperature: 0.3, maxTokens: 20000, geminiModel: MODEL_ARTIGO,
+    }));
+    if (!out.markdown || String(out.markdown).length < 200) throw new Error("correção veio incompleta");
+  } catch (e) {
+    return jsonError(`Falha a aplicar as correções: ${e.message}`, 502);
+  }
+
+  const novoMd = comAvisoLegal(limparCitacoes(String(out.markdown)), a.idioma);
+  const novoTitulo = limparCitacoes(String(out.titulo || a.titulo)).slice(0, 120);
+  const novaDesc = limparCitacoes(String(out.descricao || a.descricao || "")).slice(0, 300);
+  await env.DB.prepare(
+    `UPDATE insight_articles SET markdown = ?, titulo = ?, descricao = ?, revisto_em = NULL,
+            atualizado_em = datetime('now') WHERE id = ?`
+  ).bind(novoMd, novoTitulo, novaDesc, id).run();
+
+  const res = await getArticle(env, id);
+  const data = await res.json();
+  return jsonResponse({ ...data, notas: String(out.notas || "").slice(0, 600) });
 }
 
 async function updateArticle(request, env, id) {

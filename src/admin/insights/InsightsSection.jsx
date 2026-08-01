@@ -67,6 +67,7 @@ const fmtDataHora = (iso) => {
 export default function InsightsSection() {
   const [vista, setVista] = useState('sugestoes');
   const [artigoId, setArtigoId] = useState(null);
+  const [fecho, setFecho] = useState(0); // muda ao fechar o editor → listas refrescam
 
   return (
     <>
@@ -76,12 +77,12 @@ export default function InsightsSection() {
       {vista === 'sugestoes'
         ? <Sugestoes onAbrirArtigo={setArtigoId} />
         : vista === 'tema'
-          ? <TemaLivre onAbrirArtigo={setArtigoId} />
+          ? <TemaLivre onAbrirArtigo={setArtigoId} refreshKey={artigoId == null ? fecho : -1} />
           : vista === 'imagens'
             ? <BancoImagens onAbrirArtigo={setArtigoId} />
             : <Fontes />}
       {artigoId != null && (
-        <ArticleStudio articleId={artigoId} onClose={() => setArtigoId(null)} />
+        <ArticleStudio articleId={artigoId} onClose={() => { setArtigoId(null); setFecho(Date.now()); }} />
       )}
     </>
   );
@@ -288,7 +289,7 @@ const PASSOS_TEMA = [
   'A calcular tempo de leitura e descrição SEO…',
 ];
 
-function TemaLivre({ onAbrirArtigo }) {
+function TemaLivre({ onAbrirArtigo, refreshKey }) {
   const [tema, setTema] = useState('');
   const [gerando, setGerando] = useState(false);
   const [erro, setErro] = useState(null);
@@ -296,7 +297,24 @@ function TemaLivre({ onAbrirArtigo }) {
   const [fire, setFire] = useState(0);
 
   const carregar = () => api.freeArticles().then((d) => setAnteriores(d.articles || [])).catch(() => setAnteriores([]));
-  useEffect(() => { carregar(); }, []);
+  // recarrega ao montar e sempre que se volta do editor (um apagar/guardar pode ter mudado a lista)
+  useEffect(() => { carregar(); }, [refreshKey]);
+
+  // Apagar um rascunho diretamente da lista (pedido da Dra., 1 ago).
+  const apagarAnterior = async (a) => {
+    const ok = await admConfirm(
+      `Apagar «${a.titulo}» definitivamente? As imagens geradas para ele também são apagadas — só ficam as que estão no Banco de Imagens.`,
+      { danger: true, okLabel: 'Apagar artigo' }
+    );
+    if (!ok) return;
+    try {
+      await api.deleteArticle(a.id);
+      admToast('Artigo apagado.');
+      carregar();
+    } catch (e) {
+      admToast(`Não foi possível apagar: ${e.message}`, { kind: 'error' });
+    }
+  };
 
   const gerar = async () => {
     const t = tema.trim();
@@ -348,10 +366,11 @@ function TemaLivre({ onAbrirArtigo }) {
                      note="Artigos gerados a partir de temas seus — clique para reabrir no editor." />
           <div style={{ display: 'grid', gap: 10 }}>
             {anteriores.map((a, i) => (
-              <button key={a.id} type="button" onClick={() => onAbrirArtigo(a.id)}
-                      className="glass"
-                      style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '15px 18px', textAlign: 'left', width: '100%',
-                               animation: `rsRiseInSm .4s ${Math.min(i, 8) * 50}ms var(--ease-out) both`, cursor: 'pointer' }}>
+              <div key={a.id} role="button" tabIndex={0} onClick={() => onAbrirArtigo(a.id)}
+                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAbrirArtigo(a.id); } }}
+                   className="glass"
+                   style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '15px 18px', textAlign: 'left', width: '100%',
+                            animation: `rsRiseInSm .4s ${Math.min(i, 8) * 50}ms var(--ease-out) both`, cursor: 'pointer' }}>
                 <span style={{ width: 32, height: 32, flex: 'none', borderRadius: 9, display: 'grid', placeItems: 'center',
                                background: 'var(--grad-gold-soft)', border: '1px solid var(--edge-2)', color: 'var(--gold-soft)' }}>
                   <Icon name="edit" size={14} />
@@ -362,8 +381,14 @@ function TemaLivre({ onAbrirArtigo }) {
                     {(AREAS_LABEL[a.area] || a.area || 'Blogue')} · {fmtDataHora(a.criado_em)}
                   </span>
                 </span>
+                <button type="button" className="btn btn-quiet btn-sm" aria-label={`Apagar «${a.titulo}»`}
+                        data-tip="Apagar este rascunho"
+                        style={{ color: 'var(--danger)', flexShrink: 0, padding: '6px 8px' }}
+                        onClick={(e) => { e.stopPropagation(); apagarAnterior(a); }}>
+                  <Icon name="trash" size={13} />
+                </button>
                 <Icon name="chev" size={15} style={{ color: 'var(--fg-3)', flexShrink: 0 }} />
-              </button>
+              </div>
             ))}
           </div>
         </>

@@ -113,6 +113,10 @@ export default function ArticleStudio({ articleId, onClose }) {
   const [adotando, setAdotando] = useState(false);
   const [avaliacao, setAvaliacao] = useState(null);      // { texto, seo, avaliado_em }
   const [avaliando, setAvaliando] = useState(false);
+  const [apagando, setApagando] = useState(false);
+  const [pedidoIA, setPedidoIA] = useState('');            // correções por IA (texto da Dra.)
+  const [corrigindo, setCorrigindo] = useState(false);
+  const [notasIA, setNotasIA] = useState(null);            // o que a IA alterou/deixou por aplicar
   const [fire, setFire] = useState(0);
   const mdRef = useRef('');
   const tituloRef = useRef(null);
@@ -360,6 +364,51 @@ export default function ArticleStudio({ articleId, onClose }) {
     onClose();
   };
 
+  // Apagar o rascunho (pedido da Dra., 1 ago). Confirmação explícita: é definitivo.
+  const apagar = async () => {
+    const ok = await admConfirm(
+      `Apagar «${titulo || 'este artigo'}» definitivamente? As imagens geradas para ele também são apagadas — só ficam as que estão no Banco de Imagens.`,
+      { danger: true, okLabel: 'Apagar artigo' }
+    );
+    if (!ok) return;
+    setApagando(true);
+    try {
+      await api.deleteArticle(articleId);
+      admToast('Artigo apagado.');
+      onClose();
+    } catch (e) {
+      admToast(`Não foi possível apagar: ${e.message}`, { kind: 'error' });
+      setApagando(false);
+    }
+  };
+
+  // Correções por IA: guarda primeiro o que estiver por guardar (a IA corrige o texto
+  // mais recente), envia o pedido, e o artigo corrigido volta ao editor.
+  const corrigirIA = async () => {
+    const pedido = pedidoIA.trim();
+    if (pedido.length < 5 || corrigindo) return;
+    if (sujo) await guardar(true);
+    setCorrigindo(true);
+    setNotasIA(null);
+    try {
+      const d = await api.aiCorrect(articleId, pedido);
+      setData(d);
+      setTitulo(d.article.titulo || '');
+      setDescricao(d.article.descricao || '');
+      setMarkdown(d.article.markdown || '');
+      mdRef.current = d.article.markdown || '';
+      setSujo(false);
+      setPedidoIA('');
+      setNotasIA(d.notas || null);
+      setFire(Date.now());
+      admToast('Correções aplicadas — reveja o texto antes de marcar «Revisto pela Dra.».');
+    } catch (e) {
+      admToast(`Não foi possível aplicar as correções: ${e.message}`, { kind: 'error' });
+    } finally {
+      setCorrigindo(false);
+    }
+  };
+
   const gerarImagens = async () => {
     const regen = (data?.images?.length || 0) > 0;
     if (regen) {
@@ -461,6 +510,13 @@ export default function ArticleStudio({ articleId, onClose }) {
                           data-tip={revisto ? 'Publica no blogue nos moldes dos artigos existentes' : 'Disponível depois de marcar «Revisto pela Dra.»'}>
                     <Icon name="spark" size={14} />Publicar
                   </button>}
+            {!a.publicado_em && !a.publicar_em && (
+              <button type="button" className="btn btn-ghost btn-sm" onClick={apagar} disabled={apagando}
+                      data-tip="Apaga este rascunho e as suas imagens (as do Banco de Imagens ficam)"
+                      style={{ color: 'var(--danger)' }}>
+                <Icon name="trash" size={13} />{apagando ? 'A apagar…' : 'Apagar'}
+              </button>
+            )}
           </span>
         </div>
 
@@ -469,9 +525,13 @@ export default function ArticleStudio({ articleId, onClose }) {
           <div style={{ minWidth: 0 }}>
             <div className="glass" style={{ padding: '26px 28px 24px', marginBottom: 16 }}>
               <span className="overline">
-                Título{tituloLongo && <em style={{ color: 'var(--warn)', textTransform: 'none', letterSpacing: 0, fontWeight: 600, fontStyle: 'normal', marginLeft: 8 }}>({titulo.length}/60 — o SEO trava títulos acima de 60)</em>}
+                Título{tituloLongo && <em style={{ color: titulo.length > 120 ? 'var(--danger)' : 'var(--warn)', textTransform: 'none', letterSpacing: 0, fontWeight: 600, fontStyle: 'normal', marginLeft: 8 }}>({titulo.length}/60 — o SEO trava títulos acima de 60{titulo.length > 120 ? '; acima de 120 é cortado ao guardar' : ''})</em>}
               </span>
-              <textarea rows={1} ref={tituloRef} value={titulo} maxLength={120}
+              {/* Sem maxLength: os títulos gerados chegam por vezes já nos 120 chars e o
+                  limite silencioso fazia o teclado "não escrever" — parecia bloqueado
+                  (queixa da Dra., 1 ago). O comprimento é gerido pelos avisos visíveis
+                  e o guardar corta a 120 no servidor. */}
+              <textarea rows={1} ref={tituloRef} value={titulo}
                         onChange={(e) => { setTitulo(e.target.value); setSujo(true); }}
                         style={{ width: '100%', background: 'none', border: 0, resize: 'none', overflow: 'hidden', fontFamily: 'Fraunces,Georgia,serif',
                                  fontSize: 'clamp(24px,2.5vw,32px)', lineHeight: 1.2, letterSpacing: '-.02em', color: 'var(--fg)', marginTop: 10, outline: 'none' }} />
@@ -498,6 +558,40 @@ export default function ArticleStudio({ articleId, onClose }) {
 
           {/* -------- sidebar -------- */}
           <div className="ed-side">
+            {/* Correções por IA (pedido da Dra., 1 ago): descrever a correção em vez de
+                reescrever à mão — a IA aplica-a ao artigo e o resultado volta ao editor. */}
+            <div className="glass" style={{ padding: '20px 20px 22px' }}>
+              <span className="overline">Correções por IA</span>
+              <p style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 8, lineHeight: 1.55 }}>
+                Descreva o que está errado ou o que quer mudar — a IA corrige o artigo e
+                mantém o resto intacto. Ex.: «na secção do IRN, o prazo certo é 30 dias»,
+                «abre com um caso prático em vez da definição».
+              </p>
+              <textarea
+                className="field" rows={3} value={pedidoIA} maxLength={2000} disabled={corrigindo}
+                onChange={(e) => setPedidoIA(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) corrigirIA(); }}
+                placeholder="O que corrigir…"
+                style={{ resize: 'vertical', minHeight: 76, lineHeight: 1.5, marginTop: 10, fontSize: 13 }}
+              />
+              <button type="button" className={'btn btn-sm ' + (pedidoIA.trim().length >= 5 ? 'btn-gold' : 'btn-ghost')}
+                      style={{ width: '100%', justifyContent: 'center', marginTop: 10 }}
+                      onClick={corrigirIA} disabled={pedidoIA.trim().length < 5 || corrigindo}>
+                <Icon name={corrigindo ? 'refresh' : 'spark'} size={13} />
+                {corrigindo ? 'A aplicar as correções…' : 'Aplicar correções'}
+              </button>
+              {corrigindo && (
+                <div style={{ fontSize: 11, color: 'var(--fg-3)', marginTop: 8, textAlign: 'center' }}>
+                  ~1 min · a IA verifica os factos nas fontes antes de reescrever
+                </div>
+              )}
+              {notasIA && (
+                <div style={{ fontSize: 12, color: 'var(--fg-2)', marginTop: 10, lineHeight: 1.55, borderLeft: '2px solid var(--gold)', paddingLeft: 10 }}>
+                  {notasIA}
+                </div>
+              )}
+            </div>
+
             <div className="glass" style={{ padding: '20px 20px 22px' }}>
               <span className="overline">Imagem do artigo</span>
               {gerandoImgs ? (

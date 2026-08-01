@@ -8,6 +8,7 @@
 // Instagram login" e não dá acesso à Página, por isso não há números a mostrar.
 import React, { useEffect, useMemo, useState } from 'react';
 import { stats as statsApi } from '../apiClient';
+import { admToast } from '../toasts';
 import { Icon, Ticker, Reveal, Seg, Chart, Tilt, PanelHead } from '../rs/ui';
 
 const PLATAFORMAS = [
@@ -58,8 +59,21 @@ function fmtData(iso) {
 function fmtQuando(iso) {
   if (!iso) return '';
   const d = new Date(String(iso).replace(' ', 'T') + 'Z');
-  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' });
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' }) +
+    ' às ' + d.toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' });
 }
+
+// Tooltips das colunas do ranking (pedido do Victor, 1 ago). O TipLayer do design
+// system posiciona por portal e prende aos limites da janela — nunca corta no ecrã.
+const TIP_COLUNA = {
+  'Formato': 'Tipo de peça: Reel (vídeo curto), Imagem, Álbum (carrossel) ou Vídeo. Cada formato tem alcance e comportamento próprios no algoritmo.',
+  'Alcance': 'Contas únicas que viram esta publicação organicamente. A entrega paga (anúncios) não entra aqui — essa vê-se no Ads Manager.',
+  'Interações': 'Soma de curtidas, comentários, guardados e partilhas desta publicação.',
+  'Guardados': 'Quantas pessoas guardaram a publicação para voltar a ver. É o sinal mais forte que o algoritmo usa para a mostrar a quem não segue a página.',
+  'Partilhas': 'Quantas vezes a publicação foi enviada a outras pessoas ou partilhada nos stories.',
+  'Taxa': 'Interações a dividir pelo alcance da própria peça: de quem viu, quantos reagiram. Acima de ~5% é um resultado muito bom.',
+};
 
 export default function EngagementSection() {
   const [plataforma, setPlataforma] = useState('instagram');
@@ -67,6 +81,8 @@ export default function EngagementSection() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState(null);
+  const [reload, setReload] = useState(0);       // bump após «Atualizar agora»
+  const [sincronizando, setSincronizando] = useState(false);
 
   useEffect(() => {
     let vivo = true;
@@ -77,7 +93,24 @@ export default function EngagementSection() {
       .catch((e) => { if (vivo) setErro(e.message); })
       .finally(() => { if (vivo) setLoading(false); });
     return () => { vivo = false; };
-  }, [range]);
+  }, [range, reload]);
+
+  // «Atualizar agora»: corre o mesmo sync do cron (demora ~20-40 s — a Meta é
+  // consultada dia a dia e post a post) e depois recarrega os números.
+  const sincronizar = async () => {
+    if (sincronizando) return;
+    setSincronizando(true);
+    try {
+      await statsApi.engagementSync();
+      setReload(Date.now());
+      admToast('Números atualizados a partir do Instagram.');
+    } catch (e) {
+      // erro de sync não deita a aba abaixo — os números do último ciclo continuam válidos
+      admToast(`Não foi possível atualizar agora: ${e.message}`, { kind: 'error' });
+    } finally {
+      setSincronizando(false);
+    }
+  };
 
   const ig = data?.platforms?.instagram;
 
@@ -98,6 +131,11 @@ export default function EngagementSection() {
                 Atualizado a {fmtQuando(ig.updated_at)} · sincronização diária
               </span>
             )}
+            <button type="button" className="btn btn-ghost btn-sm" onClick={sincronizar} disabled={sincronizando}
+                    data-tip="Vai buscar os números mais recentes ao Instagram agora (demora ~30 s); fora isto, a sincronização corre sozinha uma vez por dia">
+              <Icon name="refresh" size={13} style={sincronizando ? { animation: 'rsSpin 1s linear infinite' } : undefined} />
+              {sincronizando ? 'A atualizar…' : 'Atualizar agora'}
+            </button>
           </div>
         )}
       </div>
@@ -230,7 +268,11 @@ function Instagram({ ig, dias }) {
                       textAlign: i > 1 ? 'right' : 'left', padding: '0 10px 10px',
                       fontSize: 9.5, fontWeight: 800, letterSpacing: '.16em', textTransform: 'uppercase',
                       color: 'var(--fg-3)', borderBottom: '1px solid var(--line)', whiteSpace: 'nowrap',
-                    }}>{h}</th>
+                    }}>
+                      {TIP_COLUNA[h]
+                        ? <span data-tip={TIP_COLUNA[h]} style={{ cursor: 'help', borderBottom: '1px dotted var(--fg-3)', paddingBottom: 1 }}>{h}</span>
+                        : h}
+                    </th>
                   ))}
                 </tr>
               </thead>

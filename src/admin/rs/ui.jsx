@@ -172,6 +172,21 @@ export function TipLayer() {
     setPos({ x, y });
   }, [tip]);
 
+  // 3.ª passagem: com a caixa já na posição final, corrige qualquer fuga residual
+  // (a altura pode mudar entre a medição escondida e o render visível — junto às
+  // margens isso deixava o tooltip a raspar/cortar na borda do ecrã).
+  useEffect(() => {
+    if (!pos || !box.current) return;
+    const b = box.current.getBoundingClientRect();
+    const vw = window.innerWidth, vh = window.innerHeight;
+    let x = pos.x, y = pos.y;
+    if (b.right > vw - 8) x -= b.right - (vw - 8);
+    if (b.bottom > vh - 8) y -= b.bottom - (vh - 8);
+    x = Math.max(8, x); y = Math.max(8, y);
+    if (Math.abs(x - pos.x) > 0.5 || Math.abs(y - pos.y) > 0.5) setPos({ x, y });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pos]);
+
   if (!tip || typeof document === 'undefined') return null;
   return ReactDOM.createPortal(
     <span className="rs-scope" data-rs-theme={tip.theme}

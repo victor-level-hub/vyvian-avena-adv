@@ -12,6 +12,18 @@
 
 ## Prioridade alta (código)
 
+- [x] **Editor Insights — 5 correções da Dra. + Engajamento (1 ago, `bee4a0a`, em produção):**
+  inserir fotos («JSON incompleto» — 8192 tokens + JSON forçado + motor de reserva, mesmo
+  remédio da Nota da IA), aviso legal determinístico (código acrescenta na geração e na fila
+  de publicação — nunca depende do modelo), título destravado (maxLength=120 silencioso
+  engolia o teclado quando o título gerado vinha no limite), **Correções por IA** (cartão na
+  sidebar do editor: a Dra. descreve a correção, a IA aplica ao artigo inteiro com verificação
+  nas fontes e nota do que ficou por aplicar), **Apagar rascunho** (DELETE + botão no editor e
+  na lista Tema Livre; preserva imagens do Banco; publicados não se apagam; tema volta a
+  «sugerido»). Aba Engajamento: tooltips nas colunas do ranking, TipLayer com 3.ª passagem
+  (nunca corta nas margens), «Atualizado a DD/MM às HH:MM» + botão **Atualizar agora**
+  (POST /api/stats/engagement/sync autenticado). Testado localmente ponta-a-ponta e em produção.
+
 - [x] **Redesign v3 em TODA a Área Privada — CONCLUÍDO 5/5** (27–28 jul, `90f36a1` Painel, `107648c` Clientes, `75b12a2` Parcelas+Calendário+Notificações): todos os menus no design system das Redes Sociais via **RsShell** (`rs/ui.jsx`) — shell `.rs-scope` com toggle light/dark persistido ('rs-theme'), primitivas Icon/Ticker/Reveal/Seg/PanelHead, tooltips data-tip (nunca title nativo, nunca cortados), caret visível, seletores `.adm-root .rs-scope` contra o admin.css. Parcelas: KPIs do mês + tabela rs + modal WhatsApp redesenhado. Calendário: CSS gcal-* convertido para variáveis do tema, vistas em Seg, admConfirm no apagar. Notificações: interruptores dourados, destinos .field, histórico e modelos em glass. Lógica e endpoints 100% inalterados. **Aguarda validação visual do Victor nos dois temas.** (Fora do rollout: ClientDetail.jsx e NewClient.jsx — fase posterior, se pedido.)
 
 - [x] **PUBLICAR (fase final do Insights)** — CONCLUÍDO 27 jul e validado em produção: 1.º artigo publicado pelo robô (/blog/urgencia-em-processos-de-nacionalidade-nova-deliberacao). Fila no Worker (PUBLISH_KEY) + GitHub Actions a cada 15 min (md, imagens R2 + webp, narração com timestamps, build com gate SEO, deploy, confirmação).

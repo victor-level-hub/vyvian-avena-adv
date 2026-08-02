@@ -21,10 +21,25 @@ const RANGES = {
 export async function handleStats(request, env, path, session) {
   // Sincronização imediata (botão «Atualizar agora» da aba Engajamento). Autenticada
   // pela sessão — ao contrário de /api/stats/instagram/sync, que usa a IG_SYNC_KEY
-  // e serve para disparos externos. Corre o mesmo sync do cron diário.
+  // e serve para disparos externos. Corre o mesmo sync do cron diário e, a cada clique,
+  // grava um registo de verificação no histórico da campanha (snapshot dos números).
   if (path === '/api/stats/engagement/sync' && request.method === 'POST') {
     const r = await syncInstagram(env);
+    try { await logSyncSnapshot(env); } catch { /* falha do registo não deita o sync abaixo */ }
     return jsonResponse({ ok: true, ...r });
+  }
+
+  // Guardar a data/hora de fim do engajamento (campo editável no card/modal).
+  // Body: { fim: '<ISO com offset>' | null }. Guardado em horário de Brasília (-03:00).
+  if (path === '/api/stats/campaign/end' && request.method === 'POST') {
+    const body = await request.json().catch(() => ({}));
+    const fim = (typeof body.fim === 'string' && body.fim.trim()) ? body.fim.trim() : null;
+    await env.DB.prepare(
+      `INSERT INTO campaign_settings (chave, valor, atualizado_em)
+       VALUES ('fim_engajamento', ?, datetime('now'))
+       ON CONFLICT(chave) DO UPDATE SET valor = excluded.valor, atualizado_em = datetime('now')`
+    ).bind(fim).run();
+    return jsonResponse({ ok: true, fim });
   }
 
   if (request.method !== 'GET') return jsonError('Method not allowed', 405);
@@ -69,28 +84,96 @@ export async function handleStats(request, env, path, session) {
 // Entradas por data desc (mais recente primeiro). 'acoes' e 'metricas' são JSON
 // guardados como texto — devolvemo-los já parseados para o frontend não repetir.
 async function campaignHistory(env) {
+  const fim = await getFim(env);
   let rows = [];
   try {
+    // Query completa (colunas das 0029 e 0032). Se alguma ainda não foi migrada,
+    // cai no fallback com apenas as colunas garantidas da 0028 — sem regredir a lista.
     rows = (await env.DB.prepare(
-      `SELECT id, data, fase, titulo, resumo, acoes, metricas, decisao
+      `SELECT id, data, hora, titulo, fase, resumo, acoes, metricas, decisao,
+              valor_restante, tempo_restante, restante_nota
        FROM campaign_history ORDER BY data DESC, id DESC`
     ).all()).results || [];
   } catch (e) {
-    // tabela ainda não migrada em produção → lista vazia em vez de 500
-    return jsonResponse({ entries: [] });
+    try {
+      rows = (await env.DB.prepare(
+        `SELECT id, data, titulo, fase, resumo, acoes, metricas, decisao
+         FROM campaign_history ORDER BY data DESC, id DESC`
+      ).all()).results || [];
+    } catch {
+      // tabela ainda não migrada de todo → lista vazia em vez de 500
+      return jsonResponse({ entries: [], fim });
+    }
   }
   const parse = (s, fb) => { try { return JSON.parse(s); } catch { return fb; } };
   const entries = rows.map((r) => ({
     id: r.id,
     data: r.data,
+    hora: r.hora || null,
     fase: r.fase,
     titulo: r.titulo,
     resumo: r.resumo,
     acoes: parse(r.acoes, []),
     metricas: parse(r.metricas, []),
     decisao: r.decisao,
+    valor_restante: r.valor_restante || null,
+    tempo_restante: r.tempo_restante || null,
+    restante_nota: r.restante_nota || null,
   }));
-  return jsonResponse({ entries });
+  return jsonResponse({ entries, fim });
+}
+
+// Data/hora de fim do engajamento (chave/valor da 0031). Null se ainda não migrado.
+async function getFim(env) {
+  try {
+    const r = await env.DB.prepare(
+      `SELECT valor FROM campaign_settings WHERE chave = 'fim_engajamento'`
+    ).first();
+    return r?.valor || null;
+  } catch { return null; }
+}
+
+// Instante atual em horário de Brasília: { data: 'YYYY-MM-DD', hora: 'HH:MM' }.
+function agoraBrasilia() {
+  const now = new Date();
+  const data = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(now);
+  const hora = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(now);
+  return { data, hora };
+}
+
+// Regista no histórico um snapshot dos números do momento (fase «verificação»).
+// Chamado a cada clique em «Atualizar agora» — um registo por clique.
+async function logSyncSnapshot(env) {
+  const since = new Date(Date.now() - 29 * 86400000).toISOString().slice(0, 10);
+  const rows = (await env.DB.prepare(
+    `SELECT * FROM ig_daily_insights WHERE day >= ? ORDER BY day ASC`
+  ).bind(since).all()).results || [];
+  const t = sumCols(rows);
+
+  const nf = (n) => (n == null ? '—' : n.toLocaleString('pt-PT'));
+  const taxa = t.reach ? (t.total_interactions || 0) / t.reach * 100 : null;
+  const metricas = [
+    { label: 'Contas com engajamento', valor: nf(t.accounts_engaged), sub: 'últimos 30 dias' },
+    { label: 'Interações totais', valor: nf(t.total_interactions) },
+    { label: 'Contas alcançadas', valor: nf(t.reach) },
+    { label: 'Taxa de engajamento', valor: taxa == null ? '—' : taxa.toFixed(1).replace('.', ',') + '%' },
+  ];
+
+  const { data, hora } = agoraBrasilia();
+  await env.DB.prepare(
+    `INSERT INTO campaign_history (data, hora, fase, titulo, resumo, acoes, metricas)
+     VALUES (?, ?, 'verificacao', ?, ?, ?, ?)`
+  ).bind(
+    data, hora,
+    `Sincronização · ${hora}`,
+    'Snapshot automático dos números do Instagram no momento em que carregou «Atualizar agora».',
+    JSON.stringify(['Números recarregados a partir do Instagram (últimos 30 dias).']),
+    JSON.stringify(metricas),
+  ).run();
 }
 
 // ─── Engajamento ────────────────────────────────────────────────────────────

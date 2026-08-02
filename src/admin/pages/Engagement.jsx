@@ -83,6 +83,7 @@ export default function EngagementSection() {
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState(null);
   const [reload, setReload] = useState(0);       // bump após «Atualizar agora»
+  const [histReload, setHistReload] = useState(0); // bump para recarregar o histórico (sync/edição)
   const [sincronizando, setSincronizando] = useState(false);
 
   useEffect(() => {
@@ -104,7 +105,8 @@ export default function EngagementSection() {
     try {
       await statsApi.engagementSync();
       setReload(Date.now());
-      admToast('Números atualizados a partir do Instagram.');
+      setHistReload((n) => n + 1); // o sync criou um registo novo no histórico
+      admToast('Números atualizados — registo adicionado ao histórico.');
     } catch (e) {
       // erro de sync não deita a aba abaixo — os números do último ciclo continuam válidos
       admToast(`Não foi possível atualizar agora: ${e.message}`, { kind: 'error' });
@@ -120,8 +122,13 @@ export default function EngagementSection() {
     <>
       {/* Coluna "Histórico da campanha": card clicável que abre o modal com o
           registo cronológico das intervenções e verificações do impulsionamento. */}
-      <HistoricoCampanhaCard onAbrir={() => setHistAberto(true)} />
-      {histAberto && <HistoricoCampanhaModal onFechar={() => setHistAberto(false)} />}
+      <HistoricoCampanhaCard reload={histReload} onAbrir={() => setHistAberto(true)} />
+      {histAberto && (
+        <HistoricoCampanhaModal
+          reload={histReload}
+          onSaved={() => setHistReload((n) => n + 1)}
+          onFechar={() => setHistAberto(false)} />
+      )}
 
       <div style={{ display: 'grid', gap: 12, marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
@@ -184,19 +191,68 @@ function fmtDataHist(iso) {
   return isNaN(d.getTime()) ? iso : d.toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' });
 }
 
+// ── Data/hora de fim do engajamento (sempre em horário de Brasília, GMT-3) ──
+// Formata um instante ISO no fuso de Brasília.
+function fmtFimBR(iso, opts) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('pt-PT', { timeZone: 'America/Sao_Paulo', ...opts }).format(d);
+}
+// ISO → 'YYYY-MM-DDTHH:MM' com a hora de parede de Brasília, para o <input datetime-local>.
+function isoToInputBR(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const p = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo', year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+  }).formatToParts(d).reduce((a, x) => (a[x.type] = x.value, a), {});
+  return `${p.year}-${p.month}-${p.day}T${p.hour}:${p.minute}`;
+}
+// 'YYYY-MM-DDTHH:MM' (hora de parede de Brasília) → ISO com offset -03:00.
+function inputBRToIso(v) {
+  return v ? `${v}:00-03:00` : null;
+}
+// Contagem decrescente até ao fim. { done, txt }.
+function fmtCountdown(iso) {
+  if (!iso) return null;
+  const end = new Date(iso).getTime();
+  if (isNaN(end)) return null;
+  const diff = end - Date.now();
+  if (diff <= 0) return { done: true, txt: 'terminou' };
+  const m = Math.floor(diff / 60000);
+  const d = Math.floor(m / 1440);
+  const h = Math.floor((m % 1440) / 60);
+  const mm = m % 60;
+  const txt = d > 0 ? `faltam ${d}d ${h}h` : h > 0 ? `faltam ${h}h ${mm}m` : `faltam ${mm}m`;
+  return { done: false, txt };
+}
+// Força um re-render por minuto para a contagem decrescente ficar viva.
+function useMinuteTick() {
+  const [, setT] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setT((t) => t + 1), 60000);
+    return () => clearInterval(id);
+  }, []);
+}
+
 // A "coluna" pedida: card largo e clicável que abre o histórico completo no modal.
-function HistoricoCampanhaCard({ onAbrir }) {
+function HistoricoCampanhaCard({ reload, onAbrir }) {
   const [entries, setEntries] = useState(null);
+  const [fim, setFim] = useState(null);
+  useMinuteTick();
   useEffect(() => {
     let vivo = true;
     statsApi.campaignHistory()
-      .then((d) => { if (vivo) setEntries(d.entries || []); })
+      .then((d) => { if (vivo) { setEntries(d.entries || []); setFim(d.fim || null); } })
       .catch(() => { if (vivo) setEntries([]); });
     return () => { vivo = false; };
-  }, []);
+  }, [reload]);
 
   const n = entries ? entries.length : 0;
   const ultima = entries && entries[0];
+  const cd = fim ? fmtCountdown(fim) : null;
 
   return (
     <Reveal cls="glass" style={{ padding: 0, marginBottom: 20, overflow: 'hidden' }}>
@@ -218,6 +274,14 @@ function HistoricoCampanhaCard({ onAbrir }) {
               : n === 0 ? 'Sem registos ainda.'
               : `${n} ${n === 1 ? 'registo' : 'registos'}${ultima ? ` · último: ${fmtDataHist(ultima.data)}` : ''}`}
           </span>
+          {fim && (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5, marginTop: 6,
+                           color: cd?.done ? 'var(--fg-3)' : 'var(--gold-soft)', fontWeight: 600 }}>
+              <Icon name="clock" size={12} />
+              {cd?.done ? 'Engajamento terminou' : 'Termina'} {fmtFimBR(fim, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })} (Brasília)
+              {cd && !cd.done && <span style={{ color: 'var(--fg-3)', fontWeight: 400 }}>· {cd.txt}</span>}
+            </span>
+          )}
         </span>
         <span className="chip chip-gold" style={{ flex: 'none' }}>
           Ver histórico <Icon name="chev" size={12} />
@@ -227,20 +291,42 @@ function HistoricoCampanhaCard({ onAbrir }) {
   );
 }
 
-function HistoricoCampanhaModal({ onFechar }) {
+function HistoricoCampanhaModal({ reload, onSaved, onFechar }) {
   const [entries, setEntries] = useState(null);
   const [erro, setErro] = useState(null);
+  const [fim, setFim] = useState(null);          // ISO guardado (com offset -03:00)
+  const [fimInput, setFimInput] = useState('');  // 'YYYY-MM-DDTHH:MM' (hora de Brasília)
+  const [guardando, setGuardando] = useState(false);
+  useMinuteTick();
 
   useEffect(() => {
     let vivo = true;
     statsApi.campaignHistory()
-      .then((d) => { if (vivo) setEntries(d.entries || []); })
+      .then((d) => { if (vivo) { setEntries(d.entries || []); setFim(d.fim || null); setFimInput(isoToInputBR(d.fim)); } })
       .catch((e) => { if (vivo) setErro(e.message); });
     // fechar com Esc
     const onKey = (e) => { if (e.key === 'Escape') onFechar(); };
     window.addEventListener('keydown', onKey);
     return () => { vivo = false; window.removeEventListener('keydown', onKey); };
-  }, [onFechar]);
+  }, [onFechar, reload]);
+
+  const guardarFim = async () => {
+    if (guardando) return;
+    setGuardando(true);
+    try {
+      const iso = inputBRToIso(fimInput);
+      await statsApi.campaignEndSet(iso);
+      setFim(iso);
+      admToast('Data de fim do engajamento guardada.');
+      onSaved?.();
+    } catch (e) {
+      admToast(`Não foi possível guardar: ${e.message}`, { kind: 'error' });
+    } finally {
+      setGuardando(false);
+    }
+  };
+  const cd = fim ? fmtCountdown(fim) : null;
+  const tema = (typeof document !== 'undefined' && document.querySelector('.rs-scope')?.getAttribute('data-rs-theme')) || 'dark';
 
   const conteudo = (
     <div className="rs-scope" data-rs-theme={document.querySelector('.rs-scope')?.getAttribute('data-rs-theme') || 'dark'}
@@ -255,6 +341,31 @@ function HistoricoCampanhaModal({ onFechar }) {
             <h3 style={{ fontSize: 21, marginTop: 6 }}>Reel Urgência Nacionalidade — Jul 2026 (BR+PT)</h3>
             <div style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 5 }}>
               Objetivo Engajamento · 2 conjuntos (PT / BR) · impulsionamento pago no Meta Ads
+            </div>
+
+            {/* Data/hora de fim do engajamento — editável, sempre em horário de Brasília. */}
+            <div style={{ marginTop: 13, padding: '11px 13px', border: '1px solid var(--edge)', borderRadius: 10,
+                          background: 'var(--surface-2, rgba(255,255,255,.02))', display: 'flex',
+                          alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span className="overline" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Icon name="clock" size={13} /> Fim do engajamento
+              </span>
+              <input type="datetime-local" value={fimInput} onChange={(e) => setFimInput(e.target.value)}
+                     style={{ background: 'var(--bg-2)', color: 'inherit', border: '1px solid var(--edge-2)',
+                              borderRadius: 8, padding: '6px 9px', fontSize: 12.5, colorScheme: tema }} />
+              <span style={{ fontSize: 11, color: 'var(--fg-3)' }}>Brasília (GMT-3)</span>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={guardarFim} disabled={guardando}
+                      style={{ flex: 'none' }}>
+                {guardando ? 'A guardar…' : 'Guardar'}
+              </button>
+              {cd && (
+                <span className="chip" style={{ marginLeft: 'auto',
+                        borderColor: (cd.done ? 'var(--edge)' : C.gold) + '66',
+                        background: (cd.done ? 'var(--edge)' : C.gold) + '1f',
+                        color: cd.done ? 'var(--fg-3)' : C.gold }}>
+                  {cd.done ? 'terminou' : cd.txt}
+                </span>
+              )}
             </div>
           </div>
           <button type="button" onClick={onFechar} aria-label="Fechar"
@@ -292,7 +403,7 @@ function EntradaHist({ e }) {
       <span style={{ position: 'absolute', left: 0, top: 3, width: 16, height: 16, borderRadius: 9,
                      background: fase.cor, border: '3px solid var(--bg-2)', boxShadow: '0 0 0 1px var(--edge)' }} />
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <span style={{ fontSize: 13, fontWeight: 700 }}>{fmtDataHist(e.data)}</span>
+        <span style={{ fontSize: 13, fontWeight: 700 }}>{fmtDataHist(e.data)}{e.hora ? ` · ${e.hora}` : ''}</span>
         <span className="chip" style={{ borderColor: fase.cor + '66', background: fase.cor + '1f', color: fase.cor }}>{fase.label}</span>
       </div>
       <div style={{ fontSize: 15, fontWeight: 700, marginTop: 6 }}>{e.titulo}</div>
@@ -317,6 +428,22 @@ function EntradaHist({ e }) {
               {m.sub && <div style={{ fontSize: 10.5, color: 'var(--fg-3)', opacity: .8, marginTop: 2 }}>{m.sub}</div>}
             </div>
           ))}
+        </div>
+      )}
+
+      {(e.tempo_restante || e.valor_restante) && (
+        <div style={{ marginTop: 14, padding: '12px 14px', border: `1px solid ${fase.cor}55`, borderRadius: 10,
+                      background: `linear-gradient(90deg, ${fase.cor}14, transparent 70%)` }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ color: fase.cor, display: 'flex' }}><Icon name="clock" size={15} /></span>
+            <span className="overline" style={{ color: fase.cor }}>Falta para acabar</span>
+            <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginLeft: 'auto', flexWrap: 'wrap' }}>
+              {e.tempo_restante && <span className="num" style={{ fontSize: 18, fontWeight: 700 }}>{e.tempo_restante}</span>}
+              {e.tempo_restante && e.valor_restante && <span style={{ color: 'var(--fg-3)' }}>·</span>}
+              {e.valor_restante && <span className="num" style={{ fontSize: 18, fontWeight: 700 }}>{e.valor_restante}</span>}
+            </span>
+          </div>
+          {e.restante_nota && <p style={{ fontSize: 11.5, color: 'var(--fg-3)', lineHeight: 1.55, marginTop: 7 }}>{e.restante_nota}</p>}
         </div>
       )}
 

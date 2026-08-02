@@ -47,6 +47,12 @@ export async function handleStats(request, env, path, session) {
     return await instagramStats(env, rangeKey, RANGES[rangeKey].days);
   }
 
+  // Histórico da campanha (0028): registo cronológico das intervenções/verificações,
+  // mostrado no modal "Histórico da campanha" da aba Engajamento.
+  if (path === '/api/stats/campaign-history') {
+    return await campaignHistory(env);
+  }
+
   // Engajamento (0027): métricas de conta, ranking de publicações e demografia,
   // organizado por plataforma para a aba "Engajamento".
   if (path === '/api/stats/engagement') {
@@ -57,6 +63,34 @@ export async function handleStats(request, env, path, session) {
   }
 
   return jsonError('Not found', 404);
+}
+
+// ─── Histórico da campanha (0028) ───────────────────────────────────────────
+// Entradas por data desc (mais recente primeiro). 'acoes' e 'metricas' são JSON
+// guardados como texto — devolvemo-los já parseados para o frontend não repetir.
+async function campaignHistory(env) {
+  let rows = [];
+  try {
+    rows = (await env.DB.prepare(
+      `SELECT id, data, fase, titulo, resumo, acoes, metricas, decisao
+       FROM campaign_history ORDER BY data DESC, id DESC`
+    ).all()).results || [];
+  } catch (e) {
+    // tabela ainda não migrada em produção → lista vazia em vez de 500
+    return jsonResponse({ entries: [] });
+  }
+  const parse = (s, fb) => { try { return JSON.parse(s); } catch { return fb; } };
+  const entries = rows.map((r) => ({
+    id: r.id,
+    data: r.data,
+    fase: r.fase,
+    titulo: r.titulo,
+    resumo: r.resumo,
+    acoes: parse(r.acoes, []),
+    metricas: parse(r.metricas, []),
+    decisao: r.decisao,
+  }));
+  return jsonResponse({ entries });
 }
 
 // ─── Engajamento ────────────────────────────────────────────────────────────

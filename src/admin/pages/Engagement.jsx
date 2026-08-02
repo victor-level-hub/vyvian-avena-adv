@@ -7,6 +7,7 @@
 // O Facebook mostra o estado da ligação: o token atual é do fluxo "Instagram API with
 // Instagram login" e não dá acesso à Página, por isso não há números a mostrar.
 import React, { useEffect, useMemo, useState } from 'react';
+import ReactDOM from 'react-dom';
 import { stats as statsApi } from '../apiClient';
 import { admToast } from '../toasts';
 import { Icon, Ticker, Reveal, Seg, Chart, Tilt, PanelHead } from '../rs/ui';
@@ -113,9 +114,15 @@ export default function EngagementSection() {
   };
 
   const ig = data?.platforms?.instagram;
+  const [histAberto, setHistAberto] = useState(false);
 
   return (
     <>
+      {/* Coluna "Histórico da campanha": card clicável que abre o modal com o
+          registo cronológico das intervenções e verificações do impulsionamento. */}
+      <HistoricoCampanhaCard onAbrir={() => setHistAberto(true)} />
+      {histAberto && <HistoricoCampanhaModal onFechar={() => setHistAberto(false)} />}
+
       <div style={{ display: 'grid', gap: 12, marginBottom: 20 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
           <span className="overline">Plataforma</span>
@@ -158,6 +165,167 @@ function Esqueleto() {
           <div style={{ width: '42%', height: 26, borderRadius: 6, background: 'var(--line)', opacity: .6 }} />
         </div>
       ))}
+    </div>
+  );
+}
+
+/* ============ HISTÓRICO DA CAMPANHA (0028) ============ */
+// Rótulo e cor de cada fase — consistente no card e no modal.
+const FASE = {
+  montagem:    { label: 'Montagem', cor: C.sage },
+  auditoria:   { label: 'Auditoria', cor: C.gold },
+  alteracao:   { label: 'Alteração', cor: C.warm },
+  verificacao: { label: 'Verificação', cor: C.gold2 },
+};
+
+function fmtDataHist(iso) {
+  if (!iso) return '';
+  const d = new Date(iso + 'T00:00:00');
+  return isNaN(d.getTime()) ? iso : d.toLocaleDateString('pt-PT', { day: '2-digit', month: 'long', year: 'numeric' });
+}
+
+// A "coluna" pedida: card largo e clicável que abre o histórico completo no modal.
+function HistoricoCampanhaCard({ onAbrir }) {
+  const [entries, setEntries] = useState(null);
+  useEffect(() => {
+    let vivo = true;
+    statsApi.campaignHistory()
+      .then((d) => { if (vivo) setEntries(d.entries || []); })
+      .catch(() => { if (vivo) setEntries([]); });
+    return () => { vivo = false; };
+  }, []);
+
+  const n = entries ? entries.length : 0;
+  const ultima = entries && entries[0];
+
+  return (
+    <Reveal cls="glass" style={{ padding: 0, marginBottom: 20, overflow: 'hidden' }}>
+      <button type="button" onClick={onAbrir}
+              style={{ width: '100%', textAlign: 'left', background: 'none', border: 0, cursor: 'pointer',
+                       padding: '18px 22px', display: 'flex', alignItems: 'center', gap: 16, color: 'inherit' }}
+              data-tip="Abrir o histórico completo da campanha de impulsionamento">
+        <span style={{ flex: 'none', width: 40, height: 40, borderRadius: 11, display: 'grid', placeItems: 'center',
+                       background: 'var(--grad-gold-soft)', border: '1px solid var(--edge-2)', color: 'var(--gold-soft)' }}>
+          <Icon name="clock" size={19} />
+        </span>
+        <span style={{ flex: 1, minWidth: 0 }}>
+          <span className="overline">Histórico da campanha</span>
+          <span style={{ display: 'block', fontSize: 15.5, fontWeight: 700, marginTop: 4 }}>
+            Reel Urgência Nacionalidade — Jul 2026 (BR+PT)
+          </span>
+          <span style={{ display: 'block', fontSize: 12, color: 'var(--fg-3)', marginTop: 3 }}>
+            {entries == null ? 'A carregar…'
+              : n === 0 ? 'Sem registos ainda.'
+              : `${n} ${n === 1 ? 'registo' : 'registos'}${ultima ? ` · último: ${fmtDataHist(ultima.data)}` : ''}`}
+          </span>
+        </span>
+        <span className="chip chip-gold" style={{ flex: 'none' }}>
+          Ver histórico <Icon name="chev" size={12} />
+        </span>
+      </button>
+    </Reveal>
+  );
+}
+
+function HistoricoCampanhaModal({ onFechar }) {
+  const [entries, setEntries] = useState(null);
+  const [erro, setErro] = useState(null);
+
+  useEffect(() => {
+    let vivo = true;
+    statsApi.campaignHistory()
+      .then((d) => { if (vivo) setEntries(d.entries || []); })
+      .catch((e) => { if (vivo) setErro(e.message); });
+    // fechar com Esc
+    const onKey = (e) => { if (e.key === 'Escape') onFechar(); };
+    window.addEventListener('keydown', onKey);
+    return () => { vivo = false; window.removeEventListener('keydown', onKey); };
+  }, [onFechar]);
+
+  const conteudo = (
+    <div className="rs-scope" data-rs-theme={document.querySelector('.rs-scope')?.getAttribute('data-rs-theme') || 'dark'}
+         onClick={onFechar}
+         style={{ position: 'fixed', inset: 0, zIndex: 300, background: 'rgba(6,16,13,.72)', backdropFilter: 'blur(4px)',
+                  display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '5vh 16px', overflowY: 'auto' }}>
+      <div className="glass" onClick={(e) => e.stopPropagation()}
+           style={{ width: '100%', maxWidth: 720, padding: 0, animation: 'rsRiseInSm .25s var(--ease-out) both' }}>
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '22px 24px 16px', borderBottom: '1px solid var(--edge)' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span className="overline">Histórico da campanha</span>
+            <h3 style={{ fontSize: 21, marginTop: 6 }}>Reel Urgência Nacionalidade — Jul 2026 (BR+PT)</h3>
+            <div style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 5 }}>
+              Objetivo Engajamento · 2 conjuntos (PT / BR) · impulsionamento pago no Meta Ads
+            </div>
+          </div>
+          <button type="button" onClick={onFechar} aria-label="Fechar"
+                  className="btn btn-quiet btn-sm" style={{ flex: 'none' }}>
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+
+        <div style={{ padding: '18px 24px 24px', maxHeight: '70vh', overflowY: 'auto' }}>
+          {erro ? <div style={{ color: 'var(--danger)', fontSize: 13 }}>{erro}</div>
+            : entries == null ? <div style={{ color: 'var(--fg-3)', fontSize: 13 }}>A carregar o histórico…</div>
+            : entries.length === 0 ? <div style={{ color: 'var(--fg-3)', fontSize: 13 }}>Ainda não há registos desta campanha.</div>
+            : (
+              <div style={{ position: 'relative' }}>
+                {/* fio vertical da linha do tempo */}
+                <span style={{ position: 'absolute', left: 7, top: 6, bottom: 6, width: 2, background: 'var(--edge)' }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+                  {entries.map((e) => <EntradaHist key={e.id} e={e} />)}
+                </div>
+              </div>
+            )}
+        </div>
+      </div>
+    </div>
+  );
+  return ReactDOM.createPortal(conteudo, document.body);
+}
+
+// Uma entrada do histórico — sempre com os mesmos campos: data · fase · ações ·
+// métricas · decisão (as "informações padrão").
+function EntradaHist({ e }) {
+  const fase = FASE[e.fase] || { label: e.fase, cor: C.gold2 };
+  return (
+    <div style={{ position: 'relative', paddingLeft: 30 }}>
+      <span style={{ position: 'absolute', left: 0, top: 3, width: 16, height: 16, borderRadius: 9,
+                     background: fase.cor, border: '3px solid var(--bg-2)', boxShadow: '0 0 0 1px var(--edge)' }} />
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 13, fontWeight: 700 }}>{fmtDataHist(e.data)}</span>
+        <span className="chip" style={{ borderColor: fase.cor + '66', background: fase.cor + '1f', color: fase.cor }}>{fase.label}</span>
+      </div>
+      <div style={{ fontSize: 15, fontWeight: 700, marginTop: 6 }}>{e.titulo}</div>
+      {e.resumo && <p style={{ fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.6, marginTop: 6 }}>{e.resumo}</p>}
+
+      {Array.isArray(e.acoes) && e.acoes.length > 0 && (
+        <ul style={{ margin: '12px 0 0', paddingLeft: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {e.acoes.map((a, i) => (
+            <li key={i} style={{ display: 'flex', gap: 8, fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+              <span style={{ color: fase.cor, flex: 'none', marginTop: 1 }}><Icon name="check" size={13} s={2.4} /></span>{a}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {Array.isArray(e.metricas) && e.metricas.length > 0 && (
+        <div style={{ display: 'grid', gap: 8, gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', marginTop: 14 }}>
+          {e.metricas.map((m, i) => (
+            <div key={i} style={{ padding: '9px 12px', border: '1px solid var(--edge)', borderRadius: 10, background: 'var(--surface-2, rgba(255,255,255,.02))' }}>
+              <div className="num" style={{ fontSize: 17, fontWeight: 700 }}>{m.valor}</div>
+              <div style={{ fontSize: 10.5, color: 'var(--fg-3)', marginTop: 1 }}>{m.label}</div>
+              {m.sub && <div style={{ fontSize: 10.5, color: 'var(--fg-3)', opacity: .8, marginTop: 2 }}>{m.sub}</div>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {e.decisao && (
+        <div style={{ marginTop: 14, padding: '11px 14px', borderLeft: `2px solid ${fase.cor}`, background: 'rgba(184,147,90,.06)', borderRadius: '0 8px 8px 0' }}>
+          <span className="overline" style={{ color: fase.cor }}>Decisão</span>
+          <p style={{ fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.6, marginTop: 5 }}>{e.decisao}</p>
+        </div>
+      )}
     </div>
   );
 }

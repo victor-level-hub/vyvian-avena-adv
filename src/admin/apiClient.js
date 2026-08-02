@@ -137,6 +137,8 @@ export const stats = {
   engagement: (range = '30d') => request(`/api/stats/engagement?range=${encodeURIComponent(range)}`),
   // Botão «Atualizar agora» — corre o sync do Instagram e devolve o sumário.
   engagementSync: () => request('/api/stats/engagement/sync', { method: 'POST' }),
+  // Histórico da campanha (modal na aba Engajamento).
+  campaignHistory: () => request('/api/stats/campaign-history'),
 };
 
 // ============ INSIGHTS (Redes Sociais → Insights) ============

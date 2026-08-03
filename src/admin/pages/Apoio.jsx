@@ -343,6 +343,23 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
     finally { setBusy(false); }
   };
 
+  const executar = async () => {
+    if (!ticket) return;
+    const ok = await admConfirm(
+      `Efetuar a alteração do ticket ${ticket.id}?\n\nO ticket passa a «Em execução» e o Claude trata dele na próxima sessão de desenvolvimento. Se não for possível, o status muda para «Impedimento» com o motivo detalhado.`,
+    );
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await apoio.update(ticket.id, { ...form, data_prazo: form.data_prazo || null });
+      const r = await apoio.executar(ticket.id);
+      setTicket(r.ticket); onChanged();
+      admToast(`${ticket.id} em execução — diga «resolver ticket ${ticket.id}» numa sessão do Claude.`);
+      await carregar();
+    } catch (e) { admAlert('Erro: ' + e.message); }
+    finally { setBusy(false); }
+  };
+
   // "Enviar para Aprovação" — guarda o formulário, e o worker envia um e-mail à Dra.
   // com os dados do ticket (+ prints de evidência anexados) e passa a «Em aprovação».
   const enviarAprovacao = async () => {
@@ -388,7 +405,8 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
   return (
     <div className="adm-overlay" role="dialog" aria-modal="true" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
          style={{ position: 'fixed', inset: 0, background: 'rgba(18,48,42,0.55)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '3rem 1rem', zIndex: 1000, overflowY: 'auto' }}>
-      <div className="glass" style={{ width: 'min(880px, 94vw)', height: 'fit-content', padding: '26px 28px', position: 'relative' }}>
+      {/* fundo sólido (panel-flat): sem transparência sobre a página atrás (pedido 3 ago) */}
+      <div className="glass" style={{ width: 'min(880px, 94vw)', height: 'fit-content', padding: '26px 28px', position: 'relative', background: 'var(--panel-flat)' }}>
         <ModalClose onClose={onClose} />
 
         {loading ? (
@@ -559,7 +577,12 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
                     <Icon name="check" size={13} />Abrir ticket
                   </button>
                 )}
-                {/* «Efetuar Alteração» saiu do rodapé (pedido 3 ago) — continua na lista de tickets */}
+                {ticket && !['rascunho', 'resolvido', 'cancelado'].includes(ticket.status) && (
+                  <button type="button" className="btn btn-gold btn-sm" onClick={executar} disabled={busy || ticket.status === 'em_execucao'}
+                          data-tip="O Claude tenta efetuar a melhoria; se não conseguir, passa a Impedimento com o motivo">
+                    <Icon name="spark" size={13} />{ticket.status === 'em_execucao' ? 'Em execução' : 'Efetuar Alteração'}
+                  </button>
+                )}
               </div>
             )}
           </>
@@ -595,15 +618,6 @@ export default function Apoio() {
     }
     return true;
   }), [tickets, fStatus, search]);
-
-  const executarDaLista = async (t) => {
-    const ok = await admConfirm(
-      `Efetuar a alteração do ticket ${t.id}?\n\nO ticket passa a «Em execução» e o Claude trata dele na próxima sessão. Se não for possível, o status muda para «Impedimento» com o motivo.`,
-    );
-    if (!ok) return;
-    try { await apoio.executar(t.id); admToast(`${t.id} em execução.`); carregar(); }
-    catch (e) { admAlert('Erro: ' + e.message); }
-  };
 
   if (loading) return <SkeletonPage kpis={0} rows={6} />;
   if (error) return <div className="adm-login-error">{error}</div>;
@@ -672,13 +686,8 @@ export default function Apoio() {
                         </button>{' '}
                         <button type="button" className="btn btn-ghost btn-sm" onClick={() => setModal({ id: t.id })} data-tip="Editar o ticket">
                           <Icon name="edit" size={12} />
-                        </button>{' '}
-                        {!['rascunho', 'resolvido', 'cancelado', 'em_execucao'].includes(t.status) && (
-                          <button type="button" className="btn btn-gold btn-sm" onClick={() => executarDaLista(t)}
-                                  data-tip="O Claude tenta efetuar a melhoria; se não conseguir, passa a Impedimento com o motivo">
-                            Efetuar Alteração
-                          </button>
-                        )}
+                        </button>
+                        {/* «Efetuar Alteração» vive só dentro do ticket (pedido 3 ago) */}
                       </td>
                     </tr>
                   );

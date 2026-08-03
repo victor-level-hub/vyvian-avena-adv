@@ -221,6 +221,7 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
   const [form, setForm] = useState(FORM_VAZIO);
   const [pend, setPend] = useState({ anexo: [], print_abertura: [], print_conclusao: [], audio: [] });
   const [readOnly, setReadOnly] = useState(!!readOnlyInicial);
+  const [histAberto, setHistAberto] = useState(false); // histórico recolhido por defeito
   const [loading, setLoading] = useState(!!ticketId);
   const [busy, setBusy] = useState(false);
   const [transcrevendo, setTranscrevendo] = useState(false);
@@ -545,19 +546,26 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
                 </div>
               )}
 
-              {/* histórico */}
+              {/* histórico — recolhido por defeito, abre ao clicar (pedido 3 ago) */}
               {eventos.length > 0 && (
                 <div>
-                  <span style={label}>Histórico</span>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    {eventos.map((ev, i) => (
-                      <div key={i} style={{ fontSize: 12, color: 'var(--fg-3)', lineHeight: 1.5 }}>
-                        <span style={{ color: 'var(--gold-soft)' }}>{fmtDataHora(ev.created_at)}</span>
-                        {' · '}<strong style={{ color: 'var(--fg-2)' }}>{ev.autor || '—'}</strong>
-                        {' · '}{ev.detalhe || ev.evento}
-                      </div>
-                    ))}
-                  </div>
+                  <button type="button" onClick={() => setHistAberto((o) => !o)} aria-expanded={histAberto}
+                          style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'none', border: 0, padding: 0, cursor: 'pointer' }}>
+                    <Icon name="chev" size={12}
+                          style={{ color: 'var(--gold)', transform: histAberto ? 'rotate(90deg)' : 'none', transition: 'transform .15s ease' }} />
+                    <span style={{ ...label, marginBottom: 0 }}>Histórico ({eventos.length})</span>
+                  </button>
+                  {histAberto && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 10 }}>
+                      {eventos.map((ev, i) => (
+                        <div key={i} style={{ fontSize: 12, color: 'var(--fg-3)', lineHeight: 1.5 }}>
+                          <span style={{ color: 'var(--gold-soft)' }}>{fmtDataHora(ev.created_at)}</span>
+                          {' · '}<strong style={{ color: 'var(--fg-2)' }}>{ev.autor || '—'}</strong>
+                          {' · '}{ev.detalhe || ev.evento}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

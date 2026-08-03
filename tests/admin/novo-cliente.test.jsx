@@ -51,7 +51,15 @@ beforeEach(() => {
   // o ecrã cria as parcelas com fetch direto (NewClient.jsx:509)
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ ok: true }) })));
 });
-afterEach(() => { vi.unstubAllGlobals(); });
+afterEach(async () => {
+  // O focusField do ecrã (NewClient.jsx:155) agenda um setTimeout(80) para pôr o
+  // cursor no campo em falta. Se não o deixarmos disparar aqui, ele acorda já
+  // dentro do teste seguinte e rouba o cursor a meio da escrita.
+  if (document.querySelector('.adm-login-error')) {
+    await new Promise((r) => setTimeout(r, 120));
+  }
+  vi.unstubAllGlobals();
+});
 
 const porId = (id) => document.getElementById(id);
 const rotulo = (texto) => screen.getByText(texto, { selector: 'label' });
@@ -974,5 +982,1273 @@ describe('Novo cliente — jurisdição', () => {
     expect(campo('NIF')).toHaveAttribute('placeholder', '123 456 789');
     await utilizador.click(cartao('Brasil'));
     expect(campo('CPF')).toHaveAttribute('placeholder', '12.345.678/0001-00');
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Novo cliente — validação
+// ═════════════════════════════════════════════════════════════════════════════
+describe('Novo cliente — validação', () => {
+  it('submeter em branco mostra a mensagem de campos em falta', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.click(submeter());
+    expect(await screen.findByText('Faltam campos obrigatórios (assinalados a vermelho).')).toBeInTheDocument();
+  });
+
+  it('submeter em branco não chama a API', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(erro()).not.toBeNull());
+    expect(api.criarCliente).not.toHaveBeenCalled();
+  });
+
+  it('submeter em branco não navega', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(erro()).not.toBeNull());
+    expect(navegou).not.toHaveBeenCalled();
+  });
+
+  it('submeter em branco pinta o campo do nome a vermelho', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(porId('f-name')).toHaveStyle({ borderColor: '#c00000' }));
+  });
+
+  it('submeter em branco pinta o rótulo do nome', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(rotulo('Nome completo')).toHaveStyle({ color: '#c00000' }));
+  });
+
+  it('o cursor vai parar ao campo do nome', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(document.activeElement).toBe(porId('f-name')));
+  });
+
+  it('nome só com espaços conta como vazio', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.type(porId('f-name'), '    ');
+    await utilizador.click(submeter());
+    await waitFor(() => expect(porId('f-name')).toHaveStyle({ borderColor: '#c00000' }));
+    expect(api.criarCliente).not.toHaveBeenCalled();
+  });
+
+  it('escrever no nome tira-lhe o vermelho', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(porId('f-name')).toHaveStyle({ borderColor: '#c00000' }));
+    await utilizador.type(porId('f-name'), 'M');
+    expect(porId('f-name')).not.toHaveStyle({ borderColor: '#c00000' });
+  });
+
+  it('com nome mas sem e-mail continua a não passar', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.type(porId('f-name'), 'Maria Silva');
+    await utilizador.click(submeter());
+    await waitFor(() => expect(erro()).not.toBeNull());
+    expect(api.criarCliente).not.toHaveBeenCalled();
+  });
+
+  it('sem e-mail o cursor vai para o campo do e-mail', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.type(porId('f-name'), 'Maria Silva');
+    await utilizador.click(submeter());
+    await waitFor(() => expect(document.activeElement).toBe(porId('f-email')));
+  });
+
+  it('sem telefone o cursor vai para o campo do telefone', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.type(porId('f-name'), 'Maria Silva');
+    await utilizador.type(porId('f-email'), 'maria@exemplo.pt');
+    await utilizador.click(submeter());
+    await waitFor(() => expect(document.activeElement).toBe(porId('f-phone')));
+  });
+
+  it('e-mail só com espaços não conta', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.type(porId('f-name'), 'Maria Silva');
+    await utilizador.type(porId('f-email'), '   ');
+    await utilizador.click(submeter());
+    await waitFor(() => expect(document.activeElement).toBe(porId('f-email')));
+  });
+
+  // BUG: NewClient.jsx:713-714 — o ContactsEditor nunca recebe `invalid`, por
+  // isso o e-mail em falta não fica assinalado a vermelho apesar de a mensagem
+  // dizer "assinalados a vermelho" (NewClient.jsx:372). Só o nome é pintado.
+  it.fails('e-mail em falta devia ficar assinalado a vermelho', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.type(porId('f-name'), 'Maria Silva');
+    await utilizador.click(submeter());
+    await waitFor(() => expect(document.activeElement).toBe(porId('f-email')));
+    expect(porId('f-email')).toHaveStyle({ borderColor: '#c00000' });
+  });
+
+  it('sem data de vencimento salta para o separador financeiro', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.type(porId('f-name'), 'Maria Silva');
+    await utilizador.type(porId('f-email'), 'maria@exemplo.pt');
+    await utilizador.type(porId('f-phone'), '+351911222333');
+    await utilizador.click(submeter());
+    await waitFor(() => expect(existeRotulo('Tipo de plano')).toBe(true));
+  });
+
+  it('sem data de vencimento pinta o rótulo da data', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.type(porId('f-name'), 'Maria Silva');
+    await utilizador.type(porId('f-email'), 'maria@exemplo.pt');
+    await utilizador.type(porId('f-phone'), '+351911222333');
+    await utilizador.click(submeter());
+    await waitFor(() => expect(rotulo('Data de Vencimento')).toHaveStyle({ color: '#c00000' }));
+  });
+
+  it('sem valor total pinta o rótulo do valor', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.type(porId('f-name'), 'Maria Silva');
+    await utilizador.type(porId('f-email'), 'maria@exemplo.pt');
+    await utilizador.type(porId('f-phone'), '+351911222333');
+    await irPara(utilizador, 'Dados Financeiros');
+    await escolherData(utilizador, porId('f-startDate'), 5);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(rotulo('Valor total contratado')).toHaveStyle({ color: '#c00000' }));
+  });
+
+  it('sem número de parcelas pinta o rótulo das parcelas', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.type(porId('f-name'), 'Maria Silva');
+    await utilizador.type(porId('f-email'), 'maria@exemplo.pt');
+    await utilizador.type(porId('f-phone'), '+351911222333');
+    await irPara(utilizador, 'Dados Financeiros');
+    await escolherData(utilizador, porId('f-startDate'), 5);
+    await utilizador.type(porId('f-totalValue'), '1200');
+    await utilizador.click(submeter());
+    await waitFor(() => expect(rotulo('Número de parcelas')).toHaveStyle({ color: '#c00000' }));
+  });
+
+  it('avença sem valor mensal pinta o rótulo do valor mensal', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.type(porId('f-name'), 'Maria Silva');
+    await utilizador.type(porId('f-email'), 'maria@exemplo.pt');
+    await utilizador.type(porId('f-phone'), '+351911222333');
+    await irPara(utilizador, 'Dados Financeiros');
+    await utilizador.click(cartao('Avença mensal'));
+    await escolherData(utilizador, porId('f-startDate'), 5);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(rotulo('Valor mensal')).toHaveStyle({ color: '#c00000' }));
+  });
+
+  it('pro bono não exige data nem valores', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+  });
+
+  it('oficioso não exige data nem valores', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.type(porId('f-name'), 'Maria Silva');
+    await utilizador.type(porId('f-email'), 'maria@exemplo.pt');
+    await utilizador.type(porId('f-phone'), '+351911222333');
+    await irPara(utilizador, 'Dados Financeiros');
+    await utilizador.click(cartao('Oficioso'));
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+  });
+
+  it('um plano válido passa a validação toda', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherParcelado(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(erro()).toBeNull();
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Novo cliente — contactos dentro do cadastro
+// ═════════════════════════════════════════════════════════════════════════════
+describe('Novo cliente — contactos', () => {
+  it('começa com um e-mail e um telefone', () => {
+    renderizar(<NewClient />);
+    expect(porId('f-email')).toBeInTheDocument();
+    expect(porId('f-phone')).toBeInTheDocument();
+  });
+
+  it('acrescenta um segundo e-mail', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.click(screen.getByRole('button', { name: /adicionar e-mail/ }));
+    expect(document.querySelectorAll('input[type="email"]')).toHaveLength(2);
+  });
+
+  it('acrescenta um segundo telefone', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.click(screen.getByRole('button', { name: /adicionar telefone/ }));
+    expect(document.querySelectorAll('input[type="tel"]')).toHaveLength(2);
+  });
+
+  it('remove o e-mail que sobra', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.click(screen.getByRole('button', { name: /adicionar e-mail/ }));
+    await utilizador.click(screen.getAllByTitle('Remover')[1]);
+    expect(document.querySelectorAll('input[type="email"]')).toHaveLength(1);
+  });
+
+  it('guarda os dois e-mails escritos', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.click(screen.getByRole('button', { name: /adicionar e-mail/ }));
+    const mails = document.querySelectorAll('input[type="email"]');
+    await utilizador.type(mails[0], 'um@x.pt');
+    await utilizador.type(mails[1], 'dois@x.pt');
+    expect(mails[0]).toHaveValue('um@x.pt');
+    expect(mails[1]).toHaveValue('dois@x.pt');
+  });
+
+  it('a linha de e-mail vazia é deitada fora ao guardar', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.click(screen.getByRole('button', { name: /adicionar e-mail/ }));
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(JSON.parse(api.criarCliente.mock.calls[0][0].emails)).toHaveLength(1);
+  });
+
+  it('uma etiqueta criada antes reaparece na lista', async () => {
+    localStorage.setItem('vyvian_contact_labels', JSON.stringify(['Contabilista']));
+    renderizar(<NewClient />);
+    const sel = screen.getAllByRole('combobox').find((s) => s.querySelector('option[value="__nova__"]'));
+    expect(within(sel).getByRole('option', { name: 'Contabilista' })).toBeInTheDocument();
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Novo cliente — documentos de identificação
+// ═════════════════════════════════════════════════════════════════════════════
+describe('Novo cliente — documentos de identificação', () => {
+  const docs = () => rotulo('Documento de identificação').closest('.adm-field');
+  const numeros = () => screen.getAllByPlaceholderText(/Nº do documento/);
+
+  it('começa com um documento', () => {
+    renderizar(<NewClient />);
+    expect(numeros()).toHaveLength(1);
+  });
+
+  it('com um documento não há botão de remover', () => {
+    renderizar(<NewClient />);
+    expect(screen.queryByTitle('Remover documento')).not.toBeInTheDocument();
+  });
+
+  it('adicionar cria uma segunda linha', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.click(screen.getByRole('button', { name: /adicionar documento/ }));
+    expect(numeros()).toHaveLength(2);
+  });
+
+  it('com dois documentos o rótulo fica no plural', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.click(screen.getByRole('button', { name: /adicionar documento/ }));
+    expect(existeRotulo('Documentos de identificação')).toBe(true);
+  });
+
+  it('remover deita fora a linha certa', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.click(screen.getByRole('button', { name: /adicionar documento/ }));
+    await utilizador.type(numeros()[0], 'PRIMEIRO');
+    await utilizador.type(numeros()[1], 'SEGUNDO');
+    await utilizador.click(screen.getAllByTitle('Remover documento')[0]);
+    expect(numeros()).toHaveLength(1);
+    expect(numeros()[0]).toHaveValue('SEGUNDO');
+  });
+
+  it('o tipo de documento tem os quatro tipos aceites', () => {
+    renderizar(<NewClient />);
+    const sel = within(docs()).getAllByRole('combobox')[0];
+    for (const o of ['Título de Residência', 'Cartão de Cidadão', 'Passaporte', 'BI / RG']) {
+      expect(within(sel).getByRole('option', { name: o })).toBeInTheDocument();
+    }
+  });
+
+  it('o documento preenchido vai no cadastro', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.selectOptions(within(docs()).getAllByRole('combobox')[0], 'Passaporte');
+    await utilizador.type(numeros()[0], 'X6D997798');
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    const p = api.criarCliente.mock.calls[0][0];
+    expect(p).toMatchObject({ doc_type: 'Passaporte', doc_number: 'X6D997798' });
+    expect(JSON.parse(p.documents)).toHaveLength(1);
+  });
+
+  it('documento em branco não é enviado', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(api.criarCliente.mock.calls[0][0].documents).toBeNull();
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Novo cliente — cliente conjunto (casal)
+// ═════════════════════════════════════════════════════════════════════════════
+describe('Novo cliente — cliente conjunto', () => {
+  const adicionar = (u) => u.click(screen.getByRole('button', { name: /Adicionar pessoa/ }));
+
+  it('começa só com o titular', () => {
+    renderizar(<NewClient />);
+    expect(screen.getByRole('button', { name: 'Pessoa 1' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pessoa 2' })).not.toBeInTheDocument();
+  });
+
+  it('adicionar cria a segunda pílula', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await adicionar(utilizador);
+    expect(screen.getByRole('button', { name: 'Pessoa 2' })).toBeInTheDocument();
+  });
+
+  it('adicionar mostra os campos da pessoa nova', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await adicionar(utilizador);
+    expect(screen.getByLabelText('Nome completo *')).toBeInTheDocument();
+  });
+
+  it('adicionar esconde os campos do titular', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await adicionar(utilizador);
+    expect(existeRotulo('Nome completo')).toBe(false);
+  });
+
+  it('a pessoa nova traz o botão de a remover', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await adicionar(utilizador);
+    expect(screen.getByRole('button', { name: 'Remover esta pessoa' })).toBeInTheDocument();
+  });
+
+  it('voltar ao titular pela pílula', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await adicionar(utilizador);
+    await utilizador.click(screen.getByRole('button', { name: 'Pessoa 1' }));
+    expect(existeRotulo('Nome completo')).toBe(true);
+  });
+
+  it('no titular aparece o aviso de cliente conjunto', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await adicionar(utilizador);
+    await utilizador.click(screen.getByRole('button', { name: 'Pessoa 1' }));
+    expect(screen.getByText(/Cliente conjunto: os contactos, a área e o plano/)).toBeInTheDocument();
+  });
+
+  it('sem pessoas adicionais não há aviso de cliente conjunto', () => {
+    renderizar(<NewClient />);
+    expect(screen.queryByText(/Cliente conjunto:/)).not.toBeInTheDocument();
+  });
+
+  it('o nome da pessoa nova aparece na pílula', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await adicionar(utilizador);
+    await utilizador.type(screen.getByLabelText('Nome completo *'), 'Bruno');
+    expect(screen.getByRole('button', { name: 'Bruno' })).toBeInTheDocument();
+  });
+
+  it('o nome do titular aparece na primeira pílula', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.type(porId('f-name'), 'Ana');
+    await adicionar(utilizador);
+    expect(screen.getByRole('button', { name: 'Ana' })).toBeInTheDocument();
+  });
+
+  it('dá para ter três pessoas', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await adicionar(utilizador);
+    await adicionar(utilizador);
+    expect(screen.getByRole('button', { name: 'Pessoa 3' })).toBeInTheDocument();
+  });
+
+  it('os dados da pessoa adicional sobrevivem a alternar de pílula', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await adicionar(utilizador);
+    await utilizador.type(screen.getByLabelText('NIF'), '111222333');
+    await utilizador.click(screen.getByRole('button', { name: 'Pessoa 1' }));
+    await utilizador.click(screen.getByRole('button', { name: 'Pessoa 2' }));
+    expect(screen.getByLabelText('NIF')).toHaveValue('111222333');
+  });
+
+  it('cada pessoa tem a sua morada', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await adicionar(utilizador);
+    await utilizador.type(screen.getByPlaceholderText('Nome da via'), 'do Ouro');
+    await utilizador.click(screen.getByRole('button', { name: 'Pessoa 1' }));
+    expect(screen.getByPlaceholderText('Nome da via')).toHaveValue('');
+  });
+
+  it('remover a pessoa tira-lhe a pílula', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await adicionar(utilizador);
+    await utilizador.click(screen.getByRole('button', { name: 'Remover esta pessoa' }));
+    expect(screen.queryByRole('button', { name: 'Pessoa 2' })).not.toBeInTheDocument();
+  });
+
+  it('remover devolve o ecrã ao titular', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await adicionar(utilizador);
+    await utilizador.click(screen.getByRole('button', { name: 'Remover esta pessoa' }));
+    expect(existeRotulo('Nome completo')).toBe(true);
+  });
+
+  it('passar a coletiva esconde as pessoas adicionais', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await adicionar(utilizador);
+    await utilizador.selectOptions(campo('Tipo de cliente'), 'coletiva');
+    expect(screen.queryByRole('button', { name: 'Pessoa 2' })).not.toBeInTheDocument();
+    expect(existeRotulo('Denominação da empresa')).toBe(true);
+  });
+
+  it('pessoa com dados mas sem nome bloqueia a submissão', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.type(porId('f-name'), 'Maria Silva');
+    await utilizador.type(porId('f-email'), 'maria@exemplo.pt');
+    await utilizador.type(porId('f-phone'), '+351911222333');
+    await adicionar(utilizador);
+    await utilizador.type(screen.getByLabelText('NIF'), '111222333');
+    await irPara(utilizador, 'Dados Financeiros');
+    await utilizador.click(cartao('Pro bono'));
+    await utilizador.click(submeter());
+    expect(await screen.findByText('A pessoa 2 tem dados preenchidos mas falta o nome.')).toBeInTheDocument();
+    expect(api.criarCliente).not.toHaveBeenCalled();
+  });
+
+  // BUG: NewClient.jsx:379 + PersonFields.jsx:37-42 — personHasData dá true para
+  // uma pessoa acabada de adicionar (o via_type 'Rua' do EMPTY_ADDRESS conta como
+  // dado preenchido). Basta clicar em "Adicionar pessoa" sem escrever nada para o
+  // cadastro ficar bloqueado com "A pessoa 2 tem dados preenchidos mas falta o nome".
+  it.fails('pessoa acabada de adicionar e nunca tocada não devia bloquear', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.type(porId('f-name'), 'Maria Silva');
+    await utilizador.type(porId('f-email'), 'maria@exemplo.pt');
+    await utilizador.type(porId('f-phone'), '+351911222333');
+    await adicionar(utilizador);
+    await irPara(utilizador, 'Dados Financeiros');
+    await utilizador.click(cartao('Pro bono'));
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Novo cliente — plano financeiro
+// ═════════════════════════════════════════════════════════════════════════════
+describe('Novo cliente — plano financeiro', () => {
+  async function planoParcelado(u, { total = '1200', n = '3' } = {}) {
+    await irPara(u, 'Dados Financeiros');
+    await escolherData(u, porId('f-startDate'), 5);
+    await u.type(porId('f-totalValue'), total);
+    await u.type(porId('f-installments'), n);
+  }
+  const btnAjustar = () => screen.getByRole('button', { name: /Ajustar valores das parcelas/ });
+  const valoresNoModal = () => [...modal().querySelectorAll('input[type="text"]')];
+
+  it('oferece os quatro tipos de plano', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await irPara(utilizador, 'Dados Financeiros');
+    for (const p of ['Parcelado', 'Avença mensal', 'Oficioso', 'Pro bono']) {
+      expect(cartao(p)).toBeInTheDocument();
+    }
+  });
+
+  it('começa no plano parcelado', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await irPara(utilizador, 'Dados Financeiros');
+    expect(cartao('Parcelado').closest('button').className).toContain('sel');
+  });
+
+  it('parcelado pede data, valor total e número de parcelas', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await irPara(utilizador, 'Dados Financeiros');
+    expect(existeRotulo('Data de Vencimento')).toBe(true);
+    expect(existeRotulo('Valor total contratado')).toBe(true);
+    expect(existeRotulo('Número de parcelas')).toBe(true);
+  });
+
+  it('avença troca o valor total pelo valor mensal', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await irPara(utilizador, 'Dados Financeiros');
+    await utilizador.click(cartao('Avença mensal'));
+    expect(existeRotulo('Valor mensal')).toBe(true);
+    expect(existeRotulo('Valor total contratado')).toBe(false);
+    expect(existeRotulo('Número de parcelas')).toBe(false);
+  });
+
+  it('avença continua a pedir a data de vencimento', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await irPara(utilizador, 'Dados Financeiros');
+    await utilizador.click(cartao('Avença mensal'));
+    expect(existeRotulo('Data de Vencimento')).toBe(true);
+  });
+
+  it('oficioso esconde datas e valores', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await irPara(utilizador, 'Dados Financeiros');
+    await utilizador.click(cartao('Oficioso'));
+    expect(existeRotulo('Data de Vencimento')).toBe(false);
+    expect(existeRotulo('Valor total contratado')).toBe(false);
+  });
+
+  it('oficioso explica que os honorários vêm no trânsito em julgado', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await irPara(utilizador, 'Dados Financeiros');
+    await utilizador.click(cartao('Oficioso'));
+    expect(screen.getByText(/trânsito em julgado/)).toBeInTheDocument();
+  });
+
+  it('pro bono explica que não há componente financeira', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await irPara(utilizador, 'Dados Financeiros');
+    await utilizador.click(cartao('Pro bono'));
+    expect(screen.getByText(/sem parcelas, cobranças ou lembretes/)).toBeInTheDocument();
+  });
+
+  it('pro bono esconde o lembrete automático', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await irPara(utilizador, 'Dados Financeiros');
+    await utilizador.click(cartao('Pro bono'));
+    expect(existeRotulo('Lembrete automático antes do vencimento')).toBe(false);
+  });
+
+  it('pro bono muda o texto do botão para "Criar cliente"', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await irPara(utilizador, 'Dados Financeiros');
+    await utilizador.click(cartao('Pro bono'));
+    expect(screen.getByRole('button', { name: 'Criar cliente' })).toBeInTheDocument();
+  });
+
+  it('parcelado promete gerar as parcelas no botão', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await irPara(utilizador, 'Dados Financeiros');
+    expect(screen.getByRole('button', { name: 'Criar cliente e gerar parcelas' })).toBeInTheDocument();
+  });
+
+  it('sem valores não há pré-visualização do plano', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await irPara(utilizador, 'Dados Financeiros');
+    expect(screen.queryByText(/parcelas de/)).not.toBeInTheDocument();
+  });
+
+  it('mostra a pré-visualização das parcelas', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await planoParcelado(utilizador);
+    expect(screen.getByText(/3 parcelas de € 400\.00, mensais/)).toBeInTheDocument();
+  });
+
+  it('a pré-visualização acompanha o número de parcelas', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await planoParcelado(utilizador, { total: '1200', n: '4' });
+    expect(screen.getByText(/4 parcelas de € 300\.00, mensais/)).toBeInTheDocument();
+  });
+
+  it('a pré-visualização usa o real no Brasil', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.click(cartao('Brasil'));
+    await planoParcelado(utilizador);
+    expect(screen.getByText(/3 parcelas de R\$ 400\.00, mensais/)).toBeInTheDocument();
+  });
+
+  it('a avença mostra a sua própria pré-visualização', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await irPara(utilizador, 'Dados Financeiros');
+    await utilizador.click(cartao('Avença mensal'));
+    await utilizador.type(porId('f-monthlyValue'), '450');
+    expect(screen.getByText(/avença de € 450\.00\/mês, recorrente \(12 meses iniciais\)/)).toBeInTheDocument();
+  });
+
+  it('o lembrete vem predefinido a 5 dias por e-mail e WhatsApp', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await irPara(utilizador, 'Dados Financeiros');
+    expect(campo('Lembrete automático antes do vencimento')).toHaveValue('5:email+whatsapp');
+  });
+
+  it('dá para desligar o lembrete', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await irPara(utilizador, 'Dados Financeiros');
+    await utilizador.selectOptions(campo('Lembrete automático antes do vencimento'), '0:none');
+    expect(campo('Lembrete automático antes do vencimento')).toHaveValue('0:none');
+  });
+
+  it('ajustar parcelas está desligado enquanto faltam dados', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await irPara(utilizador, 'Dados Financeiros');
+    expect(btnAjustar()).toBeDisabled();
+  });
+
+  it('ajustar parcelas só com a data ainda está desligado', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await irPara(utilizador, 'Dados Financeiros');
+    await escolherData(utilizador, porId('f-startDate'), 5);
+    expect(btnAjustar()).toBeDisabled();
+  });
+
+  it('ajustar parcelas liga quando há data, valor e número', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await planoParcelado(utilizador);
+    expect(btnAjustar()).toBeEnabled();
+  });
+
+  it('abrir o ajuste mostra uma linha por parcela', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await planoParcelado(utilizador);
+    await utilizador.click(btnAjustar());
+    expect(valoresNoModal()).toHaveLength(3);
+  });
+
+  it('as parcelas nascem com a divisão igual', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await planoParcelado(utilizador);
+    await utilizador.click(btnAjustar());
+    expect(valoresNoModal().map((i) => i.value)).toEqual(['400.00', '400.00', '400.00']);
+  });
+
+  it('a última parcela absorve o arredondamento', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await planoParcelado(utilizador, { total: '100', n: '3' });
+    await utilizador.click(btnAjustar());
+    expect(valoresNoModal().map((i) => i.value)).toEqual(['33.33', '33.33', '33.34']);
+  });
+
+  it('a soma fecha com o total logo à partida', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await planoParcelado(utilizador);
+    await utilizador.click(btnAjustar());
+    expect(modal().textContent).toContain('✓');
+  });
+
+  it('mexer numa parcela à mão quebra a soma', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await planoParcelado(utilizador);
+    await utilizador.click(btnAjustar());
+    await utilizador.clear(valoresNoModal()[0]);
+    await utilizador.type(valoresNoModal()[0], '100');
+    expect(modal().textContent).toMatch(/faltam/);
+  });
+
+  it('com a soma a mais, o ecrã diz que está a mais', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await planoParcelado(utilizador);
+    await utilizador.click(btnAjustar());
+    await utilizador.clear(valoresNoModal()[0]);
+    await utilizador.type(valoresNoModal()[0], '900');
+    expect(modal().textContent).toMatch(/a mais/);
+  });
+
+  it('Aplicar fica desligado enquanto a soma não fechar', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await planoParcelado(utilizador);
+    await utilizador.click(btnAjustar());
+    await utilizador.clear(valoresNoModal()[0]);
+    await utilizador.type(valoresNoModal()[0], '100');
+    expect(within(modal()).getByRole('button', { name: 'Aplicar' })).toBeDisabled();
+  });
+
+  it('acertar a diferença noutra parcela volta a ligar o Aplicar', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await planoParcelado(utilizador);
+    await utilizador.click(btnAjustar());
+    await utilizador.clear(valoresNoModal()[0]);
+    await utilizador.type(valoresNoModal()[0], '100');
+    await utilizador.clear(valoresNoModal()[2]);
+    await utilizador.type(valoresNoModal()[2], '700');
+    expect(within(modal()).getByRole('button', { name: 'Aplicar' })).toBeEnabled();
+  });
+
+  it('repor divisão igual desfaz as alterações', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await planoParcelado(utilizador);
+    await utilizador.click(btnAjustar());
+    await utilizador.clear(valoresNoModal()[0]);
+    await utilizador.type(valoresNoModal()[0], '100');
+    await utilizador.click(within(modal()).getByRole('button', { name: /Repor divisão igual/ }));
+    expect(valoresNoModal().map((i) => i.value)).toEqual(['400.00', '400.00', '400.00']);
+  });
+
+  it('Cancelar fecha o ajuste sem guardar nada', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await planoParcelado(utilizador);
+    await utilizador.click(btnAjustar());
+    await utilizador.clear(valoresNoModal()[0]);
+    await utilizador.type(valoresNoModal()[0], '100');
+    await utilizador.click(within(modal()).getByRole('button', { name: 'Cancelar' }));
+    expect(modal()).toBeNull();
+    expect(screen.queryByText(/valores personalizados definidos/)).not.toBeInTheDocument();
+  });
+
+  it('Aplicar fecha o ajuste e avisa que os valores são personalizados', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await planoParcelado(utilizador);
+    await utilizador.click(btnAjustar());
+    await utilizador.clear(valoresNoModal()[0]);
+    await utilizador.type(valoresNoModal()[0], '100');
+    await utilizador.clear(valoresNoModal()[2]);
+    await utilizador.type(valoresNoModal()[2], '700');
+    await utilizador.click(within(modal()).getByRole('button', { name: 'Aplicar' }));
+    expect(modal()).toBeNull();
+    expect(screen.getByText(/valores personalizados definidos/)).toBeInTheDocument();
+  });
+
+  it('eliminar uma parcela no ajuste sincroniza o número de parcelas', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await planoParcelado(utilizador);
+    await utilizador.click(btnAjustar());
+    await utilizador.click(within(modal()).getAllByRole('button', { name: '✕' })[2]);
+    await utilizador.clear(valoresNoModal()[1]);
+    await utilizador.type(valoresNoModal()[1], '800');
+    await utilizador.click(within(modal()).getByRole('button', { name: 'Aplicar' }));
+    expect(porId('f-installments')).toHaveValue(2);
+  });
+
+  it('mexer no número de parcelas deita fora a personalização', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await planoParcelado(utilizador);
+    await utilizador.click(btnAjustar());
+    await utilizador.clear(valoresNoModal()[0]);
+    await utilizador.type(valoresNoModal()[0], '100');
+    await utilizador.clear(valoresNoModal()[2]);
+    await utilizador.type(valoresNoModal()[2], '700');
+    await utilizador.click(within(modal()).getByRole('button', { name: 'Aplicar' }));
+    await utilizador.type(porId('f-installments'), '0');
+    expect(screen.queryByText(/valores personalizados definidos/)).not.toBeInTheDocument();
+  });
+
+  it('mexer no valor total também deita fora a personalização', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await planoParcelado(utilizador);
+    await utilizador.click(btnAjustar());
+    await utilizador.clear(valoresNoModal()[0]);
+    await utilizador.type(valoresNoModal()[0], '100');
+    await utilizador.clear(valoresNoModal()[2]);
+    await utilizador.type(valoresNoModal()[2], '700');
+    await utilizador.click(within(modal()).getByRole('button', { name: 'Aplicar' }));
+    await utilizador.type(porId('f-totalValue'), '0');
+    expect(screen.queryByText(/valores personalizados definidos/)).not.toBeInTheDocument();
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Novo cliente — submissão
+// ═════════════════════════════════════════════════════════════════════════════
+describe('Novo cliente — submissão', () => {
+  const payload = () => api.criarCliente.mock.calls[0][0];
+
+  it('cria o cliente com o nome escrito', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(payload().name).toBe('Maria Silva');
+  });
+
+  it('o id do cliente sai do nome', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(payload().id).toMatch(/^maria-silva-[a-z0-9]{4}$/);
+  });
+
+  it('envia o primeiro e-mail e o primeiro telefone em campos próprios', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(payload().email).toBe('maria@exemplo.pt');
+    expect(payload().phone).toBe('+351911222333');
+  });
+
+  it('envia a lista completa de contactos em JSON', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(JSON.parse(payload().emails)).toEqual([{ label: 'Pessoal', value: 'maria@exemplo.pt' }]);
+    expect(JSON.parse(payload().phones)).toEqual([{ label: 'Pessoal', value: '+351911222333' }]);
+  });
+
+  it('envia o país e o tipo de pessoa', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(payload()).toMatchObject({ country: 'PT', person_type: 'singular', plan_type: 'probono' });
+  });
+
+  it('pro bono vai sem honorários nem data de contrato', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(payload()).toMatchObject({ honorarios_total: 0, honorarios_parcelas: 0, contract_start_date: null });
+  });
+
+  it('navega para a ficha do cliente criado', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(navegou).toHaveBeenCalledWith(expect.stringMatching(/^\/admin\/clientes\/maria-silva-/)));
+  });
+
+  it('o botão diz "A criar…" e fica bloqueado durante a gravação', async () => {
+    let libertar;
+    api.criarCliente.mockImplementation(() => new Promise((r) => { libertar = () => r({}); }));
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    const btn = await screen.findByRole('button', { name: 'A criar…' });
+    expect(btn).toBeDisabled();
+    libertar();
+    await waitFor(() => expect(navegou).toHaveBeenCalled());
+  });
+
+  it('o Cancelar também fica bloqueado durante a gravação', async () => {
+    let libertar;
+    api.criarCliente.mockImplementation(() => new Promise((r) => { libertar = () => r({}); }));
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await screen.findByRole('button', { name: 'A criar…' });
+    expect(screen.getByRole('button', { name: 'Cancelar' })).toBeDisabled();
+    libertar();
+    await waitFor(() => expect(navegou).toHaveBeenCalled());
+  });
+
+  it('os campos ficam bloqueados durante a gravação', async () => {
+    let libertar;
+    api.criarCliente.mockImplementation(() => new Promise((r) => { libertar = () => r({}); }));
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await screen.findByRole('button', { name: 'A criar…' });
+    await irPara(utilizador, 'Dados do Cliente');
+    expect(porId('f-name')).toBeDisabled();
+    libertar();
+    await waitFor(() => expect(navegou).toHaveBeenCalled());
+  });
+
+  it('o Cancelar leva de volta à lista de clientes', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.click(screen.getByRole('button', { name: 'Cancelar' }));
+    expect(navegou).toHaveBeenCalledWith('/admin/clientes');
+  });
+
+  it('plano parcelado envia o total e o número de parcelas', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherParcelado(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(payload()).toMatchObject({ plan_type: 'installment', honorarios_total: 1200, honorarios_parcelas: 3 });
+  });
+
+  it('plano parcelado envia a data de vencimento', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherParcelado(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(payload().contract_start_date).toMatch(/^\d{4}-\d{2}-05$/);
+  });
+
+  it('plano parcelado cria uma parcela por prestação', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherParcelado(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(navegou).toHaveBeenCalled());
+    expect(corposDasParcelas()).toHaveLength(3);
+  });
+
+  it('as parcelas somam exatamente o valor total', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherParcelado(utilizador, { total: '100', n: '3' });
+    await utilizador.click(submeter());
+    await waitFor(() => expect(navegou).toHaveBeenCalled());
+    const soma = corposDasParcelas().reduce((s, p) => s + p.amount, 0);
+    expect(Math.round(soma * 100) / 100).toBe(100);
+  });
+
+  it('as parcelas são numeradas e sabem quantas são no total', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherParcelado(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(navegou).toHaveBeenCalled());
+    expect(corposDasParcelas().map((p) => p.installment_number)).toEqual([1, 2, 3]);
+    expect(corposDasParcelas().every((p) => p.total_installments === 3)).toBe(true);
+  });
+
+  it('as parcelas vencem de mês a mês, no mesmo dia', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherParcelado(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(navegou).toHaveBeenCalled());
+    const datas = corposDasParcelas().map((p) => p.due_date);
+    expect(datas.every((d) => d.endsWith('-05'))).toBe(true);
+    const meses = datas.map((d) => Number(d.slice(0, 4)) * 12 + Number(d.slice(5, 7)));
+    expect(meses[1] - meses[0]).toBe(1);
+    expect(meses[2] - meses[1]).toBe(1);
+  });
+
+  it('as parcelas ficam ligadas ao cliente criado', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherParcelado(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(navegou).toHaveBeenCalled());
+    const id = payload().id;
+    expect(corposDasParcelas().map((p) => p.client_id)).toEqual([id, id, id]);
+    expect(corposDasParcelas()[0].id).toBe(`${id}-p1`);
+  });
+
+  it('em Portugal as parcelas são em euros', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherParcelado(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(navegou).toHaveBeenCalled());
+    expect(corposDasParcelas().every((p) => p.currency === 'EUR')).toBe(true);
+  });
+
+  it('no Brasil as parcelas são em reais', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.click(cartao('Brasil'));
+    await preencherParcelado(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(navegou).toHaveBeenCalled());
+    expect(corposDasParcelas().every((p) => p.currency === 'BRL')).toBe(true);
+  });
+
+  it('os valores personalizados são os que vão para as parcelas', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherParcelado(utilizador);
+    await utilizador.click(screen.getByRole('button', { name: /Ajustar valores das parcelas/ }));
+    const campos = () => [...modal().querySelectorAll('input[type="text"]')];
+    await utilizador.clear(campos()[0]);
+    await utilizador.type(campos()[0], '100');
+    await utilizador.clear(campos()[2]);
+    await utilizador.type(campos()[2], '700');
+    await utilizador.click(within(modal()).getByRole('button', { name: 'Aplicar' }));
+    await utilizador.click(submeter());
+    await waitFor(() => expect(navegou).toHaveBeenCalled());
+    expect(corposDasParcelas().map((p) => p.amount)).toEqual([100, 400, 700]);
+  });
+
+  it('a avença cria as 12 primeiras parcelas', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.type(porId('f-name'), 'Maria Silva');
+    await utilizador.type(porId('f-email'), 'maria@exemplo.pt');
+    await utilizador.type(porId('f-phone'), '+351911222333');
+    await irPara(utilizador, 'Dados Financeiros');
+    await utilizador.click(cartao('Avença mensal'));
+    await escolherData(utilizador, porId('f-startDate'), 5);
+    await utilizador.type(porId('f-monthlyValue'), '450');
+    await utilizador.click(submeter());
+    await waitFor(() => expect(navegou).toHaveBeenCalled());
+    const parcelas = corposDasParcelas();
+    expect(parcelas).toHaveLength(12);
+    expect(parcelas.every((p) => p.amount === 450)).toBe(true);
+  });
+
+  it('pro bono não cria parcelas nenhumas', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(navegou).toHaveBeenCalled());
+    expect(corposDasParcelas()).toHaveLength(0);
+  });
+
+  it('cria as regras de lembrete por e-mail e WhatsApp', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherParcelado(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(navegou).toHaveBeenCalled());
+    expect(api.criarRegra).toHaveBeenCalledTimes(2);
+    expect(api.criarRegra.mock.calls.map(([r]) => r.channel)).toEqual(['email', 'whatsapp']);
+  });
+
+  it('a regra de lembrete guarda os dias de antecedência', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherParcelado(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(navegou).toHaveBeenCalled());
+    expect(api.criarRegra.mock.calls[0][0]).toMatchObject({ days_before: 5, enabled: true });
+  });
+
+  it('desligar o lembrete não cria regras', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherParcelado(utilizador);
+    await utilizador.selectOptions(campo('Lembrete automático antes do vencimento'), '0:none');
+    await utilizador.click(submeter());
+    await waitFor(() => expect(navegou).toHaveBeenCalled());
+    expect(api.criarRegra).not.toHaveBeenCalled();
+  });
+
+  it('pro bono não cria regras de lembrete', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(navegou).toHaveBeenCalled());
+    expect(api.criarRegra).not.toHaveBeenCalled();
+  });
+
+  it('a morada vai composta numa linha e também estruturada', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    const box = rotulo('Morada / Endereço').closest('.adm-field');
+    await utilizador.type(within(box).getByPlaceholderText('Nome da via'), 'das Flores');
+    await utilizador.type(within(box).getByPlaceholderText('Número'), '12');
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(payload().address).toBe('Rua das Flores, Nº 12');
+    expect(JSON.parse(payload().address_parts).via_name).toBe('das Flores');
+  });
+
+  it('sem morada, o cliente vai com morada nula', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(payload().address).toBeNull();
+    expect(payload().address_parts).toBeNull();
+  });
+
+  it('as nacionalidades escritas em etiquetas vão na lista', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.type(document.querySelector('.adm-tags input'), 'portuguesa{Enter}');
+    await utilizador.type(document.querySelector('.adm-tags input'), 'brasileira{Enter}');
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(JSON.parse(payload().nationalities)).toEqual(['portuguesa', 'brasileira']);
+    expect(payload().nationality).toBe('portuguesa');
+  });
+
+  it('a filiação junta o pai e a mãe', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.type(campo('Pai (opcional)'), 'José Silva');
+    await utilizador.type(campo('Mãe (opcional)'), 'Ana Silva');
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(payload().filiation).toBe('José Silva e Ana Silva');
+  });
+
+  it('o processo escrito vai com referência, área e resumo', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await irPara(utilizador, 'Dados do Processo');
+    await utilizador.type(campo('Processo / referência interna'), '1289/26');
+    await utilizador.type(campo('Resumo do processo'), 'Divórcio consensual');
+    await utilizador.selectOptions(campo('Área de atuação'), 'Cível');
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(payload()).toMatchObject({
+      practice_area: 'Cível',
+      process_summary: 'Divórcio consensual',
+      notes: 'Processo: 1289/26',
+    });
+    expect(JSON.parse(payload().processes)).toHaveLength(1);
+  });
+
+  it('dois processos vão os dois na lista', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await irPara(utilizador, 'Dados do Processo');
+    await utilizador.click(screen.getByRole('button', { name: /adicionar processo/ }));
+    const refs = screen.getAllByPlaceholderText(/1289\/26/);
+    await utilizador.type(refs[0], 'A/1');
+    await utilizador.type(refs[1], 'B/2');
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(JSON.parse(payload().processes).map((p) => p.ref)).toEqual(['A/1', 'B/2']);
+  });
+
+  it('processos em branco não são enviados', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(payload().processes).toBeNull();
+  });
+
+  it('a coletiva envia os dados do representante legal', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.selectOptions(campo('Tipo de cliente'), 'coletiva');
+    await utilizador.type(porId('f-name'), 'Avena Lda');
+    await utilizador.type(campo('Nome do responsável'), 'António Costa');
+    await utilizador.type(campo('Cargo'), 'sócio-gerente');
+    await utilizador.type(campo('DUNS (opcional)'), '449683786');
+    await utilizador.type(porId('f-email'), 'geral@avena.pt');
+    await utilizador.type(porId('f-phone'), '+351911222333');
+    await irPara(utilizador, 'Dados Financeiros');
+    await utilizador.click(cartao('Pro bono'));
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(payload()).toMatchObject({
+      person_type: 'coletiva',
+      rep_name: 'António Costa',
+      rep_role: 'sócio-gerente',
+      duns: '449683786',
+    });
+  });
+
+  it('a singular não envia dados de representante', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(payload()).toMatchObject({ rep_name: null, rep_role: null, duns: null });
+  });
+
+  it('o cliente conjunto envia as pessoas adicionais', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await utilizador.type(porId('f-name'), 'Maria Silva');
+    await utilizador.type(porId('f-email'), 'maria@exemplo.pt');
+    await utilizador.type(porId('f-phone'), '+351911222333');
+    await utilizador.click(screen.getByRole('button', { name: /Adicionar pessoa/ }));
+    await utilizador.type(screen.getByLabelText('Nome completo *'), 'Bruno Silva');
+    await utilizador.type(screen.getByLabelText('NIF'), '111222333');
+    await irPara(utilizador, 'Dados Financeiros');
+    await utilizador.click(cartao('Pro bono'));
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(payload().people).toHaveLength(1);
+    expect(payload().people[0]).toMatchObject({ name: 'Bruno Silva', identification: '111222333' });
+  });
+
+  it('sem pessoas adicionais a lista vai vazia', async () => {
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(payload().people).toEqual([]);
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Novo cliente — quando a API falha
+// ═════════════════════════════════════════════════════════════════════════════
+describe('Novo cliente — quando a API falha', () => {
+  it('mostra a mensagem devolvida pelo servidor', async () => {
+    api.criarCliente.mockRejectedValue(new Error('Já existe um cliente com esse NIF'));
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    expect(await screen.findByText('Já existe um cliente com esse NIF')).toBeInTheDocument();
+  });
+
+  it('não navega quando a gravação falha', async () => {
+    api.criarCliente.mockRejectedValue(new Error('HTTP 500'));
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await screen.findByText('HTTP 500');
+    expect(navegou).not.toHaveBeenCalled();
+  });
+
+  it('devolve o botão à utilizadora para ela tentar outra vez', async () => {
+    api.criarCliente.mockRejectedValue(new Error('HTTP 500'));
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await screen.findByText('HTTP 500');
+    expect(screen.getByRole('button', { name: 'Criar cliente' })).toBeEnabled();
+  });
+
+  it('falha de rede aparece com a mensagem do browser', async () => {
+    api.criarCliente.mockRejectedValue(new TypeError('Failed to fetch'));
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    expect(await screen.findByText('Failed to fetch')).toBeInTheDocument();
+  });
+
+  it('um pedido que expira acaba por mostrar o erro', async () => {
+    api.criarCliente.mockImplementation(
+      () => new Promise((_, rej) => setTimeout(() => rej(new Error('A ligação expirou')), 40))
+    );
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    expect(await screen.findByText('A ligação expirou')).toBeInTheDocument();
+    expect(navegou).not.toHaveBeenCalled();
+  });
+
+  it('tentar outra vez com sucesso limpa a mensagem de erro', async () => {
+    api.criarCliente.mockRejectedValueOnce(new Error('HTTP 500')).mockResolvedValue({ ok: true });
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherProBono(utilizador);
+    await utilizador.click(submeter());
+    await screen.findByText('HTTP 500');
+    await utilizador.click(submeter());
+    await waitFor(() => expect(navegou).toHaveBeenCalled());
+    expect(erro()).toBeNull();
+  });
+
+  it('falha ao criar as regras de lembrete mostra o erro', async () => {
+    api.criarRegra.mockRejectedValue(new Error('Regra recusada'));
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherParcelado(utilizador);
+    await utilizador.click(submeter());
+    expect(await screen.findByText('Regra recusada')).toBeInTheDocument();
+    expect(navegou).not.toHaveBeenCalled();
+  });
+
+  // BUG: NewClient.jsx:507-517 — as parcelas são gravadas com um fetch direto e
+  // ninguém olha para o res.ok. Se o servidor recusar, a Dra. é levada para a
+  // ficha do cliente como se estivesse tudo bem — e o plano fica sem parcelas.
+  it.fails('parcela recusada pelo servidor devia travar a navegação', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500, json: async () => ({ error: 'boom' }) })));
+    const { utilizador } = renderizar(<NewClient />);
+    await preencherParcelado(utilizador);
+    await utilizador.click(submeter());
+    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+    expect(navegou).not.toHaveBeenCalled();
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// Cálculo das parcelas (funções usadas pelo separador financeiro)
+// ═════════════════════════════════════════════════════════════════════════════
+describe('cálculo das parcelas', () => {
+  it('divide o total em partes iguais', () => {
+    expect(gerarParcelas(1200, 3, '2026-01-15').map((r) => r.amount)).toEqual(['400.00', '400.00', '400.00']);
+  });
+
+  it('a última parcela absorve os cêntimos que sobram', () => {
+    expect(gerarParcelas(100, 3, '2026-01-15').map((r) => r.amount)).toEqual(['33.33', '33.33', '33.34']);
+  });
+
+  it('a soma bate sempre certo com o total', () => {
+    expect(somaParcelas(gerarParcelas(100, 3, '2026-01-15'))).toBe(100);
+  });
+
+  it('numera as parcelas a partir de 1', () => {
+    expect(gerarParcelas(300, 3, '2026-01-15').map((r) => r.n)).toEqual([1, 2, 3]);
+  });
+
+  it('as datas são mensais e consecutivas', () => {
+    expect(gerarParcelas(300, 3, '2026-01-15').map((r) => r.due_date))
+      .toEqual(['2026-01-15', '2026-02-15', '2026-03-15']);
+  });
+
+  it('uma parcela só devolve o total inteiro', () => {
+    expect(gerarParcelas(999.99, 1, '2026-01-15')[0].amount).toBe('999.99');
+  });
+
+  it('parseValor aceita a vírgula portuguesa', () => expect(parseValor('1250,50')).toBe(1250.5));
+  it('parseValor aceita o ponto', () => expect(parseValor('1250.50')).toBe(1250.5));
+  it('parseValor de lixo dá zero', () => expect(parseValor('abc')).toBe(0));
+  it('parseValor de vazio dá zero', () => expect(parseValor('')).toBe(0));
+  it('somaParcelas de lista vazia dá zero', () => expect(somaParcelas([])).toBe(0));
+
+  it('addMonthsISO avança um mês', () => expect(addMonthsISO('2026-01-15', 1)).toBe('2026-02-15'));
+  it('addMonthsISO atravessa o ano', () => expect(addMonthsISO('2026-12-10', 1)).toBe('2027-01-10'));
+
+  // BUG: ParcelasEditor.jsx:9-13 e NewClient.jsx:25-29 — o addMonths usa
+  // Date.setMonth, que transborda quando o dia não existe no mês seguinte. Uma
+  // 1.ª parcela a 31 de janeiro gera a 2.ª a 3 de março (saltando fevereiro).
+  it.fails('um vencimento a 31 devia cair no último dia do mês seguinte', () => {
+    expect(addMonthsISO('2026-01-31', 1)).toBe('2026-02-28');
   });
 });

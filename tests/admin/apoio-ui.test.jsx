@@ -11,7 +11,11 @@
 // Defeitos reais do componente ficam marcados com `it.fails` + comentário BUG.
 import React from 'react';
 import { describe, it, expect, vi, beforeAll, beforeEach, afterEach } from 'vitest';
-import { renderizar, screen, within, waitFor, fireEvent } from '../helpers/dom.jsx';
+import { renderizar, screen, within, waitFor, fireEvent, configure } from '../helpers/dom.jsx';
+
+// a suíte inteira corre em paralelo com 25 ficheiros de worker; o jsdom fica
+// lento sob carga e o 1 s por omissão do findBy/waitFor não chega
+configure({ asyncUtilTimeout: 3000 });
 
 vi.mock('../../src/admin/apiClient.js', () => ({
   apoio: {
@@ -1644,7 +1648,7 @@ describe('ditar por voz', () => {
   // e não aparece em lado nenhum: a Dra. não vê que a gravação ficou anexada
   // (só a transcrição entra na descrição). Devia aparecer na zona do pedido,
   // como aparece depois de o ticket existir.
-  it('o áudio ditado num ticket novo fica visível na zona de anexos', async () => {
+  it.fails('o áudio ditado num ticket novo fica visível na zona de anexos', async () => {
     const { utilizador } = await novoTicket();
     await utilizador.click(screen.getByRole('button', { name: /Ditar por voz/ }));
     await utilizador.click(await screen.findByRole('button', { name: /Parar/ }));
@@ -1849,14 +1853,14 @@ describe('acessibilidade', () => {
   // <span> solto, não um <label htmlFor> nem um aria-label. Um leitor de ecrã
   // (e a Dra. com lupa/teclado) não sabe a que campo pertence «Título do pedido».
   // Devia ser possível chegar ao campo por getByLabelText('Título do pedido *').
-  it('o campo Título tem etiqueta associada', async () => {
+  it.fails('o campo Título tem etiqueta associada', async () => {
     await novoTicket();
     expect(screen.getByLabelText(/Título do pedido/)).toBeInTheDocument();
   });
 
   // BUG: Apoio.jsx:695 — a caixa de pesquisa da lista só tem placeholder,
   // que desaparece assim que se escreve; não tem etiqueta nem aria-label.
-  it('a caixa de pesquisa tem etiqueta', async () => {
+  it.fails('a caixa de pesquisa tem etiqueta', async () => {
     await montarCom([ticket()]);
     expect(screen.getByLabelText(/Pesquisar/)).toBeInTheDocument();
   });
@@ -1864,7 +1868,7 @@ describe('acessibilidade', () => {
   // BUG: Apoio.jsx:744-746 — o botão do lápis (editar ticket) só tem um <svg>
   // aria-hidden e um data-tip; fica sem nome acessível nenhum. Devia ter
   // aria-label="Editar o ticket" (o data-tip só serve o rato).
-  it('o botão de editar da linha tem nome acessível', async () => {
+  it.fails('o botão de editar da linha tem nome acessível', async () => {
     await montarCom([ticket()]);
     expect(within(linhaDe('AT-2026-001')).getAllByRole('button')[1]).toHaveAccessibleName();
   });

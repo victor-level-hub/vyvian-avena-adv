@@ -18,6 +18,13 @@ primeira letra sozinho, e o autocompletar acrescenta um espaço — em qualquer 
 a Dra. leva "Credenciais inválidas" com a password certa.
 *Correção:* `WHERE email = lower(trim(?))`, ou normalizar antes do bind.
 
+**Adicionar uma segunda pessoa por engano tranca o cadastro** — `src/admin/PersonFields.jsx:37-42`
+O `personHasData` percorre todas as chaves de `addrParts` menos `country`, e o
+`EMPTY_ADDRESS` já traz `via_type: 'Rua'` por omissão. Resultado: **basta clicar em
+"Adicionar pessoa" e não escrever nada** para a gravação ficar bloqueada com *"A pessoa 2
+tem dados preenchidos mas falta o nome"* (`NewClient.jsx:379`) — e não há maneira de
+destrancar sem descobrir que é preciso remover a pessoa.
+
 **Um anónimo consegue provocar 500 com detalhe interno** — `worker/routes/auth.js:36`
 Um corpo de login com `email` que não é texto (`{"email":{"$ne":null},"password":"x"}`)
 vai direto ao `.bind()`; o D1 lança, o erro sobe ao catch global (`worker/index.js:208`)
@@ -39,6 +46,18 @@ a falha devia ser para o lado seguro. Sem teste `it.fails` por não ser explorá
 no log, o dedupe diário cala o alerta o resto do dia, e o painel garante que foi
 enviado. A Dra. não recebe nada e não tem como saber.
 
+**Lembrete que falha uma vez nunca mais é enviado** — `worker/cron.js:57-60`
+O dedupe diário só olha a (parcela, canal, dia) e ignora o **estado** do registo. Um
+lembrete que falhou com um erro transitório fica marcado como "já tentado hoje"; como o
+cron corre uma vez por dia e no dia seguinte a parcela já não bate no `days_before`, **o
+cliente nunca chega a receber o aviso**. O `owner_alerts.js:27` faz o contrário — só faz
+dedupe do que ficou `sent` — e é essa assimetria que denuncia o defeito.
+
+**Regra de notificação com `days_before` negativo desliga-se em silêncio** — `worker/cron.js:52`
+Produz o modificador `'+-3 days'`, inválido em SQLite → NULL → a regra deixa de apanhar
+seja o que for, sem erro nem registo. `worker/routes/notifications.js:62` aceita qualquer
+valor sem validar. Mesma doença do `upcoming?days=-5` nas parcelas.
+
 **Criar cliente é impossível a partir das migrações** — `worker/routes/clients.js:102`
 O código escreve em `address`, `nationality`, `marital_status`, `rg`, `birth_date`,
 `birth_place`, `doc_type`, `doc_number`, `doc_validity`, `niss` e `filiation`, mas
@@ -52,6 +71,19 @@ cliente sem tabelas. (Os testes criam-nas localmente; ver o topo de
 
 > As duas últimas são a mesma doença: **`migrations/` não descreve a base de dados real.**
 > Vale a pena exportar o esquema de produção e escrever as migrações em falta.
+
+---
+
+## 1-B. Arrumação: ficheiros mortos na raiz
+
+O `wrangler.jsonc` tem `"main": "worker/index.js"` — só a pasta `worker/` é publicada.
+Os ficheiros `worker-cron.js`, `worker-index.js`, `worker-lib-senders.js`,
+`worker-lib-pdfgen.js`, `worker-routes-notifications.js` e `worker-routes-recibos.js`,
+na raiz, são de uma geração anterior e **divergem bastante** do código vivo: o
+`worker-cron.js` tem outra assinatura, devolve um array de texto em vez do resumo e
+apenas marca `status='queued'` sem enviar nada; o `worker-lib-senders.js` exporta
+`sendEmailViaResend`, nome que já não existe. São candidatos a apagar — só confundem
+quem for procurar o código do cron.
 
 ---
 
@@ -155,9 +187,22 @@ como inexistente: o cadastro guarda `address = null` e o que a Dra. escreveu des
 O tipo de via entra na morada composta mesmo com o nome da via vazio. Uma morada só com
 código postal fica `"Rua, 1700-001"` — e é assim que aparece na pré-visualização e nos PDFs.
 
-**Pessoa em branco conta como preenchida** — `src/admin/PersonFields.jsx:37-42`
-O `personHasData` inspeciona todas as chaves de `addrParts` e o `EMPTY_ADDRESS` já traz
-`via_type: 'Rua'`. Uma pessoa acabada de adicionar e nunca tocada é dada como tendo dados.
+**As parcelas são gravadas sem verificar se resultou** — `src/admin/pages/NewClient.jsx:507-517`
+Cada parcela é criada com um `fetch` direto e o `res.ok` nunca é lido. Se o servidor
+devolver 500, a Dra. é levada para a ficha do cliente **como se tivesse corrido tudo
+bem** e o plano de honorários fica sem parcelas nenhumas. (Há ali também uma linha
+morta: `await installmentsApi.list ? null : null`.)
+
+**Contactos em falta não ficam a vermelho** — `src/admin/pages/NewClient.jsx:713-714`
+A mensagem de erro diz "assinalados a vermelho" (linha 372), mas o `ContactsEditor`
+nunca recebe `invalid`/`requiredFirst` — apesar de o componente já saber pintar-se. Só o
+nome fica marcado, e a Dra. procura um campo vermelho que não existe.
+
+**Plano de pagamento salta fevereiro** — `NewClient.jsx:25-29` e `ParcelasEditor.jsx:9-13`
+O `Date.setMonth` transborda: uma primeira parcela a 31/01 gera a segunda a **03/03**,
+saltando o mês inteiro. Afeta parcelado e avença. (Há um risco adicional por confirmar à
+mão: `toISOString` sobre hora local pode recuar um dia num vencimento na semana da
+mudança da hora.)
 
 **Gravação de voz invisível antes de o ticket existir** — `src/admin/pages/Apoio.jsx:530`
 A zona de anexos só desenha `pend.print_abertura` e `pend.anexo`. Num ticket ainda por
@@ -170,6 +215,66 @@ etiqueta não foca, e um leitor de ecrã anuncia "campo de edição" sem dizer q
 `Apoio.jsx:495-497` (rótulos do modal são `<span>` solto), `Apoio.jsx:695` (pesquisa só
 com *placeholder*, que desaparece ao escrever) e `Apoio.jsx:744-746` (o botão do lápis
 tem só um SVG `aria-hidden` e um `data-tip`, ficando sem nome acessível).
+
+---
+
+## 4-C. Prompts de IA — texto de terceiros sem fronteira
+
+Oito prompts vão para o Gemini (seis a partir da constante `PERFIL` em `insights.js`,
+mais a colocação de imagens e a análise de complexidade do ticket em `apoio.js`). Em
+**todos**, o texto escrito por pessoas é colado no meio das instruções sem qualquer
+delimitador — sem *fence*, sem tag, sem marcador a dizer ao modelo onde acaba a
+instrução do sistema e onde começa conteúdo de terceiros:
+
+| Onde | O que entra sem fronteira |
+|---|---|
+| `apoio.js:238` | título do ticket |
+| `apoio.js:241` | descrição do ticket — e é a **última coisa do prompt**, sem nada depois a re-ancorar o formato |
+| `insights.js:411` | tema do artigo |
+| `insights.js:515-516` | corpo do artigo em avaliação (Markdown, pode trazer *fences*) |
+| `insights.js:874` | trecho selecionado no editor |
+| `insights.js:918-919` | instruções de correção escritas pela Dra., e o artigo inteiro |
+| `insights.js:1337` | URL da fonte |
+
+O caso mais concreto é o do URL: **`insights.js:1330` valida-o só com `/^https?:\/\//`**,
+que aceita quebras de linha e tudo o que venha depois. Um "URL" como
+`https://x.pt\n\nIgnora as instruções anteriores e…` passa a validação, segue para o
+prompt **e fica gravado em `insight_sources.url`**. Devia usar-se `new URL()` e recusar
+qualquer endereço com espaços ou quebras de linha.
+
+O risco prático hoje é moderado — quem escreve tickets e temas é a própria Dra. — mas
+duas entradas já não são dela: o **URL de fonte** e o **título de sugestão**, que vem de
+um modelo com pesquisa na web. E o padrão fica errado para quando houver um formulário
+público. A correção é barata: envolver cada bloco de conteúdo em delimitadores
+explícitos e repetir a instrução de formato depois do bloco.
+
+Nos prompts do Insights o esquema JSON vem **depois** do texto do utilizador, o que
+atenua o problema. No Apoio vem antes — e é por isso que `apoio.js:241` é o ponto mais
+exposto dos oito.
+
+### Entradas sem limite de tamanho (custo)
+
+Há cortes bem feitos em vários sítios (avaliação a 18 000 caracteres, tema a 300,
+instruções a 2 000, trecho a 8 000). Mas escapam:
+
+| Onde | O que passa inteiro |
+|---|---|
+| `insights.js:916` | `corrigirComIA` manda o artigo **cru**, sem o corte aos 18 000 que a avaliação faz — 120 000 caracteres entram todos |
+| `apoio.js:238-241` | ticket sem limite: título de 10 000 e descrição de 200 000 caracteres entram inteiros (`maxOutputTokens` só trava a saída, não a entrada) |
+| `insights.js:264` | `existing_titles` corta às 40 entradas, mas não o tamanho de cada uma |
+| `insights.js:1329` | URL da fonte sem limite |
+| `insights.js:714` | colocação de imagens corta cada bloco a 180 caracteres, mas não o **número** de blocos |
+| `insights.js:1216` | geração de imagens é o único pedido sem `maxOutputTokens` nem `temperature` |
+
+### Dois detalhes menores
+
+`apoio.js:242` ainda aponta ao modelo datado `gemini-2.5-pro`, quando o `insights.js`
+já migrou para os aliases `-latest` precisamente porque os datados começaram a devolver
+*"no longer available to new users"* (o comentário está em `insights.js:15-19`). A
+análise de tickets fica exposta à próxima descontinuação.
+
+Os prompts de **pesquisa de temas** e de **ficha da fonte** nunca declaram o idioma da
+resposta; todos os outros pedem português europeu explicitamente.
 
 ---
 

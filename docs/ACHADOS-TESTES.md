@@ -89,6 +89,153 @@ quem for procurar o código do cron.
 
 ---
 
+## 1-A. O site público inteiro em branco no Safari com cookies bloqueados
+
+**`src/components/CookieBanner.jsx:13`** lê o `localStorage` sem `try/catch`. No Safari
+com cookies bloqueados (e em navegação privada de alguns browsers) o `getItem` atira
+`SecurityError` — e como o banner vive dentro do `Layout`, **o site inteiro deixa de
+renderizar**. Não é o banner que falha: é tudo. O `analytics.js` (`readConsent`) já faz
+esta mesma leitura protegida, portanto a correção é copiar o que está ao lado.
+
+**`src/components/ScrollReveal.jsx:13`** tem o mesmo tipo de risco: `new
+IntersectionObserver` sem guarda de suporte. Num browser sem a API, atira `ReferenceError`
+e a árvore desmonta — página em branco, pior do que simplesmente não animar.
+
+---
+
+## 1-B. SEO e consentimento
+
+**O JSON-LD não escapa `</script>`** — `src/components/Seo.jsx:114`
+Um título de artigo ou uma resposta de FAQ que contenha essa sequência fecha o
+`<script>` a meio: o bloco deixa de fazer parse — é exatamente a falha "JSON-LD inválido"
+que o `scripts/seo-check.mjs` procura — e o resto do JSON passa a **texto visível na
+página**.
+
+**Sem `path`, o canónico fica `https://vyavenaadv.comundefined`** — `src/components/Seo.jsx:79`
+Hoje nenhuma página omite o prop, mas uma rota nova que se esqueça dele passa
+despercebida e publica um canónico inválido.
+
+**Os interruptores de preferências de cookies não funcionam por teclado** — `src/components/CookieBanner.jsx:99`
+São `<div>` com `onClick`, sem `role`, sem `tabIndex` e sem tratamento de teclas. Quem
+navega só por teclado ou com leitor de ecrã fica reduzido a "aceitar tudo" ou "só
+essenciais", sem escolha granular. Num consentimento RGPD, no site de uma advogada, é o
+mais sensível desta lista.
+
+**A Política de Cookies é uma página órfã** — `src/components/Footer.jsx`
+É indexável e entra no sitemap, mas o único caminho para lá num ecrã com Layout é o
+banner — que desaparece assim que o visitante decide. A `/links` tem a ligação; o rodapé
+não. Resultado: mal rastreada pelos motores de busca, e inacessível a quem já consentiu.
+
+> Confirmado como **correto** pelos testes: recusar cookies nunca ativa a analítica nem
+> injeta o `gtag.js`, e sem consentimento nenhum evento faz pedidos de rede.
+
+---
+
+## 1-C. Ecrãs que vão abaixo com um único registo estranho
+
+Todos partilham a mesma causa: um campo em falta ou ilegível usado sem defesa, num
+sítio por onde passa a lista inteira. Não é um aviso na consola — é a página em branco.
+
+**Um cliente sem nome parte a pesquisa e a ordenação** — `src/admin/pages/Clients.jsx:130,142`
+`c.name.toLowerCase()` na pesquisa e `a.name.localeCompare(...)` na ordenação não têm
+`|| ''` (o e-mail, o NIF e os nomes extra têm). Basta escrever uma letra na pesquisa, ou
+clicar na coluna «Cliente», para o ecrã cair.
+
+**Uma parcela sem data de vencimento parte o ecrã das parcelas** — `src/admin/pages/Installments.jsx:134,145`
+`i.due_date.slice(0, 7)` corre antes de qualquer filtro, por isso a lista nem chega a
+desenhar-se. Liga-se ao defeito do backend que aceita gravar `due_date` inválido.
+
+**Não há, em lado nenhum, forma de marcar uma parcela como paga**
+— `src/admin/pages/Installments.jsx:110-123` **e** `src/admin/pages/ClientDetail.jsx:524`
+
+Este é o achado mais sério do lote, e só se vê juntando as duas suítes. Nos **dois**
+ecrãs o `handleMarkPaid` existe, completo, com confirmação, chamada à API e
+recarregamento — e nos dois **nenhum botão o chama**. Na listagem, o redesenho v3 pôs a
+coluna «Lembrete» onde estava a ação; na ficha, a coluna de ações só tem
+Anexar/Ver/Remover documentos.
+
+O único caminho que resta é **anexar o PDF do recibo**, porque anexar um Recibo ou
+Fatura-Recibo marca a parcela como paga. Quem recebeu por transferência e ainda não
+emitiu o recibo na AT não tem como registar o pagamento. O código está lá inteiro nos
+dois sítios: é ligar um botão, ou decidir apagá-lo.
+
+**Também não há forma de enviar o recibo ao cliente** — `src/admin/pages/ClientDetail.jsx:629`
+O `handleSendRecibo` é código morto e a API existe e está exposta
+(`apiClient.js:288`, `recibos.sendToClient`) — e tem testes de backend a passar
+(`tests/worker/recibos.test.js`). Falta só o botão.
+
+**Guardar o plano não grava o tipo de plano** — `src/admin/pages/ClientDetail.jsx:757-761`
+O `handleSavePlan` envia `honorarios_total`, `honorarios_parcelas` e
+`contract_start_date`, mas não o `plan_type`. Como a leitura dá prioridade ao valor
+gravado (linha 1101), um cliente em avença que passe a parcelado **continua a ser lido
+como avença**: a ficha mostra "Avença mensal" e "N meses ativo" em vez de Total
+contratado / Em aberto / Progresso. O `PUT /api/clients` já aceita o campo
+(`worker/routes/clients.js:159`) — é uma linha em falta.
+
+**Números e datas ilegíveis mostrados em cru** — `Clients.jsx:37,38,53` e `Installments.jsx:15,18-21,155`
+`€ NaN` na coluna do valor, `Invalid Date` (em inglês) na do vencimento, e o selo de
+atraso a dizer **`NaND ATRASO`**. Pior: no cartão «Previsto» o total usa `Number()` cru e
+mostra `NaN`, enquanto o subtítulo, que passa pelo formatador, mostra `€ 0` — dois sítios
+do mesmo ecrã a dizer coisas diferentes.
+
+---
+
+## 1-D. O seletor de datas leva a página à frente
+
+**Uma data mal formada rebenta o ecrã inteiro** — `src/admin/datepicker.jsx:52,72`
+Abrir o calendário com um `value` que não seja ISO faz `new Date('lixoT00:00:00')` →
+`Invalid Date` → `view = { y: NaN, m: NaN }` → `Array(NaN)` → **`RangeError: Invalid
+array length`** durante o render. Não é um aviso na consola: é a página em branco.
+Devia cair no mês de hoje, como já faz quando o valor está vazio. E como o
+`installments.js` aceita gravar `due_date` inválido (ver secção 2), o valor mau pode vir
+mesmo da base de dados.
+
+**Redimensionar a janela deixa o calendário a flutuar** — `src/admin/datepicker.jsx:30,34`
+O mesmo handler serve `scroll` e `resize`, mas no `resize` o `e.target` é a `window`, que
+não é um nó do DOM: `ref.current.contains(window)` atira `TypeError` e o fecho nunca
+corre. Como o popover é `position: fixed` com coordenadas já calculadas, fica fora do
+campo. Acontece num browser a sério, não é artefacto do jsdom.
+
+**Data mal formada aparece como `undefined/undefined/2026/07/14`** — `src/admin/datepicker.jsx:16`
+O `fmtShow` não valida o que recebe.
+
+**Estúdio de artigos preso no esqueleto para sempre** — `src/admin/insights/InsightsSection.jsx:419,575`
+O `carregar()` do Banco de Imagens e o do diretório de Fontes só fazem um aviso no
+`catch` e deixam o estado a `null`. Com a API em baixo, o ecrã fica **eternamente no
+esqueleto de carregamento** — sem erro visível e sem forma de tentar de novo. O
+`BancoPicker` do estúdio (`ArticleStudio.jsx:1216`) trata o mesmo caso com `setItens([])`,
+por isso a intenção está provada: falta aqui.
+
+---
+
+## 1-E. Gestão de utilizadores
+
+**Falha da foto esconde que o utilizador já foi criado** — `src/admin/pages/Configuracoes.jsx:94-95`
+O `uploadFoto` corre dentro do mesmo `try` do `createUser`. Se a foto falhar, a conta já
+existe e o convite já seguiu, mas o ecrã só diz «Erro:», não fecha o modal nem recarrega
+a lista. A Dra. carrega outra vez em «Criar» e leva um «e-mail duplicado» sem perceber
+porquê.
+
+**Mudar as próprias permissões não atualiza a sessão** — `src/admin/pages/Configuracoes.jsx:89-101`
+Depois de se despromover, o `sessionStorage` continua com `['*']`: o menu continua a
+mostrar abas a que já não tem acesso. O servidor recusa, mas **a interface mente** até
+sair e voltar a entrar.
+
+**«Reenviar convite» sem trava** — `src/admin/pages/Configuracoes.jsx:219-224`
+Dois cliques geram dois tokens, e o link do primeiro e-mail — que a pessoa pode já ter
+aberto — morre em silêncio.
+
+**Botões de editar e apagar sem nome acessível** — `src/admin/pages/Configuracoes.jsx:270-282`
+Só têm ícone `aria-hidden` e `data-tip`, num ecrã onde um deles apaga um utilizador. O
+`ModalClose` do mesmo projeto usa `aria-label`, portanto é esquecimento, não convenção.
+
+> Nota de âmbito: este ecrã é só gestão de utilizadores e permissões. As preferências de
+> alertas e os templates vivem na aba Notificações, e as chaves de API são segredos do
+> Worker — nunca chegam ao browser. A suíte prova isso: injeta `password_hash`,
+> `invite_token` e chaves na resposta da API e confirma que nada disso chega ao DOM.
+
+---
+
 ## 2. Perda ou corrupção silenciosa de dados
 
 **Ticket nº 1000 do ano fica inacessível** — `worker/routes/apoio.js:55` vs `:160`
@@ -129,6 +276,28 @@ vencimentos sai **vazia**, sem erro. Parece que não há nada a vencer.
 **Query string longa apaga a página do Banco de Palavras** — `worker/lib/visits.js:52`
 O limite de 160 caracteres é medido **antes** de cortar a query string, por isso um
 artigo partilhado com `utm_*` longos nunca é contado.
+
+**€1200,50 gravado como €1,20 no calendário** — `src/admin/pages/Calendar.jsx:353`
+`String(f.amount).replace(',', '.')` só troca a primeira vírgula e não tira o ponto dos
+milhares: `1.200,50` vira `parseFloat("1.200.50")` = **1.2**. O evento fica gravado com
+um valor mil vezes menor. (O `parseValor` do `ParcelasEditor` tem o mesmo defeito de
+origem, mas ali os valores raramente levam separador de milhares.)
+
+**Navegar no calendário salta um mês** — `src/admin/pages/Calendar.jsx:316`
+`d.setMonth(d.getMonth() + dir)` num dia 31 transborda: 31 de agosto + 1 mês = 1 de
+outubro, e setembro desaparece. Reproduzível pelo ecrã: vista de dia até ao dia 31,
+voltar a mês, avançar. É a mesma família do salto de fevereiro no plano de pagamento.
+
+**«+-2,4%» no crescimento de seguidores** — `src/admin/pages/Statistics.jsx:374`
+O `+` está fixo no JSX e o valor já traz o próprio sinal. Sempre que a conta perde
+seguidores no período — situação normal — o selo sai com os dois sinais.
+
+**Dinheiro em formato inglês** — `src/admin/pages/Calendar.jsx:26`
+O modo compacto produz `€ 1.2k` num ecrã todo em português, onde `1.200` se lê como mil
+e duzentos. Ambíguo, e sobre dinheiro.
+
+**Emojis coloridos no painel** — `src/admin/pages/Dashboard.jsx:80,152`
+«Sem atrasos 🌿» — contra a regra do projeto de usar só glifos e SVGs monocromáticos.
 
 **Score 0 promovido a 50** — `worker/lib/keywords.js:29`
 `Math.round(+(k.score) || 50)` trata o zero como ausência de valor.
@@ -205,12 +374,28 @@ A zona de anexos só desenha `pend.print_abertura` e `pend.anexo`. Num ticket ai
 criar, o áudio ditado vai para `pend.audio` e não aparece em lado nenhum — a Dra. não
 vê que a gravação ficou anexada (só a transcrição entra na descrição).
 
-**Acessibilidade: campos sem etiqueta ligada** — vários
-`Login.jsx:51,62` (os `<label>` não têm `htmlFor` nem envolvem o campo — clicar na
-etiqueta não foca, e um leitor de ecrã anuncia "campo de edição" sem dizer qual),
-`Apoio.jsx:495-497` (rótulos do modal são `<span>` solto), `Apoio.jsx:695` (pesquisa só
-com *placeholder*, que desaparece ao escrever) e `Apoio.jsx:744-746` (o botão do lápis
-tem só um SVG `aria-hidden` e um `data-tip`, ficando sem nome acessível).
+### Acessibilidade: um padrão, não casos isolados
+
+Quatro suítes independentes encontraram a mesma falha, o que faz disto um hábito do
+código e não um esquecimento pontual. **Nenhum formulário do projeto liga as etiquetas
+aos campos**, e vários botões só de ícone ficam sem nome acessível:
+
+| Onde | O quê |
+|---|---|
+| `Contacto.jsx:68-131` | os cinco `<label>` do formulário público — nome, e-mail, mensagem, área — sem `htmlFor`, e os campos sem `id` nem `aria-label` |
+| `Login.jsx:51,62` | idem; clicar na etiqueta nem sequer foca o campo |
+| `Apoio.jsx:495-497` | rótulos do modal são `<span>` solto |
+| `Apoio.jsx:695` | pesquisa só com *placeholder*, que desaparece ao escrever |
+| `Apoio.jsx:744-746` | botão do lápis: só SVG `aria-hidden` + `data-tip` (que só serve o rato) |
+| `Configuracoes.jsx:270-282` | editar/apagar/expandir sem nome — e um deles apaga um utilizador |
+| `Calendar.jsx:531,533` | período anterior/seguinte anunciados só como «botão» |
+
+O texto das etiquetas está lá e está correto; falta só a associação. É barato de corrigir
+(um `id` e um `htmlFor` por campo, um `aria-label` por botão de ícone) e vale a pena
+fazê-lo de uma vez, com um teste por formulário a exigir `getByLabelText`.
+
+O `ModalClose` do próprio projeto já usa `aria-label` — portanto é esquecimento, não
+convenção.
 
 ---
 

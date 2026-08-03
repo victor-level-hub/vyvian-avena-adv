@@ -29,7 +29,7 @@ function Btn({ on, active, disabled, title, children }) {
   );
 }
 
-export default function RichEditor({ initialMarkdown, onChangeMarkdown, placeholder }) {
+export default function RichEditor({ initialMarkdown, onChangeMarkdown, onSelectionChange, apiRef, placeholder }) {
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [2, 3] } }),
@@ -95,6 +95,46 @@ export default function RichEditor({ initialMarkdown, onChangeMarkdown, placehol
       raiz.removeEventListener('mousedown', reativar, true);
     };
   }, [editor]);
+
+  // Seleção para as «Correções por IA»: avisa o pai quando há um trecho selecionado.
+  // A seleção fica no estado do ProseMirror mesmo quando o foco passa para a sidebar,
+  // por isso o pai pode usá-la depois de a Dra. escrever o pedido de correção.
+  useEffect(() => {
+    if (!editor || !onSelectionChange) return undefined;
+    const emitir = () => {
+      const { from, to, empty } = editor.state.selection;
+      if (empty) { onSelectionChange(null); return; }
+      const texto = editor.state.doc.textBetween(from, to, '\n');
+      if (!texto.trim()) { onSelectionChange(null); return; }
+      let md = texto;
+      try {
+        // mesmo caminho que o tiptap-markdown usa ao copiar: serializa o slice em Markdown
+        md = editor.storage.markdown.serializer.serialize(editor.state.doc.slice(from, to).content).trim() || texto;
+      } catch { /* o texto simples chega */ }
+      onSelectionChange({ from, to, texto, md });
+    };
+    editor.on('selectionUpdate', emitir);
+    return () => { editor.off('selectionUpdate', emitir); };
+  }, [editor, onSelectionChange]);
+
+  // API imperativa para o pai (substituir o trecho corrigido pela IA)
+  useEffect(() => {
+    if (!apiRef) return undefined;
+    apiRef.current = !editor ? null : {
+      textoEntre: (from, to) => {
+        const fim = editor.state.doc.content.size;
+        return editor.state.doc.textBetween(Math.min(from, fim), Math.min(to, fim), '\n');
+      },
+      substituirTrecho: (from, to, md) => {
+        const fim = editor.state.doc.content.size;
+        try { editor.setEditable(true); } catch { /* ignore */ } // o guarda de foco pode tê-lo desativado
+        // o tiptap-markdown interpreta strings do insertContentAt como Markdown
+        editor.chain().focus().insertContentAt({ from: Math.min(from, fim), to: Math.min(to, fim) }, md).run();
+      },
+      limparSelecao: () => { try { editor.commands.setTextSelection(editor.state.selection.from); } catch { /* ignore */ } },
+    };
+    return () => { apiRef.current = null; };
+  }, [editor, apiRef]);
 
   const setLink = useCallback(async () => {
     if (!editor) return;

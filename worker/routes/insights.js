@@ -846,6 +846,53 @@ async function corrigirComIA(request, env, id) {
   const a = await env.DB.prepare(`SELECT * FROM insight_articles WHERE id = ?`).bind(id).first();
   if (!a) return jsonError("Artigo não encontrado", 404);
 
+  // Modo trecho: a Dra. selecionou um excerto no editor — corrige SÓ o excerto e
+  // devolve uma proposta { texto, notas }. Nada é gravado: ela revê num modal e
+  // aplica no editor (e guarda como qualquer outra edição).
+  const selecao = String(body.selecao || "").trim().slice(0, 8000);
+  if (selecao) {
+    const promptTrecho = `${PERFIL}
+
+És o editor de texto da Dra. Vyvian. Ela selecionou um TRECHO de um artigo do blogue
+e pediu uma correção que incide APENAS sobre esse trecho.
+
+TÍTULO DO ARTIGO (contexto — não o alteres): ${a.titulo}
+IDIOMA: ${a.idioma || "pt-PT"}
+
+TRECHO SELECIONADO (em Markdown — corrige SÓ isto):
+${selecao}
+
+CORREÇÃO PEDIDA PELA DRA. (aplica-a com rigor; se citar factos/lei, verifica nas fontes oficiais):
+${instrucoes}
+
+Regras:
+- Devolve o trecho corrigido e NADA além dele — sem introduções, sem o resto do artigo.
+- Preserva a formatação Markdown que o trecho já tem (negritos, links, listas, títulos).
+- Mantém o idioma (${a.idioma || "pt-PT"}), o tom e a dimensão aproximada do trecho original.
+- Se a correção pedir algo juridicamente errado ou impossível de confirmar, NÃO inventes:
+  aplica o que for verificável e explica no campo "notas" o que ficou por aplicar e porquê.
+
+Responde EXCLUSIVAMENTE com JSON válido:
+{
+  "texto": "o trecho corrigido em Markdown",
+  "notas": "1-3 frases: o que foi alterado e, se aplicável, o que ficou por aplicar"
+}`;
+    let outT;
+    try {
+      outT = extractJson(await pesquisaIA(env, promptTrecho, {
+        temperature: 0.3, maxTokens: 8000, geminiModel: MODEL_ARTIGO,
+      }));
+      if (!outT.texto || !String(outT.texto).trim()) throw new Error("a correção veio vazia");
+    } catch (e) {
+      return jsonError(`Falha a corrigir o trecho: ${e.message}`, 502);
+    }
+    return jsonResponse({
+      ok: true,
+      texto: limparCitacoes(String(outT.texto)).trim(),
+      notas: String(outT.notas || "").slice(0, 600),
+    });
+  }
+
   const prompt = `${PERFIL}
 
 És o editor de texto da Dra. Vyvian. Ela pediu correções num artigo do blogue.

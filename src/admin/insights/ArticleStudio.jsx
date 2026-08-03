@@ -5,7 +5,7 @@
 //  · editor rico TipTap (re-skin via rs-theme.css) · capas com hover direcional;
 //  · StepLoader narrado na geração de imagens · pré-visualização com contraste AA.
 // Lógica e endpoints inalterados.
-import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { marked } from 'marked';
 import { insights as api } from '../apiClient';
 import { admToast } from '../toasts';
@@ -117,8 +117,11 @@ export default function ArticleStudio({ articleId, onClose }) {
   const [pedidoIA, setPedidoIA] = useState('');            // correções por IA (texto da Dra.)
   const [corrigindo, setCorrigindo] = useState(false);
   const [notasIA, setNotasIA] = useState(null);            // o que a IA alterou/deixou por aplicar
+  const [selecao, setSelecao] = useState(null);            // trecho selecionado no corpo { from, to, texto, md }
+  const [proposta, setProposta] = useState(null);          // proposta da IA p/ o trecho { texto, notas, from, to, excerto }
   const [fire, setFire] = useState(0);
   const mdRef = useRef('');
+  const editorApi = useRef(null);                          // API imperativa do RichEditor
   const tituloRef = useRef(null);
   const descRef = useRef(null);
   // título/descrição crescem com o conteúdo — nunca mostram barra de rolagem
@@ -319,14 +322,17 @@ export default function ArticleStudio({ articleId, onClose }) {
 
   useEffect(() => () => { Object.values(urls).forEach((u) => u && URL.revokeObjectURL(u)); }, []); // eslint-disable-line
 
-  // Esc fecha (lightbox primeiro, depois pré-visualização, depois o estúdio)
+  // Esc fecha (lightbox primeiro, depois proposta de correção, pré-visualização, e só então o estúdio)
   const ampliadaRef = useRef(null);
+  const propostaRef = useRef(null);
   useEffect(() => { ampliadaRef.current = ampliada; }, [ampliada]);
+  useEffect(() => { propostaRef.current = proposta; }, [proposta]);
   useEffect(() => {
     const onKey = (e) => {
       if (e.key !== 'Escape') return;
       if (ampliadaRef.current != null) return; // o lightbox trata do seu próprio Esc
       if (document.querySelector('.adm-overlay')) return; // um diálogo aberto trata do seu próprio Esc
+      if (propostaRef.current) { setProposta(null); return; } // fecha só o modal da proposta
       setPreview((p) => { if (p) return false; fechar(); return p; });
     };
     window.addEventListener('keydown', onKey);
@@ -384,9 +390,25 @@ export default function ArticleStudio({ articleId, onClose }) {
 
   // Correções por IA: guarda primeiro o que estiver por guardar (a IA corrige o texto
   // mais recente), envia o pedido, e o artigo corrigido volta ao editor.
+  // Com um trecho selecionado no corpo, a correção incide SÓ sobre ele: a IA devolve
+  // uma proposta que abre num modal editável — nada muda até a Dra. carregar em Aplicar.
+  const onSelecao = useCallback((s) => setSelecao(s), []);
   const corrigirIA = async () => {
     const pedido = pedidoIA.trim();
     if (pedido.length < 5 || corrigindo) return;
+    if (selecao) {
+      setCorrigindo(true);
+      setNotasIA(null);
+      try {
+        const d = await api.aiCorrect(articleId, pedido, selecao.md);
+        setProposta({ texto: d.texto || '', notas: d.notas || null, from: selecao.from, to: selecao.to, excerto: selecao.texto });
+      } catch (e) {
+        admToast(`Não foi possível corrigir o trecho: ${e.message}`, { kind: 'error' });
+      } finally {
+        setCorrigindo(false);
+      }
+      return;
+    }
     if (sujo) await guardar(true);
     setCorrigindo(true);
     setNotasIA(null);
@@ -407,6 +429,26 @@ export default function ArticleStudio({ articleId, onClose }) {
     } finally {
       setCorrigindo(false);
     }
+  };
+
+  // Aplica a proposta do modal: substitui o trecho no editor (nada vai ao servidor —
+  // a Dra. revê e guarda como qualquer outra edição).
+  const aplicarProposta = () => {
+    if (!proposta) return;
+    const ed = editorApi.current;
+    if (!ed) { admToast('O editor ainda não está pronto.', { kind: 'error' }); return; }
+    // segurança: se o corpo mudou desde a análise, as posições já não valem
+    if (ed.textoEntre(proposta.from, proposta.to) !== proposta.excerto) {
+      admToast('O texto mudou desde a análise — selecione o trecho de novo e repita.', { kind: 'error' });
+      setProposta(null);
+      return;
+    }
+    ed.substituirTrecho(proposta.from, proposta.to, proposta.texto.trim());
+    setNotasIA(proposta.notas || null);
+    setProposta(null);
+    setSelecao(null);
+    setPedidoIA('');
+    admToast('Trecho corrigido — reveja e guarde o artigo.');
   };
 
   const gerarImagens = async () => {
@@ -524,14 +566,23 @@ export default function ArticleStudio({ articleId, onClose }) {
           {/* -------- coluna principal -------- */}
           <div style={{ minWidth: 0 }}>
             <div className="glass" style={{ padding: '26px 28px 24px', marginBottom: 16 }}>
-              <span className="overline">
-                Título{tituloLongo && <em style={{ color: titulo.length > 120 ? 'var(--danger)' : 'var(--warn)', textTransform: 'none', letterSpacing: 0, fontWeight: 600, fontStyle: 'normal', marginLeft: 8 }}>({titulo.length}/60 — o SEO trava títulos acima de 60{titulo.length > 120 ? '; acima de 120 é cortado ao guardar' : ''})</em>}
+              <span className="overline" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                Título
+                <span role="button" tabIndex={0} data-tip="O título edita-se aqui — clique e escreva"
+                      aria-label="Editar o título"
+                      onClick={() => { const el = tituloRef.current; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); tituloRef.current?.focus(); } }}
+                      style={{ display: 'inline-flex', alignItems: 'center', color: 'var(--gold-soft)', cursor: 'pointer' }}>
+                  <Icon name="edit" size={11} />
+                </span>
+                {tituloLongo && <em style={{ color: titulo.length > 120 ? 'var(--danger)' : 'var(--warn)', textTransform: 'none', letterSpacing: 0, fontWeight: 600, fontStyle: 'normal', marginLeft: 0 }}>({titulo.length}/60 — o SEO trava títulos acima de 60{titulo.length > 120 ? '; acima de 120 é cortado ao guardar' : ''})</em>}
               </span>
               {/* Sem maxLength: os títulos gerados chegam por vezes já nos 120 chars e o
                   limite silencioso fazia o teclado "não escrever" — parecia bloqueado
                   (queixa da Dra., 1 ago). O comprimento é gerido pelos avisos visíveis
                   e o guardar corta a 120 no servidor. */}
-              <textarea rows={1} ref={tituloRef} value={titulo}
+              <textarea rows={1} ref={tituloRef} value={titulo} className="ed-titulo"
+                        placeholder="Título do artigo…" aria-label="Título do artigo"
                         onChange={(e) => { setTitulo(e.target.value); setSujo(true); }}
                         style={{ width: '100%', background: 'none', border: 0, resize: 'none', overflow: 'hidden', fontFamily: 'Fraunces,Georgia,serif',
                                  fontSize: 'clamp(24px,2.5vw,32px)', lineHeight: 1.2, letterSpacing: '-.02em', color: 'var(--fg)', marginTop: 10, outline: 'none' }} />
@@ -552,7 +603,8 @@ export default function ArticleStudio({ articleId, onClose }) {
             </div>
 
             <Suspense fallback={<div className="glass" style={{ padding: 30, color: 'var(--fg-3)', fontSize: 13 }}>A carregar o editor…</div>}>
-              <RichEditor initialMarkdown={markdown} onChangeMarkdown={onMd} placeholder="Corpo do artigo…" />
+              <RichEditor initialMarkdown={markdown} onChangeMarkdown={onMd} placeholder="Corpo do artigo…"
+                          onSelectionChange={onSelecao} apiRef={editorApi} />
             </Suspense>
           </div>
 
@@ -567,6 +619,27 @@ export default function ArticleStudio({ articleId, onClose }) {
                 mantém o resto intacto. Ex.: «na secção do IRN, o prazo certo é 30 dias»,
                 «abre com um caso prático em vez da definição».
               </p>
+              <p style={{ fontSize: 12, color: 'var(--fg-3)', marginTop: 8, lineHeight: 1.55 }}>
+                <strong style={{ color: 'var(--gold-soft)', fontWeight: 700 }}>Dica:</strong>{' '}
+                selecione um trecho no corpo do artigo e a correção incide só sobre ele —
+                a proposta abre num modal para rever (e editar) antes de entrar no texto.
+              </p>
+              {selecao && (
+                <div style={{ marginTop: 10, border: '1px solid var(--edge-2)', borderRadius: 10, padding: '9px 11px', fontSize: 12, lineHeight: 1.5 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                    <span style={{ color: 'var(--gold-soft)', fontWeight: 700, letterSpacing: '.04em' }}>
+                      <Icon name="check" size={11} s={3} /> Trecho selecionado
+                    </span>
+                    <button type="button" className="btn btn-quiet" style={{ fontSize: 10.5, padding: '2px 6px' }}
+                            onClick={() => { editorApi.current?.limparSelecao(); setSelecao(null); }}>
+                      usar o artigo inteiro
+                    </button>
+                  </div>
+                  <div style={{ color: 'var(--fg-3)', marginTop: 5, fontStyle: 'italic', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                    «{selecao.texto.length > 140 ? selecao.texto.slice(0, 140) + '…' : selecao.texto}»
+                  </div>
+                </div>
+              )}
               <textarea
                 className="field" rows={3} value={pedidoIA} maxLength={2000} disabled={corrigindo}
                 onChange={(e) => setPedidoIA(e.target.value)}
@@ -578,7 +651,9 @@ export default function ArticleStudio({ articleId, onClose }) {
                       style={{ width: '100%', justifyContent: 'center', marginTop: 10 }}
                       onClick={corrigirIA} disabled={pedidoIA.trim().length < 5 || corrigindo}>
                 <Icon name={corrigindo ? 'refresh' : 'spark'} size={13} />
-                {corrigindo ? 'A aplicar as correções…' : 'Aplicar correções'}
+                {corrigindo
+                  ? (selecao ? 'A corrigir o trecho…' : 'A aplicar as correções…')
+                  : (selecao ? 'Corrigir o trecho selecionado' : 'Aplicar correções')}
               </button>
               {corrigindo && (
                 <div style={{ fontSize: 11, color: 'var(--fg-3)', marginTop: 8, textAlign: 'center' }}>
@@ -747,6 +822,41 @@ export default function ArticleStudio({ articleId, onClose }) {
                   onRetry={() => gerarImagens()}
                   onCancel={() => { setGerandoImgs(false); setErroImgs(null); }} />
       <Confetti fire={fire} key={fire} />
+
+      {/* -------- proposta de correção do trecho selecionado -------- */}
+      {proposta && (
+        <div role="dialog" aria-modal="true" aria-label="Correção proposta pela IA"
+             onMouseDown={(e) => { if (e.target === e.currentTarget) setProposta(null); }}
+             style={{ position: 'fixed', inset: 0, zIndex: 120, background: 'rgba(6, 18, 15, .72)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '4vh 16px' }}>
+          <div className="glass" style={{ width: 'min(680px, 96vw)', maxHeight: '92vh', overflowY: 'auto', padding: '22px 24px 20px', borderRadius: 18 }}>
+            <span className="overline">Correção proposta pela IA</span>
+            <p style={{ fontSize: 12.5, color: 'var(--fg-3)', margin: '8px 0 12px', lineHeight: 1.55 }}>
+              Só o trecho selecionado será substituído pelo texto abaixo — que ainda pode editar.
+              O resto do artigo fica intacto.
+            </p>
+            <div style={{ border: '1px solid var(--edge)', borderRadius: 10, padding: '10px 12px', marginBottom: 12, maxHeight: 130, overflowY: 'auto' }}>
+              <span className="overline" style={{ fontSize: 9 }}>Trecho original</span>
+              <div style={{ fontSize: 12.5, color: 'var(--fg-3)', marginTop: 6, lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>{proposta.excerto}</div>
+            </div>
+            <span className="overline" style={{ fontSize: 9 }}>Como vai ficar (editável)</span>
+            <textarea className="field" rows={8} value={proposta.texto} autoFocus
+                      onChange={(e) => { const v = e.target.value; setProposta((p) => (p ? { ...p, texto: v } : p)); }}
+                      style={{ resize: 'vertical', minHeight: 150, lineHeight: 1.6, fontSize: 13.5, marginTop: 8 }} />
+            {proposta.notas && (
+              <div style={{ fontSize: 12, color: 'var(--fg-2)', marginTop: 10, lineHeight: 1.55, borderLeft: '2px solid var(--gold)', paddingLeft: 10 }}>
+                {proposta.notas}
+              </div>
+            )}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 16 }}>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setProposta(null)}>Cancelar</button>
+              <button type="button" className="btn btn-gold btn-sm" onClick={aplicarProposta} disabled={!proposta.texto.trim()}>
+                <Icon name="check" size={13} s={3} />Aplicar no texto
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {preview && (
         <PreviewBlogue

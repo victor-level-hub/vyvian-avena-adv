@@ -322,3 +322,9 @@
 .rs-scope .adm-date-day.sel, .adm-root .rs-scope .adm-date-day.sel { background: var(--forest); color: var(--cream); }
 .rs-scope .adm-date-foot button, .adm-root .rs-scope .adm-date-foot button { color: var(--gold-deep); font-size: .7rem; }
 .rs-scope .adm-date-foot button:hover, .adm-root .rs-scope .adm-date-foot button:hover { color: var(--forest); }
+
+/* título do artigo no estúdio — deixar visível que é editável (pedido 3 ago) */
+.rs-studio .ed-titulo { border-radius: 8px; cursor: text; transition: box-shadow .15s ease; }
+.rs-studio .ed-titulo:hover { box-shadow: inset 0 -1px 0 var(--edge-2); }
+.rs-studio .ed-titulo:focus { box-shadow: inset 0 -2px 0 var(--gold-soft); }
+.rs-studio .ed-titulo::placeholder { color: var(--fg-3); }

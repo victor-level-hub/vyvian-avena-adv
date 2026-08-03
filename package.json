@@ -9,7 +9,10 @@
     "preview": "vite preview",
     "build:nossg": "vite build",
     "build:ssr": "vite build --ssr src/entry-server.jsx --outDir dist-ssr",
-    "seo:check": "node scripts/seo-check.mjs"
+    "seo:check": "node scripts/seo-check.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:log": "node scripts/test-log.mjs"
   },
   "dependencies": {
     "@formspree/react": "^2.5.1",
@@ -34,6 +37,7 @@
     "autoprefixer": "^10.4.17",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
-    "vite": "^6.4.2"
+    "vite": "^6.4.2",
+    "vitest": "^4.1.10"
   }
 }

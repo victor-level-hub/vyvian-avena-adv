@@ -16,3 +16,8 @@ instagram-token.txt
 *.key
 .publicados.json
 .wrangler/
+
+# saída gerada pelos testes (npm run test:log)
+tests/ULTIMO-LOG.txt
+tests/relatorio.html
+tests/.resultados.json

@@ -40,6 +40,58 @@ const fmtDataHora = (iso) => {
 };
 const fmtData = (s) => (s ? s.split('-').reverse().join('/') : '—');
 
+/* ---------- histórico legível: traduz os registos técnicos para a Dra. ---------- */
+const CAMPO_LABEL = {
+  titulo: 'Título', descricao: 'Descrição', criado_por: 'Criado por', urgencia: 'Grau de urgência',
+  data_prazo: 'Data de prazo', plano_ia: 'Como a IA vai resolver', impedimentos: 'Impedimentos',
+  resolucao: 'Como foi efetuada a resolução', complexidade: 'Complexidade',
+  complexidade_justificacao: 'Justificação da complexidade',
+};
+const ANEXO_LABEL = {
+  anexo: 'Ficheiro', print_abertura: 'Print do pedido',
+  print_conclusao: 'Print de evidência da conclusão', audio: 'Gravação de voz',
+};
+function fmtEvento(ev) {
+  const d = (ev.detalhe || '').trim();
+  if (ev.evento === 'status' || ev.evento === 'editado') {
+    const frases = [];
+    const campos = [];
+    for (const p of d.split(';').map((x) => x.trim()).filter(Boolean)) {
+      const mSt = p.match(/^status:\s*(\S+)\s*(?:→|->)\s*(\S+)$/);
+      if (mSt) {
+        const de = STATUS_META[mSt[1]]?.label || mSt[1];
+        const para = STATUS_META[mSt[2]]?.label || mSt[2];
+        frases.push(`Status alterado de «${de}» para «${para}»`);
+      } else if (CAMPO_LABEL[p]) {
+        campos.push(CAMPO_LABEL[p]);
+      } else {
+        campos.push(p);
+      }
+    }
+    if (campos.length) frases.push(`${campos.length === 1 ? 'Campo alterado' : 'Campos alterados'}: ${campos.join(', ')}`);
+    return frases.join(' · ') || d || 'Ticket atualizado';
+  }
+  if (ev.evento === 'anexo') {
+    const mRem = d.match(/^Removido:\s*(.+)$/);
+    if (mRem) return `Anexo removido: ${mRem[1]}`;
+    const mAx = d.match(/^(anexo|print_abertura|print_conclusao|audio):\s*(.+?)(?:\s*\((\d+\s*KB)\))?$/);
+    if (mAx) {
+      const [, tipo, nome, tam] = mAx;
+      const sufixo = tam ? ` (${tam})` : '';
+      if (tipo === 'audio') return `Gravação de voz anexada${sufixo}`;
+      return `${ANEXO_LABEL[tipo]} anexado: ${nome}${sufixo}`;
+    }
+    return d;
+  }
+  if (ev.evento === 'analise_ia') {
+    const mCx = d.match(/^Complexidade:\s*(\S+)/);
+    if (mCx) return `Análise da IA concluída — complexidade ${COMPLEX_META[mCx[1]] || mCx[1]}`;
+    return d || 'Análise da IA concluída';
+  }
+  if (ev.evento === 'criado') return d || 'Ticket criado';
+  return d || ev.evento;
+}
+
 /* textarea que cresce com o conteúdo — nunca mostra barra de rolagem vertical */
 function AutoTextarea({ value, minHeight = 66, style, ...props }) {
   const ref = useRef(null);
@@ -561,7 +613,7 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
                         <div key={i} style={{ fontSize: 12, color: 'var(--fg-3)', lineHeight: 1.5 }}>
                           <span style={{ color: 'var(--gold-soft)' }}>{fmtDataHora(ev.created_at)}</span>
                           {' · '}<strong style={{ color: 'var(--fg-2)' }}>{ev.autor || '—'}</strong>
-                          {' · '}{ev.detalhe || ev.evento}
+                          {' · '}{fmtEvento(ev)}
                         </div>
                       ))}
                     </div>

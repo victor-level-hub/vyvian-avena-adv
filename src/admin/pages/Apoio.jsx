@@ -418,7 +418,7 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
   const enviarAprovacao = async () => {
     if (!ticket) return;
     const ok = await admConfirm(
-      `Enviar o ticket ${ticket.id} para aprovação da Dra.?\n\nEla recebe um e-mail com os dados do ticket (título, urgência, descrição, análise, resolução e prints de evidência) e o status passa a «Em aprovação».`,
+      `Enviar o ticket ${ticket.id} para aprovação da Dra.?\n\nEla recebe um e-mail com os dados do ticket (título, urgência, descrição, análise, resolução e prints de evidência).`,
     );
     if (!ok) return;
     setBusy(true);
@@ -581,20 +581,11 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
 
               {/* status manual quando já existe */}
               {ticket && !readOnly && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                    <span style={{ ...label, marginBottom: 0 }}>Status</span>
-                    <Seg small value={ticket.status}
-                         items={Object.entries(STATUS_META).filter(([k]) => k !== 'rascunho' || ticket.status === 'rascunho').map(([k, m]) => ({ k, label: m.label }))}
-                         onChange={(v) => mudarStatus(v)} />
-                  </div>
-                  <div>
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={enviarAprovacao}
-                            disabled={busy || ['rascunho', 'cancelado'].includes(ticket.status)}
-                            data-tip="A Dra. recebe um e-mail com os dados do ticket (título, urgência, prazo, descrição, análise, resolução e prints de evidência) e o status passa a «Em aprovação»">
-                      <Icon name="mail" size={13} />{busy ? 'A enviar…' : 'Enviar para Aprovação'}
-                    </button>
-                  </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                  <span style={{ ...label, marginBottom: 0 }}>Status</span>
+                  <Seg small value={ticket.status}
+                       items={Object.entries(STATUS_META).filter(([k]) => k !== 'rascunho' || ticket.status === 'rascunho').map(([k, m]) => ({ k, label: m.label }))}
+                       onChange={(v) => mudarStatus(v)} />
                 </div>
               )}
 
@@ -641,6 +632,12 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
                   <button type="button" className="btn btn-gold btn-sm" onClick={executar} disabled={busy || ticket.status === 'em_execucao'}
                           data-tip="O Claude tenta efetuar a melhoria; se não conseguir, passa a Impedimento com o motivo">
                     <Icon name="spark" size={13} />{ticket.status === 'em_execucao' ? 'Em execução' : 'Efetuar Alteração'}
+                  </button>
+                )}
+                {ticket && ticket.status === 'em_aprovacao' && (
+                  <button type="button" className="btn btn-gold btn-sm" onClick={enviarAprovacao} disabled={busy}
+                          data-tip="A Dra. recebe um e-mail com os dados do ticket (título, urgência, prazo, descrição, análise, resolução e prints de evidência)">
+                    <Icon name="mail" size={13} />{busy ? 'A enviar…' : 'Enviar para Aprovação'}
                   </button>
                 )}
               </div>

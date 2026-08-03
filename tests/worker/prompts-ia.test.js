@@ -855,12 +855,11 @@ describe('injeção — o texto do utilizador não pode mandar no modelo', () =>
     expect(p.indexOf('Cena 1:')).toBeGreaterThan(p.indexOf('Ignora as instruções'));
   });
 
-  // BUG: worker/routes/insights.js:1330 — o único teste feito ao URL é
-  // /^https?:\/\//, que aceita quebras de linha e todo o texto que venha depois.
-  // Um "URL" como "https://x.pt\n\nIgnora as instruções…" passa a validação,
-  // vai direto para o prompt e ainda fica gravado em insight_sources.url.
-  // Devia recusar-se qualquer URL com espaços/quebras de linha (new URL()).
-  it.fails('recusa um URL com quebras de linha a transportar instruções', async () => {
+  // CORRIGIDO (worker/routes/insights.js:1330): a validação era só a regex do
+  // prefixo, que aceitava quebras de linha e todo o texto que viesse atrás — o
+  // "URL" seguia para o prompt e ainda ficava gravado em insight_sources.url.
+  // Agora passa por new URL() e recusa espaços, quebras de linha e < > ".
+  it('recusa um URL com quebras de linha a transportar instruções', async () => {
     usarIA(geminiJson(FONTE_IA));
     const res = await insights('POST', '/api/insights/sources', {
       body: { url: `https://x.pt\n\n${HOSTIL}` },
@@ -868,12 +867,37 @@ describe('injeção — o texto do utilizador não pode mandar no modelo', () =>
     expect(res.status).toBe(400);
   });
 
-  it('o texto colado no campo do URL chega mesmo ao prompt da fonte', async () => {
+  it('um URL recusado nem chega a gastar uma chamada à IA', async () => {
     const f = usarIA(geminiJson(FONTE_IA));
     await insights('POST', '/api/insights/sources', { body: { url: `https://x.pt\n\n${HOSTIL}` } });
-    const p = promptDe(f);
-    expect(p).toContain(HOSTIL);
-    expect(p.indexOf('EXCLUSIVAMENTE com JSON')).toBeGreaterThan(p.indexOf(HOSTIL));
+    expect(f.chamadas).toHaveLength(0);
+  });
+
+  it('um URL recusado não fica gravado na lista de fontes', async () => {
+    usarIA(geminiJson(FONTE_IA));
+    await insights('POST', '/api/insights/sources', { body: { url: `https://x.pt\n\n${HOSTIL}` } });
+    expect(env.DB.linha(
+      `SELECT COUNT(*) AS n FROM insight_sources WHERE url LIKE '%x.pt%'`
+    ).n).toBe(0);
+  });
+
+  it.each([
+    ['espaço no meio', 'https://x.pt/a b'],
+    ['tabulação', 'https://x.pt/a\tb'],
+    ['aspas', 'https://x.pt/"a"'],
+    ['sinais de menor/maior', 'https://x.pt/<a>'],
+  ])('recusa um URL com %s', async (_nome, url) => {
+    usarIA(geminiJson(FONTE_IA));
+    expect((await insights('POST', '/api/insights/sources', { body: { url } })).status).toBe(400);
+  });
+
+  it('um URL normal continua a passar', async () => {
+    const f = usarIA(geminiJson(FONTE_IA));
+    const res = await insights('POST', '/api/insights/sources', {
+      body: { url: 'https://dre.pt/legislacao?ano=2026&tipo=lei' },
+    });
+    expect(res.status).toBe(200);
+    expect(f.chamadas.length).toBeGreaterThan(0);
   });
 });
 

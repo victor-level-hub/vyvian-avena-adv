@@ -891,20 +891,19 @@ describe('runDailyCron — dedupe e idempotência', () => {
     expect(s).toMatchObject({ notified: 1, skipped: 1 });
   });
 
-  it('o dedupe não olha ao estado do log: um skipped também bloqueia o dia', async () => {
+  it('um envio saltado não bloqueia o dia: volta a tentar-se', async () => {
     env.DB.exec(`INSERT INTO notification_log (id, installment_id, client_id, channel, status)
                  VALUES ('antigo', 'p1', 'cli-1', 'email', 'skipped')`);
     const s = await runDailyCron(env);
-    expect(s.notified).toBe(0);
-    expect(s.skipped).toBe(1);
+    expect(s.notified).toBe(1);
+    expect(s.skipped).toBe(0);
   });
 
-  // BUG: worker/cron.js:57-60 — o dedupe só olha a (parcela, canal, dia) e ignora
-  // o `status`. Um lembrete que falhou por um 500 transitório fica marcado como
-  // "já tentado hoje" e, como o cron só corre uma vez por dia, o cliente nunca
-  // chega a receber o aviso. O owner_alerts.js:27 faz o contrário — só faz dedupe
-  // do que ficou 'sent'. Uma tentativa falhada devia poder ser repetida.
-  it.fails('um envio falhado é retentado na corrida seguinte do mesmo dia', async () => {
+  // CORRIGIDO (worker/cron.js:57): o dedupe passou a exigir status = 'sent'. Antes só
+  // olhava a (parcela, canal, dia): um lembrete que falhasse com um 500 passageiro
+  // ficava marcado como "já tentado hoje" e, como o cron corre uma vez por dia e no
+  // dia seguinte a parcela já não bate no days_before, o cliente nunca o recebia.
+  it('um envio falhado é retentado na corrida seguinte do mesmo dia', async () => {
     vi.stubGlobal('fetch', mockFetch({ status: 500, json: { message: 'servidor em baixo' } }));
     await runDailyCron(env);
     const f = mockFetch({ json: { id: 'ok' } });
@@ -913,11 +912,13 @@ describe('runDailyCron — dedupe e idempotência', () => {
     expect(s.notified).toBe(1);
   });
 
-  it('um envio falhado fica mesmo assim a bloquear o dia (documenta o efeito)', async () => {
-    vi.stubGlobal('fetch', mockFetch({ status: 500, json: { message: 'boom' } }));
+  it('um envio já bem sucedido continua a não se repetir', async () => {
+    const f = mockFetch({ json: { id: 'ok' } });
+    vi.stubGlobal('fetch', f);
     await runDailyCron(env);
     const s = await runDailyCron(env);
     expect(s).toMatchObject({ notified: 0, skipped: 1, errors: 0 });
+    expect(f.chamadas).toHaveLength(1);   // não houve segundo e-mail
   });
 
   it('um log de outra parcela não bloqueia esta', async () => {

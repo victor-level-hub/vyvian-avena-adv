@@ -53,10 +53,15 @@ export async function runDailyCron(env, ctx) {
       `).bind(rule.client_id, rule.days_before).all();
 
       for (const p of parcelas.results || []) {
-        // dedupe: já houve envio deste canal para esta parcela hoje?
+        // Dedupe: já houve envio BEM SUCEDIDO deste canal para esta parcela hoje?
+        // O status tem de entrar na condição. Sem ele, um envio que falhou com um
+        // erro passageiro contava como "já tratado" e, como o cron só corre uma vez
+        // por dia e no dia seguinte a parcela já não bate no days_before, o cliente
+        // nunca chegava a receber o aviso. (É o critério que owner_alerts.js:27 já usa.)
         const already = await env.DB.prepare(`
           SELECT 1 FROM notification_log
-          WHERE installment_id = ? AND channel = ? AND date(sent_at) = date('now') LIMIT 1
+          WHERE installment_id = ? AND channel = ? AND date(sent_at) = date('now')
+            AND status = 'sent' LIMIT 1
         `).bind(p.id, rule.channel).first();
         if (already) { summary.skipped++; continue; }
 

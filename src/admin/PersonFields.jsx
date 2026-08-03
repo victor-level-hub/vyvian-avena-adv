@@ -36,9 +36,16 @@ export function personFromRow(row, country) {
 const DATA_KEYS = ['identification', 'nationality', 'marital_status', 'rg', 'birth_date', 'birth_place', 'doc_type', 'doc_number', 'doc_validity', 'niss', 'father_name', 'mother_name'];
 export function personHasData(p) {
   if (DATA_KEYS.some((k) => String(p[k] || '').trim() !== '')) return true;
-  // morada estruturada preenchida também conta
+  // Morada estruturada preenchida também conta — mas só o que a pessoa escreveu
+  // mesmo. O EMPTY_ADDRESS traz `via_type: 'Rua'` por omissão, e comparar apenas
+  // com string vazia dava uma pessoa acabada de adicionar como tendo dados, o que
+  // trancava a gravação do cadastro com "falta o nome" sem forma de destrancar.
   const a = p.addrParts || {};
-  return Object.entries(a).some(([k, v]) => k !== 'country' && String(v || '').trim() !== '');
+  return Object.entries(a).some(([k, v]) => {
+    if (k === 'country') return false;
+    const escrito = String(v ?? '').trim();
+    return escrito !== '' && escrito !== String(EMPTY_ADDRESS[k] ?? '').trim();
+  });
 }
 
 export default function PersonFields({ value, onChange, country, disabled }) {

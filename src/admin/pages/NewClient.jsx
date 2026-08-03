@@ -504,16 +504,17 @@ export default function NewClient() {
         }
       }
 
+      // Uma parcela que não grave não pode passar em silêncio: o cliente já existe,
+      // por isso a mensagem tem de dizer isso e mandar conferir o plano na ficha.
       for (const inst of installmentsToCreate) {
-        await installmentsApi.list ? null : null; // dummy
-        await fetch('/api/installments', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${sessionStorage.getItem('vyvian_admin_token')}`,
-          },
-          body: JSON.stringify(inst),
-        });
+        try {
+          await installmentsApi.create(inst);
+        } catch (err) {
+          throw new Error(
+            `O cliente foi criado, mas a parcela ${inst.installment_number} não ficou gravada ` +
+            `(${err.message}). Confirme o plano de honorários na ficha do cliente.`
+          );
+        }
       }
 
       // 3. Criar regras de notificação

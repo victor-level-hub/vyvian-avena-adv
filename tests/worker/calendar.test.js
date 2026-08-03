@@ -1088,14 +1088,16 @@ describe('POST /api/notifications/process-queue', () => {
     expect(env.DB.linha("SELECT status FROM notification_log WHERE installment_id = 'i-1'").status).toBe('error');
   });
 
-  it('um erro num envio não impede o dia seguinte de ser tentado', async () => {
+  it('um envio falhado volta a ser tentado no disparo seguinte', async () => {
     vi.stubGlobal('fetch', mockFetch({ status: 500, json: {} }));
     parcela('i-1', 3);
     regra();
     await nots('POST', '/api/notifications/process-queue');
-    // o log de erro não conta para o dedupe? conta — o dedupe é por canal+parcela+dia
+    // O dedupe é por (parcela, canal, dia) MAS só conta o que ficou 'sent'
+    // (worker/cron.js:57) — senão uma falha passageira calava o lembrete para sempre.
+    vi.stubGlobal('fetch', mockFetch({ json: { id: 'ok' } }));
     const b = await json(await nots('POST', '/api/notifications/process-queue'));
-    expect(b.skipped).toBeGreaterThanOrEqual(1);
+    expect(b.notified).toBeGreaterThanOrEqual(1);
   });
 
   it('cliente sem e-mail: o envio é saltado e registado como skipped', async () => {

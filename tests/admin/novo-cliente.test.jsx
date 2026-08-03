@@ -18,6 +18,7 @@ vi.mock('react-router-dom', async () => {
 // ─── API mockada (a rede está fechada em tests/setup.js) ─────────────────────
 const api = vi.hoisted(() => ({
   criarCliente: vi.fn(),
+  criarParcela: vi.fn(),
   criarRegra: vi.fn(),
   listarParcelas: vi.fn(),
 }));
@@ -26,7 +27,7 @@ vi.mock('../../src/admin/apiClient.js', () => ({
     create: api.criarCliente,
     list: vi.fn(), get: vi.fn(), update: vi.fn(), remove: vi.fn(),
   },
-  installments: { create: vi.fn(), list: api.listarParcelas },
+  installments: { create: api.criarParcela, list: api.listarParcelas },
   notifications: { createRule: api.criarRegra },
   getToken: () => 'tok', setToken: vi.fn(), clearToken: vi.fn(),
 }));
@@ -47,9 +48,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
   api.criarCliente.mockResolvedValue({ ok: true });
+  api.criarParcela.mockResolvedValue({ ok: true });
   api.criarRegra.mockResolvedValue({ ok: true });
-  // o ecrã cria as parcelas com fetch direto (NewClient.jsx:509)
-  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ ok: true }) })));
 });
 afterEach(async () => {
   // O focusField do ecrã (NewClient.jsx:155) agenda um setTimeout(80) para pôr o
@@ -100,10 +100,9 @@ async function preencherParcelado(u, { total = '1200', n = '3', dia = 5 } = {}) 
   await u.type(porId('f-installments'), n);
 }
 
-const corposDasParcelas = () =>
-  globalThis.fetch.mock.calls
-    .filter(([url]) => url === '/api/installments')
-    .map(([, opt]) => JSON.parse(opt.body));
+// As parcelas são criadas por installmentsApi.create (NewClient.jsx:507) — o ecrã
+// deixou de usar fetch cru, precisamente para o erro deixar de passar em silêncio.
+const corposDasParcelas = () => api.criarParcela.mock.calls.map(([corpo]) => corpo);
 
 // ═════════════════════════════════════════════════════════════════════════════
 // cleanContacts — limpar entradas vazias antes de guardar
@@ -305,10 +304,10 @@ describe('personHasData', () => {
     expect(personHasData({ ...semMorada, addrParts: { country: 'BR' } })).toBe(false);
   });
 
-  // BUG: PersonFields.jsx:37-42 — personHasData olha para todas as chaves de
-  // addrParts menos country, e o EMPTY_ADDRESS traz via_type: 'Rua' por omissão.
-  // Uma pessoa acabada de adicionar e nunca tocada é dada como tendo dados.
-  it.fails('pessoa acabada de adicionar (EMPTY_PERSON) não tem dados', () => {
+  // CORRIGIDO (PersonFields.jsx:37-42): o EMPTY_ADDRESS traz via_type: 'Rua' por
+  // omissão, e a verificação comparava só com string vazia — uma pessoa nunca tocada
+  // contava como tendo dados. Agora só conta o que difere do valor por omissão.
+  it('pessoa acabada de adicionar (EMPTY_PERSON) não tem dados', () => {
     expect(personHasData({ ...EMPTY_PERSON })).toBe(false);
   });
 });
@@ -1418,11 +1417,10 @@ describe('Novo cliente — cliente conjunto', () => {
     expect(api.criarCliente).not.toHaveBeenCalled();
   });
 
-  // BUG: NewClient.jsx:379 + PersonFields.jsx:37-42 — personHasData dá true para
-  // uma pessoa acabada de adicionar (o via_type 'Rua' do EMPTY_ADDRESS conta como
-  // dado preenchido). Basta clicar em "Adicionar pessoa" sem escrever nada para o
-  // cadastro ficar bloqueado com "A pessoa 2 tem dados preenchidos mas falta o nome".
-  it.fails('pessoa acabada de adicionar e nunca tocada não devia bloquear', async () => {
+  // CORRIGIDO: bastava clicar em "Adicionar pessoa" sem escrever nada para o cadastro
+  // ficar trancado com "A pessoa 2 tem dados preenchidos mas falta o nome", sem forma
+  // óbvia de destrancar. Ver personHasData em PersonFields.jsx:37-42.
+  it('pessoa acabada de adicionar e nunca tocada não bloqueia a gravação', async () => {
     const { utilizador } = renderizar(<NewClient />);
     await utilizador.type(porId('f-name'), 'Maria Silva');
     await utilizador.type(porId('f-email'), 'maria@exemplo.pt');
@@ -2194,16 +2192,45 @@ describe('Novo cliente — quando a API falha', () => {
     expect(navegou).not.toHaveBeenCalled();
   });
 
-  // BUG: NewClient.jsx:507-517 — as parcelas são gravadas com um fetch direto e
-  // ninguém olha para o res.ok. Se o servidor recusar, a Dra. é levada para a
-  // ficha do cliente como se estivesse tudo bem — e o plano fica sem parcelas.
-  it.fails('parcela recusada pelo servidor devia travar a navegação', async () => {
-    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500, json: async () => ({ error: 'boom' }) })));
-    const { utilizador } = renderizar(<NewClient />);
-    await preencherParcelado(utilizador);
-    await utilizador.click(submeter());
-    await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
-    expect(navegou).not.toHaveBeenCalled();
+  // CORRIGIDO (NewClient.jsx:507): as parcelas eram gravadas com um fetch direto e
+  // ninguém olhava para o res.ok — a Dra. era levada para a ficha do cliente como se
+  // estivesse tudo bem, com o plano vazio. Agora usa installmentsApi.create, que
+  // lança, e a mensagem diz que o cliente ficou criado mas o plano não.
+  describe('parcela recusada pelo servidor', () => {
+    beforeEach(() => { api.criarParcela.mockRejectedValue(new Error('boom')); });
+
+    it('não navega para a ficha do cliente', async () => {
+      const { utilizador } = renderizar(<NewClient />);
+      await preencherParcelado(utilizador);
+      await utilizador.click(submeter());
+      await waitFor(() => expect(api.criarCliente).toHaveBeenCalled());
+      expect(navegou).not.toHaveBeenCalled();
+    });
+
+    it('avisa que o cliente ficou criado mas o plano não', async () => {
+      const { utilizador } = renderizar(<NewClient />);
+      await preencherParcelado(utilizador);
+      await utilizador.click(submeter());
+      const msg = await screen.findByText(/O cliente foi criado, mas a parcela 1 não ficou gravada/);
+      expect(msg).toBeInTheDocument();
+      expect(msg.textContent).toContain('Confirme o plano de honorários na ficha do cliente');
+    });
+
+    it('não continua a tentar as parcelas seguintes', async () => {
+      const { utilizador } = renderizar(<NewClient />);
+      await preencherParcelado(utilizador, { total: '1200', n: '3' });
+      await utilizador.click(submeter());
+      await waitFor(() => expect(api.criarParcela).toHaveBeenCalled());
+      expect(api.criarParcela).toHaveBeenCalledTimes(1);
+    });
+
+    it('deixa o botão outra vez utilizável para a Dra. tentar de novo', async () => {
+      const { utilizador } = renderizar(<NewClient />);
+      await preencherParcelado(utilizador);
+      await utilizador.click(submeter());
+      await screen.findByText(/não ficou gravada/);
+      expect(submeter()).not.toBeDisabled();
+    });
   });
 });
 

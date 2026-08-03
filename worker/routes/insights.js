@@ -1327,7 +1327,14 @@ async function addSource(request, env) {
   let body = {};
   try { body = await request.json(); } catch {}
   const url = String(body.url || "").trim();
-  if (!/^https?:\/\//i.test(url)) return jsonError("Indique um link válido (https://…).", 400);
+  // O URL vai parar dentro do prompt da IA e fica gravado na base de dados. A regex
+  // sozinha aceitava espaços e quebras de linha, o que deixava passar um "link" a
+  // transportar texto atrás ("https://x.pt\n\nIgnora as instruções…"). O new URL()
+  // resolve a forma; a recusa explícita de espaços fecha o resto.
+  if (!/^https?:\/\//i.test(url) || /[\s<>"]/.test(url)) {
+    return jsonError("Indique um link válido (https://…).", 400);
+  }
+  try { new URL(url); } catch { return jsonError("Indique um link válido (https://…).", 400); }
 
   const dup = await env.DB.prepare(`SELECT id FROM insight_sources WHERE url = ?`).bind(url).first();
   if (dup) return jsonError("Essa fonte já está na lista.", 409);

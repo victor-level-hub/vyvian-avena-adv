@@ -1,11 +1,27 @@
 # Achados da suíte de testes
 
-Defeitos reais encontrados ao escrever a suíte Vitest (agosto 2026). **Nenhum foi
-corrigido** — cada um está documentado por um teste marcado `it.fails(...)` com um
-comentário `// BUG:`, que aparece no relatório como "falha esperada". Corrigir o
-código faz o teste passar a verde; é assim que se fecha cada linha desta lista.
+Defeitos reais encontrados ao escrever a suíte Vitest (agosto 2026). Os que ainda estão
+por corrigir têm um teste marcado `it.fails(...)` com um comentário `// BUG:`, que
+aparece no relatório como "falha esperada". **Corrigir o código faz esse teste passar a
+verde — e é assim que se fecha cada linha desta lista**: o teste deixa de ser `it.fails`,
+passa a teste normal, e a partir daí protege contra a regressão.
 
 Correr `npm run test:log` gera `tests/relatorio.html` com o estado atual.
+
+---
+
+## ✅ Já corrigidos
+
+Quatro entradas saíram da lista. Em cada uma, o teste que a documentava passou de
+`it.fails` a teste normal — é isso que prova a correção, e é isso que impede a
+regressão.
+
+| O quê | Onde | Correção |
+|---|---|---|
+| Parcelas gravadas sem verificar o resultado | `NewClient.jsx:507` | passou a usar `installmentsApi.create` (que lança) e a mensagem diz que o cliente ficou criado mas o plano não |
+| Adicionar pessoa por engano trancava o cadastro | `PersonFields.jsx:37` | `personHasData` só conta o que difere do valor por omissão (o `via_type: 'Rua'` deixou de contar) |
+| Lembrete que falha uma vez nunca mais era enviado | `cron.js:57` | o dedupe passou a exigir `status = 'sent'`, como o `owner_alerts.js` já fazia |
+| URL de fonte aceitava quebras de linha | `insights.js:1330` | passa por `new URL()` e recusa espaços, quebras de linha e `< > "` |
 
 ---
 
@@ -17,13 +33,6 @@ em minúsculas (`worker/routes/config.js:130`). O teclado do telemóvel põe mai
 primeira letra sozinho, e o autocompletar acrescenta um espaço — em qualquer dos casos
 a Dra. leva "Credenciais inválidas" com a password certa.
 *Correção:* `WHERE email = lower(trim(?))`, ou normalizar antes do bind.
-
-**Adicionar uma segunda pessoa por engano tranca o cadastro** — `src/admin/PersonFields.jsx:37-42`
-O `personHasData` percorre todas as chaves de `addrParts` menos `country`, e o
-`EMPTY_ADDRESS` já traz `via_type: 'Rua'` por omissão. Resultado: **basta clicar em
-"Adicionar pessoa" e não escrever nada** para a gravação ficar bloqueada com *"A pessoa 2
-tem dados preenchidos mas falta o nome"* (`NewClient.jsx:379`) — e não há maneira de
-destrancar sem descobrir que é preciso remover a pessoa.
 
 **Um anónimo consegue provocar 500 com detalhe interno** — `worker/routes/auth.js:36`
 Um corpo de login com `email` que não é texto (`{"email":{"$ne":null},"password":"x"}`)
@@ -45,13 +54,6 @@ a falha devia ser para o lado seguro. Sem teste `it.fails` por não ser explorá
 `{ skipped: true }` quando falta a `RESEND_API_KEY`) como sucesso. Fica gravado `sent`
 no log, o dedupe diário cala o alerta o resto do dia, e o painel garante que foi
 enviado. A Dra. não recebe nada e não tem como saber.
-
-**Lembrete que falha uma vez nunca mais é enviado** — `worker/cron.js:57-60`
-O dedupe diário só olha a (parcela, canal, dia) e ignora o **estado** do registo. Um
-lembrete que falhou com um erro transitório fica marcado como "já tentado hoje"; como o
-cron corre uma vez por dia e no dia seguinte a parcela já não bate no `days_before`, **o
-cliente nunca chega a receber o aviso**. O `owner_alerts.js:27` faz o contrário — só faz
-dedupe do que ficou `sent` — e é essa assimetria que denuncia o defeito.
 
 **Regra de notificação com `days_before` negativo desliga-se em silêncio** — `worker/cron.js:52`
 Produz o modificador `'+-3 days'`, inválido em SQLite → NULL → a regra deixa de apanhar
@@ -186,12 +188,6 @@ como inexistente: o cadastro guarda `address = null` e o que a Dra. escreveu des
 **"Rua," sozinho na morada** — `src/admin/AddressEditor.jsx:20-21`
 O tipo de via entra na morada composta mesmo com o nome da via vazio. Uma morada só com
 código postal fica `"Rua, 1700-001"` — e é assim que aparece na pré-visualização e nos PDFs.
-
-**As parcelas são gravadas sem verificar se resultou** — `src/admin/pages/NewClient.jsx:507-517`
-Cada parcela é criada com um `fetch` direto e o `res.ok` nunca é lido. Se o servidor
-devolver 500, a Dra. é levada para a ficha do cliente **como se tivesse corrido tudo
-bem** e o plano de honorários fica sem parcelas nenhumas. (Há ali também uma linha
-morta: `await installmentsApi.list ? null : null`.)
 
 **Contactos em falta não ficam a vermelho** — `src/admin/pages/NewClient.jsx:713-714`
 A mensagem de erro diz "assinalados a vermelho" (linha 372), mas o `ContactsEditor`

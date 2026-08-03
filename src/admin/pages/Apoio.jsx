@@ -40,6 +40,19 @@ const fmtDataHora = (iso) => {
 };
 const fmtData = (s) => (s ? s.split('-').reverse().join('/') : '—');
 
+/* textarea que cresce com o conteúdo — nunca mostra barra de rolagem vertical */
+function AutoTextarea({ value, minHeight = 66, style, ...props }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = 'auto';
+    el.style.height = Math.max(minHeight, el.scrollHeight) + 'px';
+  }, [value, minHeight]);
+  return <textarea ref={ref} value={value} {...props}
+                   style={{ ...style, minHeight, height: 'auto', overflow: 'hidden', resize: 'none' }} />;
+}
+
 function Badge({ meta, children }) {
   return (
     <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.1em', textTransform: 'uppercase',
@@ -330,23 +343,6 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
     finally { setBusy(false); }
   };
 
-  const executar = async () => {
-    if (!ticket) return;
-    const ok = await admConfirm(
-      `Efetuar a alteração do ticket ${ticket.id}?\n\nO ticket passa a «Em execução» e o Claude trata dele na próxima sessão de desenvolvimento. Se não for possível, o status muda para «Impedimento» com o motivo detalhado.`,
-    );
-    if (!ok) return;
-    setBusy(true);
-    try {
-      await apoio.update(ticket.id, { titulo: form.titulo, descricao: form.descricao, plano_ia: form.plano_ia, impedimentos: form.impedimentos, resolucao: form.resolucao });
-      const r = await apoio.executar(ticket.id);
-      setTicket(r.ticket); onChanged();
-      admToast(`${ticket.id} em execução — diga «resolver ticket ${ticket.id}» numa sessão do Claude.`);
-      await carregar();
-    } catch (e) { admAlert('Erro: ' + e.message); }
-    finally { setBusy(false); }
-  };
-
   // "Enviar para Aprovação" — guarda o formulário, e o worker envia um e-mail à Dra.
   // com os dados do ticket (+ prints de evidência anexados) e passa a «Em aprovação».
   const enviarAprovacao = async () => {
@@ -454,8 +450,8 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
                   <span style={{ ...label, marginBottom: 0 }}>Descrição do pedido</span>
                   {!ro && <Gravador onAudio={onAudio} transcrevendo={transcrevendo} />}
                 </div>
-                <textarea className="field" style={area} value={form.descricao} onChange={(e) => set('descricao')(e.target.value)} disabled={ro}
-                          placeholder="Descreva o erro, a melhoria ou a nova demanda… (ou dite por voz)" />
+                <AutoTextarea className="field" style={area} minHeight={90} value={form.descricao} onChange={(e) => set('descricao')(e.target.value)} disabled={ro}
+                              placeholder="Descreva o erro, a melhoria ou a nova demanda… (ou dite por voz)" />
               </div>
 
               <PasteZone label="Prints e ficheiros do pedido (Ctrl+V para colar)"
@@ -485,21 +481,21 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
                   </div>
                 )}
                 <span style={label}>Como a IA vai resolver</span>
-                <textarea className="field" style={{ ...area, minHeight: 76 }} value={form.plano_ia} onChange={(e) => set('plano_ia')(e.target.value)} disabled={ro}
-                          placeholder="Preenchido pela análise da IA (editável)…" />
+                <AutoTextarea className="field" style={area} minHeight={76} value={form.plano_ia} onChange={(e) => set('plano_ia')(e.target.value)} disabled={ro}
+                              placeholder="Preenchido pela análise da IA (editável)…" />
               </div>
 
               <div>
                 <span style={label}>Impedimentos</span>
-                <textarea className="field" style={{ ...area, minHeight: 66 }} value={form.impedimentos} onChange={(e) => set('impedimentos')(e.target.value)} disabled={ro}
-                          placeholder="Preenchido por quem não conseguir avançar (ex.: falta de token da API, falta de créditos, programa por instalar…)" />
+                <AutoTextarea className="field" style={area} minHeight={66} value={form.impedimentos} onChange={(e) => set('impedimentos')(e.target.value)} disabled={ro}
+                              placeholder="Preenchido por quem não conseguir avançar (ex.: falta de token da API, falta de créditos, programa por instalar…)" />
               </div>
 
               {/* conclusão */}
               <div>
                 <span style={label}>Como foi efetuada a resolução</span>
-                <textarea className="field" style={{ ...area, minHeight: 66 }} value={form.resolucao} onChange={(e) => set('resolucao')(e.target.value)} disabled={ro}
-                          placeholder="Explicação da resolução do problema…" />
+                <AutoTextarea className="field" style={area} minHeight={130} value={form.resolucao} onChange={(e) => set('resolucao')(e.target.value)} disabled={ro}
+                              placeholder="Explicação da resolução do problema…" />
               </div>
 
               <PasteZone label="Prints de evidência da conclusão (Ctrl+V)"
@@ -535,7 +531,7 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
               {eventos.length > 0 && (
                 <div>
                   <span style={label}>Histórico</span>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6, maxHeight: 170, overflowY: 'auto', paddingRight: 6 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                     {eventos.map((ev, i) => (
                       <div key={i} style={{ fontSize: 12, color: 'var(--fg-3)', lineHeight: 1.5 }}>
                         <span style={{ color: 'var(--gold-soft)' }}>{fmtDataHora(ev.created_at)}</span>
@@ -563,12 +559,7 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
                     <Icon name="check" size={13} />Abrir ticket
                   </button>
                 )}
-                {ticket && !['rascunho', 'resolvido', 'cancelado'].includes(ticket.status) && (
-                  <button type="button" className="btn btn-gold btn-sm" onClick={executar} disabled={busy || ticket.status === 'em_execucao'}
-                          data-tip="O Claude tenta efetuar a melhoria; se não conseguir, passa a Impedimento com o motivo">
-                    <Icon name="spark" size={13} />{ticket.status === 'em_execucao' ? 'Em execução' : 'Efetuar Alteração'}
-                  </button>
-                )}
+                {/* «Efetuar Alteração» saiu do rodapé (pedido 3 ago) — continua na lista de tickets */}
               </div>
             )}
           </>

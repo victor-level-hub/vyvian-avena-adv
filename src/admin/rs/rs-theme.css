@@ -323,6 +323,28 @@
 .rs-scope .adm-date-foot button, .adm-root .rs-scope .adm-date-foot button { color: var(--gold-deep); font-size: .7rem; }
 .rs-scope .adm-date-foot button:hover, .adm-root .rs-scope .adm-date-foot button:hover { color: var(--forest); }
 
+/* ============ barras de rolagem no padrão do tema (pedido 3 ago) ============
+   As nativas claras destoavam do fundo verde-floresta. color-scheme põe as
+   nativas (incl. a da página) escuras no tema dark; o resto afina os contentores
+   internos (histórico, textareas, tabelas com overflow) com um polegar dourado
+   discreto sobre calha transparente. */
+.rs-scope[data-rs-theme=dark] { color-scheme: dark; }
+.rs-scope[data-rs-theme=light] { color-scheme: light; }
+.rs-scope, .rs-scope * {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(184, 147, 90, .45) transparent; /* Firefox */
+}
+.rs-scope::-webkit-scrollbar, .rs-scope *::-webkit-scrollbar { width: 10px; height: 10px; }
+.rs-scope::-webkit-scrollbar-track, .rs-scope *::-webkit-scrollbar-track { background: transparent; }
+.rs-scope::-webkit-scrollbar-thumb, .rs-scope *::-webkit-scrollbar-thumb {
+  background: rgba(184, 147, 90, .38);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.rs-scope::-webkit-scrollbar-thumb:hover, .rs-scope *::-webkit-scrollbar-thumb:hover { background: rgba(184, 147, 90, .6); background-clip: padding-box; border: 2px solid transparent; }
+.rs-scope::-webkit-scrollbar-corner, .rs-scope *::-webkit-scrollbar-corner { background: transparent; }
+
 /* título do artigo no estúdio — deixar visível que é editável (pedido 3 ago) */
 .rs-studio .ed-titulo { border-radius: 8px; cursor: text; transition: box-shadow .15s ease; }
 .rs-studio .ed-titulo:hover { box-shadow: inset 0 -1px 0 var(--edge-2); }

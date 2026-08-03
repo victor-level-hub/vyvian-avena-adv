@@ -20,6 +20,7 @@ import { requireAuth } from './lib/auth.js';
 import { ROTAS_PUBLICAS } from './rotas-publicas.js';
 import { handleStats } from './routes/stats.js'; // Fase A: estatísticas (acessos ao site)
 import { handleInsights } from './routes/insights.js'; // Insights: temas, artigos IA, imagens, fontes
+import { handlePreviaArtigo } from './routes/previa.js'; // prévia pública de artigo (token)
 import { isValidHit, recordVisit } from './lib/visits.js'; // Fase A: contador de visitas (beacon)
 import { syncInstagram } from './lib/instagram.js'; // Fase B: sync do Instagram (cron + trigger manual)
 
@@ -207,6 +208,16 @@ export default {
       } catch (err) {
         console.error('API error:', err.message, err.stack);
         return jsonError('Internal server error', 500, { detail: err.message });
+      }
+    }
+
+    // === PRÉ-VISUALIZAÇÃO PÚBLICA DE ARTIGO (link partilhável, guardado por token) ===
+    if (path === '/pre-visual-artigo') {
+      try {
+        return await handlePreviaArtigo(request, env);
+      } catch (err) {
+        console.error('previa error:', err.message);
+        return new Response('Erro na pré-visualização.', { status: 500 });
       }
     }
 

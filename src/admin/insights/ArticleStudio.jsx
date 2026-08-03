@@ -539,6 +539,18 @@ export default function ArticleStudio({ articleId, onClose }) {
             }}>
               <Icon name="eye" size={14} />Pré-visualizar
             </button>
+            <button type="button" className="btn btn-ghost btn-sm"
+                    data-tip="Copia um link público da prévia — cole no WhatsApp da Dra. (abre sem login)"
+                    onClick={async () => {
+                      try {
+                        if (sujo) await guardar(true); // o link mostra sempre a última versão guardada
+                        const d = await api.previaLink(articleId);
+                        await navigator.clipboard.writeText(d.url);
+                        admToast('Link da prévia copiado — pode colar no WhatsApp da Dra.');
+                      } catch (e) { admToast(`Não foi possível copiar o link: ${e.message}`, { kind: 'error' }); }
+                    }}>
+              <Icon name="link" size={14} />Copiar link de prévia
+            </button>
             <button type="button" className={'btn btn-sm ' + (sujo ? 'btn-gold' : 'btn-ghost')} onClick={() => guardar()} disabled={guardando}>
               <Icon name={sujo ? 'save' : 'check'} size={14} s={sujo ? 1.6 : 3} />
               {guardando ? 'A guardar…' : sujo ? 'Guardar' : 'Guardado'}

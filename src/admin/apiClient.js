@@ -161,6 +161,8 @@ export const insights = {
   saveArticle: (id, data) => request(`/api/insights/articles/${id}`, { method: 'PATCH', body: data }),
   // Apagar um rascunho (artigos publicados não se apagam por aqui).
   deleteArticle: (id) => request(`/api/insights/articles/${id}`, { method: 'DELETE' }),
+  // Link público de pré-visualização (token) — partilhável com a Dra. no WhatsApp
+  previaLink: (id) => request(`/api/insights/articles/${id}/previa-link`),
   // Correções por IA: a Dra. descreve a correção; a IA aplica-a ao artigo inteiro.
   // Com `selecao` (trecho em Markdown), corrige SÓ o trecho e devolve { texto, notas }
   // como proposta — nada é gravado até a Dra. aplicar no editor.

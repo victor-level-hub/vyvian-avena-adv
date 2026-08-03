@@ -9,6 +9,7 @@
 // prefixo insights/).
 import { jsonResponse, jsonError } from "../lib/response.js";
 import { upsertKeywords, resumoBanco, blocoBancoParaPrompt, updateKeywordMetrics } from "../lib/keywords.js";
+import { tokenPrevia } from "./previa.js";
 
 const GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 // Aliases "latest": resistentes a descontinuações (a 24/07/2026, o gemini-2.5-flash
@@ -196,6 +197,16 @@ export async function handleInsights(request, env, path, session) {
   }
   mt = path.match(/^\/api\/insights\/articles\/(\d+)\/corrigir$/);
   if (mt && m === "POST") return corrigirComIA(request, env, +mt[1]);
+  // link público de pré-visualização (token) — para partilhar com a Dra. no WhatsApp
+  mt = path.match(/^\/api\/insights\/articles\/(\d+)\/previa-link$/);
+  if (mt && m === "GET") {
+    const idArt = +mt[1];
+    const a = await env.DB.prepare(`SELECT id FROM insight_articles WHERE id = ?`).bind(idArt).first();
+    if (!a) return jsonError("Artigo não encontrado", 404);
+    const t = await tokenPrevia(env, idArt);
+    const origem = new URL(request.url).origin;
+    return jsonResponse({ url: `${origem}/pre-visual-artigo?id=${idArt}&t=${t}` });
+  }
   mt = path.match(/^\/api\/insights\/articles\/(\d+)\/inserir-imagens$/);
   if (mt && m === "POST") return inserirImagens(request, env, +mt[1]);
   mt = path.match(/^\/api\/insights\/articles\/(\d+)\/avaliar$/);

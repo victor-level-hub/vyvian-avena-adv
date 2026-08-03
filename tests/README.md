@@ -74,6 +74,43 @@ Repor sempre no fim: `afterEach(() => vi.unstubAllGlobals())`.
 sem o ter mockado falha com "Chamada de rede não mockada". É de propósito — sem isto,
 um teste distraído bate mesmo na API do Gemini ou chega a enviar um e-mail a sério.
 
+## Testes de interface (componentes React)
+
+Vivem em `tests/admin/*.test.jsx` e correm em **jsdom** com a Testing Library. A
+primeira linha do ficheiro tem de declarar o ambiente — sem isto o teste corre em Node
+e não há DOM nenhum:
+
+```js
+// @vitest-environment jsdom
+```
+
+O helper é `tests/helpers/dom.jsx`. O `renderizar()` já embrulha o componente no
+MemoryRouter (quase toda a Área Privada usa `useNavigate`/`Link` e rebenta sem ele) e
+devolve um `utilizador` já preparado:
+
+```js
+const { utilizador, container } = renderizar(<Ecra />, { caminho: '/admin/clientes/x', rota: '/admin/clientes/:id' });
+await utilizador.click(screen.getByRole('button', { name: 'Guardar' }));
+expect(await screen.findByText('Cliente criado')).toBeInTheDocument();
+```
+
+Regras:
+
+- **Mockar sempre `src/admin/apiClient.js`** com `vi.mock` — a rede está fechada e um
+  teste que lá chegue falha de propósito.
+- **Consultar por papel e por texto visível** (`getByRole`, `getByLabelText`,
+  `getByText`), não por classe CSS: testa-se o que a Dra. vê, não como está montado.
+- Para esperas, `findBy*` ou `waitFor` — nunca `setTimeout`.
+- `MediaRecorder`, `clipboard` e afins não existem no jsdom: mocka-os com `vi.stubGlobal`.
+
+Um cuidado que já mordeu: o `fmtValor` separa o símbolo do valor com um **espaço
+inseparável** (` `), de propósito, para "€ 200,00" não partir em duas linhas. Uma
+comparação com espaço normal falha com duas strings visualmente idênticas. Ver
+`tests/admin/parcelas-editor.test.jsx`, que normaliza em vez de meter caracteres
+invisíveis no ficheiro.
+
+`tests/admin/inputs.test.jsx` serve de exemplo de estilo para um ficheiro novo.
+
 ## Convenções
 
 - Nomes de teste em português, a descrever **comportamento** ("recusa ticket sem título"),

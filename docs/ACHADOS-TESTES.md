@@ -139,6 +139,40 @@ deixa um evento sem nome no calendário.
 
 ---
 
+## 4-B. Interface (encontrados pelos testes de componente)
+
+**O login aterra sempre no Painel** — `src/admin/pages/Login.jsx:21`
+O destino está fixo em `/admin/painel` em vez de `primeiraRotaPermitida()`
+(`src/admin/perms.js:23`). Quem não tem a aba Painel aterra numa rota proibida e só
+não fica preso porque o `PermGate` (`AdminApp.jsx:35`) o atira logo para outro lado —
+e quem não tem aba nenhuma é devolvido ao ecrã de login **já autenticado**.
+
+**Morada perde-se quando só o distrito está preenchido** — `src/admin/AddressEditor.jsx:48-50`
+O `hasAddress` não olha para distrito, estado nem complemento, por isso trata a morada
+como inexistente: o cadastro guarda `address = null` e o que a Dra. escreveu desaparece.
+
+**"Rua," sozinho na morada** — `src/admin/AddressEditor.jsx:20-21`
+O tipo de via entra na morada composta mesmo com o nome da via vazio. Uma morada só com
+código postal fica `"Rua, 1700-001"` — e é assim que aparece na pré-visualização e nos PDFs.
+
+**Pessoa em branco conta como preenchida** — `src/admin/PersonFields.jsx:37-42`
+O `personHasData` inspeciona todas as chaves de `addrParts` e o `EMPTY_ADDRESS` já traz
+`via_type: 'Rua'`. Uma pessoa acabada de adicionar e nunca tocada é dada como tendo dados.
+
+**Gravação de voz invisível antes de o ticket existir** — `src/admin/pages/Apoio.jsx:530`
+A zona de anexos só desenha `pend.print_abertura` e `pend.anexo`. Num ticket ainda por
+criar, o áudio ditado vai para `pend.audio` e não aparece em lado nenhum — a Dra. não
+vê que a gravação ficou anexada (só a transcrição entra na descrição).
+
+**Acessibilidade: campos sem etiqueta ligada** — vários
+`Login.jsx:51,62` (os `<label>` não têm `htmlFor` nem envolvem o campo — clicar na
+etiqueta não foca, e um leitor de ecrã anuncia "campo de edição" sem dizer qual),
+`Apoio.jsx:495-497` (rótulos do modal são `<span>` solto), `Apoio.jsx:695` (pesquisa só
+com *placeholder*, que desaparece ao escrever) e `Apoio.jsx:744-746` (o botão do lápis
+tem só um SVG `aria-hidden` e um `data-tip`, ficando sem nome acessível).
+
+---
+
 ## 5. Detalhes com consequência
 
 **HTML por escapar no e-mail** — `worker/lib/senders.js`

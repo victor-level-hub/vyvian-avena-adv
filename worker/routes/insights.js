@@ -141,6 +141,29 @@ export function comAvisoLegal(markdown, idioma) {
   );
 }
 
+/* Normalização de blocos (problema reportado pela Dra., 3 ago): aparecia um título
+   com os «##» à vista em vez de H2 — quase sempre o primeiro. Causa: o markdown
+   chegava com o título colado ao bloco anterior (tipicamente a uma imagem inserida:
+   `![alt](/api/insights/images/31)## O que diz…`). Sem quebra de linha antes, o `##`
+   é texto corrido e não um cabeçalho. Em vez de perseguir cada produtor (geração,
+   correções por IA, colocação de imagens), garante-se aqui, à entrada da base de
+   dados, que títulos, imagens, `---` e citações começam sempre em bloco próprio. */
+export function normalizarBlocos(markdown) {
+  let md = String(markdown || "").replace(/\r\n?/g, "\n");
+  // imagem colada ao que vem a seguir (o caso observado)
+  md = md.replace(/(!\[[^\]]*\]\([^)\s]+\))(?=[^\n])/g, "$1\n\n");
+  // título ATX sem linha em branco antes. Só se atua quando o «##» já abre a linha —
+  // partir «##» a meio de uma frase estragaria prosa legítima, e o caso real (imagem
+  // colada) já ficou resolvido pela regra acima.
+  md = md.replace(/([^\n])\n(#{2,4}\s+)/g, "$1\n\n$2");
+  // separador e citação precisam igualmente de linha em branco antes
+  md = md.replace(/([^\n])\n(---\s*$)/gm, "$1\n\n$2");
+  md = md.replace(/([^\n])\n(>\s)/g, "$1\n\n$2");
+  // um título nunca fica colado ao parágrafo seguinte
+  md = md.replace(/^(#{2,4}\s+.+)\n(?!\n)/gm, "$1\n\n");
+  return md.replace(/\n{3,}/g, "\n\n").trim();
+}
+
 // Contexto fixo da Dra. para os prompts.
 const PERFIL = `A Dra. Vyvian Avena é advogada luso-brasileira, inscrita na Ordem dos Advogados
 de Portugal, com escritório em Portugal e atuação também no Brasil (vyavenaadv.com,
@@ -450,7 +473,7 @@ Responde EXCLUSIVAMENTE com JSON válido:
          limparCitacoes(String(art.descricao || "")).slice(0, 300),
          String(art.area || (topic && topic.area) || "").slice(0, 30) || null,
          art.idioma === "pt-BR" ? "pt-BR" : "pt-PT",
-         comAvisoLegal(limparCitacoes(String(art.markdown)), art.idioma)).run();
+         comAvisoLegal(normalizarBlocos(limparCitacoes(String(art.markdown))), art.idioma)).run();
   if (topic) {
     await env.DB.prepare(`UPDATE insight_topics SET estado='artigo_gerado' WHERE id = ?`).bind(topic.id).run();
   }
@@ -550,7 +573,7 @@ async function solicitarPublicacao(env, id) {
   if (!slug) return jsonError("Não foi possível gerar o URL (slug) a partir do título", 400);
   // Rede de segurança para rascunhos gerados antes do aviso legal determinístico:
   // nenhum artigo segue para o blogue sem o parágrafo de fecho.
-  const mdFinal = comAvisoLegal(a.markdown, a.idioma);
+  const mdFinal = comAvisoLegal(normalizarBlocos(a.markdown), a.idioma);
   await env.DB.prepare(
     `UPDATE insight_articles SET slug = ?, markdown = ?, publicar_em = datetime('now') WHERE id = ?`
   ).bind(slug, mdFinal, id).run();
@@ -741,7 +764,7 @@ Responde EXCLUSIVAMENTE com JSON válido:
 
   // inserir fotos altera o conteúdo → a revisão da Dra. deixa de valer
   await env.DB.prepare(`UPDATE insight_articles SET markdown = ?, revisto_em = NULL WHERE id = ?`)
-    .bind(blocos.join("\n\n"), articleId).run();
+    .bind(normalizarBlocos(blocos.join("\n\n")), articleId).run();
   return getArticle(env, articleId);
 }
 
@@ -863,7 +886,7 @@ Responde EXCLUSIVAMENTE com JSON válido:
     return jsonError(`Falha a aplicar as correções: ${e.message}`, 502);
   }
 
-  const novoMd = comAvisoLegal(limparCitacoes(String(out.markdown)), a.idioma);
+  const novoMd = comAvisoLegal(normalizarBlocos(limparCitacoes(String(out.markdown))), a.idioma);
   const novoTitulo = limparCitacoes(String(out.titulo || a.titulo)).slice(0, 120);
   const novaDesc = limparCitacoes(String(out.descricao || a.descricao || "")).slice(0, 300);
   await env.DB.prepare(
@@ -885,7 +908,7 @@ async function updateArticle(request, env, id) {
   let conteudoMudou = false;
   if (typeof body.titulo === "string") { sets.push("titulo = ?"); vals.push(body.titulo.slice(0, 120)); conteudoMudou = conteudoMudou || body.titulo.slice(0, 120) !== (a.titulo || ""); }
   if (typeof body.descricao === "string") { sets.push("descricao = ?"); vals.push(body.descricao.slice(0, 300)); conteudoMudou = conteudoMudou || body.descricao.slice(0, 300) !== (a.descricao || ""); }
-  if (typeof body.markdown === "string") { sets.push("markdown = ?"); vals.push(body.markdown); conteudoMudou = conteudoMudou || body.markdown !== (a.markdown || ""); }
+  if (typeof body.markdown === "string") { sets.push("markdown = ?"); vals.push(normalizarBlocos(body.markdown)); conteudoMudou = conteudoMudou || body.markdown !== (a.markdown || ""); }
   if (typeof body.area === "string") { sets.push("area = ?"); vals.push(body.area.slice(0, 30)); }
   // «Revisto pela Dra.» — marca/desmarca explícita…
   if (typeof body.revisto === "boolean") {

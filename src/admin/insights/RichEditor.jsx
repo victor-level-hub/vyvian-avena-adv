@@ -70,6 +70,32 @@ export default function RichEditor({ initialMarkdown, onChangeMarkdown, placehol
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialMarkdown, editor]);
 
+  // O ProseMirror reafirma o foco com gosto — na prática, escrever no TÍTULO ou na
+  // descrição podia acabar com as teclas a cair no corpo do artigo («não consigo
+  // editar o título», Dra., 1 ago). Guarda equivalente à dos diálogos: enquanto um
+  // campo de escrita FORA do editor tiver o foco, o editor fica não-editável
+  // (contenteditable=false não pode reclamar teclado); volta a editável assim que
+  // se clica no corpo ou na barra de ferramentas.
+  useEffect(() => {
+    if (!editor) return undefined;
+    const raiz = editor.view.dom.closest('.adm-rte') || editor.view.dom;
+    const onFocusIn = (e) => {
+      const el = e.target;
+      if (!el || raiz.contains(el)) return;
+      const escrita = el.tagName === 'TEXTAREA' || el.tagName === 'INPUT' || el.isContentEditable;
+      if (escrita) { try { editor.commands.blur(); editor.setEditable(false); } catch { /* ignore */ } }
+    };
+    const reativar = () => {
+      try { if (!editor.isEditable) editor.setEditable(true); } catch { /* ignore */ }
+    };
+    document.addEventListener('focusin', onFocusIn, true);
+    raiz.addEventListener('mousedown', reativar, true);
+    return () => {
+      document.removeEventListener('focusin', onFocusIn, true);
+      raiz.removeEventListener('mousedown', reativar, true);
+    };
+  }, [editor]);
+
   const setLink = useCallback(async () => {
     if (!editor) return;
     const prev = editor.getAttributes('link').href || '';

@@ -300,3 +300,25 @@
 /* selects do redesign (filtros de Clientes etc.) — mesmo aspeto dos inputs .field */
 .rs-scope select.field { appearance: none; -webkit-appearance: none; background-image: linear-gradient(45deg, transparent 50%, var(--gold-soft) 50%), linear-gradient(135deg, var(--gold-soft) 50%, transparent 50%); background-position: calc(100% - 18px) 55%, calc(100% - 13px) 55%; background-size: 5px 5px; background-repeat: no-repeat; padding-right: 34px !important; }
 .rs-scope select.field option { background: var(--panel-flat); color: var(--fg); }
+
+/* ============ DateInput (admin.css) dentro do rs-scope ============
+   O reset genérico `.rs-scope button { font/color: inherit; background:
+   none; border: 0 }` tem especificidade acima das classes .adm-date-* :
+   apagava o campo de data e pintava os dias do calendário com o --fg
+   creme do tema escuro sobre o popover branco (pareciam desativados).
+   Campo no aspeto dos .field; o popover é sempre branco, por isso a
+   tinta usa os tokens fixos do admin.css (:root). */
+.rs-scope .adm-date-btn, .adm-root .rs-scope .adm-date-btn {
+  border: 1px solid var(--edge); background: var(--panel); color: var(--fg);
+  border-radius: var(--r-md); padding: 11px 16px; font-size: 14px;
+}
+.rs-scope .adm-date-btn:hover:not(:disabled), .adm-root .rs-scope .adm-date-btn:hover:not(:disabled) { border-color: var(--gold-soft); }
+.rs-scope .adm-date-btn.open, .adm-root .rs-scope .adm-date-btn.open { border-color: var(--gold-soft); box-shadow: 0 0 0 4px rgba(184, 147, 90, .14); }
+.rs-scope .adm-date-btn.empty span, .adm-root .rs-scope .adm-date-btn.empty span { color: var(--fg-3); }
+.rs-scope .adm-date-btn svg, .adm-root .rs-scope .adm-date-btn svg { color: var(--fg-3); }
+.rs-scope .adm-date-nav, .adm-root .rs-scope .adm-date-nav { color: var(--muted); font-size: .95rem; }
+.rs-scope .adm-date-nav:hover, .adm-root .rs-scope .adm-date-nav:hover { background: var(--cream-soft); color: var(--forest); }
+.rs-scope .adm-date-day, .adm-root .rs-scope .adm-date-day { color: var(--ink); font-size: .78rem; }
+.rs-scope .adm-date-day.sel, .adm-root .rs-scope .adm-date-day.sel { background: var(--forest); color: var(--cream); }
+.rs-scope .adm-date-foot button, .adm-root .rs-scope .adm-date-foot button { color: var(--gold-deep); font-size: .7rem; }
+.rs-scope .adm-date-foot button:hover, .adm-root .rs-scope .adm-date-foot button:hover { color: var(--forest); }

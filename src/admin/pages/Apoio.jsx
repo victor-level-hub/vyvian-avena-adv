@@ -422,7 +422,7 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
                 </div>
                 <div>
                   <span style={label}>Data de prazo</span>
-                  <DateInput value={form.data_prazo} onChange={set('data_prazo')} disabled={ro} />
+                  <DateInput value={form.data_prazo} onChange={(e) => set('data_prazo')(e.target.value)} disabled={ro} />
                 </div>
               </div>
 

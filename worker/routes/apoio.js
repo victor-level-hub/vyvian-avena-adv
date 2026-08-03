@@ -8,6 +8,7 @@
 //   POST   /api/apoio/tickets/:id/abrir                                       -> passa rascunho -> aberto (data/hora)
 //   POST   /api/apoio/tickets/:id/analisar                                    -> IA: complexidade + plano (Gemini)
 //   POST   /api/apoio/tickets/:id/executar                                    -> "Efetuar Alteração": status em_execucao
+//   POST   /api/apoio/tickets/:id/aprovar                                     -> e-mail à Dra. + status em_aprovacao
 //   POST   /api/apoio/tickets/:id/anexos           ?tipo=&nome=  (binário)    -> { anexo }   (R2)
 //   GET    /api/apoio/anexos/:anexoId                                         -> ficheiro (stream do R2)
 //   DELETE /api/apoio/anexos/:anexoId                                         -> { ok }
@@ -18,6 +19,7 @@
 // atualiza status/resolucao/impedimentos via PATCH.
 
 import { jsonResponse, jsonError } from "../lib/response.js";
+import { sendEmail } from "../lib/senders.js";
 
 const HOJE_LX = () => {
   // data/hora de Lisboa (o D1 guarda datetime('now') em UTC; a abertura fica legível)
@@ -30,7 +32,7 @@ const HOJE_LX = () => {
   return { data: `${g("year")}-${g("month")}-${g("day")}`, hora: `${g("hour")}:${g("minute")}` };
 };
 
-const STATUS_VALIDOS = ["rascunho", "aberto", "em_analise", "em_execucao", "impedimento", "resolvido", "cancelado"];
+const STATUS_VALIDOS = ["rascunho", "aberto", "em_analise", "em_execucao", "em_aprovacao", "impedimento", "resolvido", "cancelado"];
 const URGENCIAS = ["baixa", "media", "alta", "critica"];
 const TIPOS_ANEXO = ["anexo", "print_abertura", "print_conclusao", "audio"];
 const CAMPOS_EDITAVEIS = [
@@ -155,7 +157,7 @@ export async function handleApoio(request, env, path, session) {
   }
 
   // ---- rotas por ticket ----
-  m = path.match(/^\/api\/apoio\/tickets\/(AT-\d{4}-\d{3})(\/(abrir|analisar|executar|anexos))?$/);
+  m = path.match(/^\/api\/apoio\/tickets\/(AT-\d{4}-\d{3})(\/(abrir|analisar|executar|aprovar|anexos))?$/);
   if (!m) return jsonError("Not found", 404);
   const id = m[1];
   const acao = m[3] || null;
@@ -274,6 +276,86 @@ ${ticket.descricao || "(sem descrição)"}`;
     await log(env, id, "execucao",
       "Pedido de execução registado. O Claude vai tratar do ticket na próxima sessão de desenvolvimento " +
       `(basta dizer «resolver ticket ${id}»). Se não for possível, o status passa a Impedimento com o motivo detalhado.`,
+      autor);
+    return jsonResponse({ ok: true, ticket: await carregarTicket(env, id) });
+  }
+
+  // "Enviar para Aprovação" — e-mail à Dra. com os dados do ticket (+ prints de
+  // evidência anexados) e status em_aprovacao. O frontend guarda o formulário
+  // (PATCH) antes de chamar isto, por isso o ticket aqui já está atualizado.
+  if (acao === "aprovar" && method === "POST") {
+    if (["rascunho", "cancelado"].includes(ticket.status)) {
+      return jsonError("Abra o ticket antes de o enviar para aprovação.", 400);
+    }
+    const contacts = await env.DB.prepare(`SELECT email FROM owner_alert_contacts WHERE id = 1`).first().catch(() => null);
+    const destino = contacts?.email || env.ADMIN_EMAIL;
+    if (!destino) return jsonError("Sem e-mail da Dra. configurado (Configurações → Alertas).", 503);
+
+    // prints de evidência da conclusão seguem anexados
+    const prints = (await env.DB.prepare(
+      `SELECT nome, content_type, r2_key FROM ticket_anexos WHERE ticket_id = ? AND tipo = 'print_conclusao' ORDER BY created_at`
+    ).bind(id).all()).results || [];
+    const attachments = [];
+    for (const p of prints) {
+      const obj = await env.RECIBOS.get(p.r2_key);
+      if (!obj) continue;
+      const u8 = new Uint8Array(await obj.arrayBuffer());
+      let b64 = "";
+      const chunk = 0x8000;
+      for (let i = 0; i < u8.length; i += chunk) b64 += String.fromCharCode.apply(null, u8.subarray(i, i + chunk));
+      attachments.push({ filename: p.nome || "print.png", content: btoa(b64) });
+    }
+
+    const URG_LABEL = { baixa: "Baixa", media: "Média", alta: "Alta", critica: "Crítica" };
+    const urg = URG_LABEL[ticket.urgencia] || "Média";
+    const prazo = ticket.data_prazo ? ticket.data_prazo.split("-").reverse().join("/") : null;
+    const analise = [
+      ticket.complexidade ? `Complexidade ${ticket.complexidade}${ticket.complexidade_justificacao ? ` — ${ticket.complexidade_justificacao}` : ""}` : null,
+      ticket.plano_ia || null,
+    ].filter(Boolean).join("\n\n");
+
+    const esc = (s) => String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/\n/g, "<br>");
+    const secao = (t, corpo) => corpo
+      ? `<h3 style="margin:20px 0 4px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:#8e6f3f">${t}</h3>` +
+        `<p style="margin:0;font-size:14px;line-height:1.65;color:#333">${esc(corpo)}</p>`
+      : "";
+    const html =
+      `<div style="font-family:Georgia,'Times New Roman',serif;max-width:640px;margin:0 auto;padding:8px 4px">` +
+      `<h2 style="color:#12302a;margin:0 0 2px;font-weight:600">Ticket ${id} — para aprovação</h2>` +
+      `<p style="margin:0 0 16px;color:#8a8275;font-size:13px">Apoio Técnico · Vyvian Avena Advogada</p>` +
+      `<p style="margin:0;font-size:16px;color:#12302a"><strong>${esc(ticket.titulo)}</strong></p>` +
+      `<p style="margin:8px 0 0;font-size:13.5px;color:#555">Urgência: <strong>${urg}</strong>${prazo ? ` · Prazo: <strong>${prazo}</strong>` : ""}</p>` +
+      secao("Descrição", ticket.descricao) +
+      secao("Análise da IA", analise) +
+      secao("Impedimentos", ticket.impedimentos) +
+      secao("Como foi efetuada a resolução", ticket.resolucao) +
+      (attachments.length ? `<p style="margin:20px 0 0;font-size:13px;color:#555">${attachments.length} print${attachments.length === 1 ? "" : "s"} de evidência da conclusão em anexo.</p>` : "") +
+      `<p style="margin:24px 0 0;font-size:12px;color:#8a8275">Para aprovar ou pedir alterações, registe no ticket na Área Privada (Apoio Técnico → ${id}).</p>` +
+      `</div>`;
+    const text = [
+      `Ticket ${id} — para aprovação`,
+      ``,
+      ticket.titulo,
+      `Urgência: ${urg}` + (prazo ? ` · Prazo: ${prazo}` : ""),
+      ticket.descricao ? `\nDESCRIÇÃO\n${ticket.descricao}` : null,
+      analise ? `\nANÁLISE DA IA\n${analise}` : null,
+      ticket.impedimentos ? `\nIMPEDIMENTOS\n${ticket.impedimentos}` : null,
+      ticket.resolucao ? `\nCOMO FOI EFETUADA A RESOLUÇÃO\n${ticket.resolucao}` : null,
+      attachments.length ? `\n${attachments.length} print(s) de evidência em anexo.` : null,
+    ].filter((l) => l != null).join("\n");
+
+    const res = await sendEmail(env, {
+      to: destino,
+      subject: `Ticket ${id} para aprovação — ${ticket.titulo}`,
+      html, text, attachments,
+    });
+    if (!res.ok) return jsonError(`E-mail não enviado: ${res.error || res.reason || "falha no envio"}`, 502);
+
+    await env.DB.prepare(
+      `UPDATE tickets SET status = 'em_aprovacao', updated_at = datetime('now') WHERE id = ?`
+    ).bind(id).run();
+    await log(env, id, "aprovacao",
+      `Enviado para aprovação da Dra. (e-mail para ${destino}${attachments.length ? `, ${attachments.length} print${attachments.length === 1 ? "" : "s"} de evidência` : ""}).`,
       autor);
     return jsonResponse({ ok: true, ticket: await carregarTicket(env, id) });
   }

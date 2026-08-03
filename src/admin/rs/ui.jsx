@@ -43,6 +43,7 @@ const RS_ICONS = {
   bell: 'M18 9a6 6 0 1 0-12 0c0 5-2 6-2 6h16s-2-1-2-6|M10.3 19.5a2 2 0 0 0 3.4 0',
   calendar: 'M4.5 6h15v14h-15V6Z|M8 3.5V7|M16 3.5V7|M4.5 10.5h15',
   doc: 'M6 3h8l4 4v14H6V3Z|M14 3v4h4|M9 12h6|M9 16h6',
+  mail: 'M3 6h18v12H3V6Z|M3 7l9 6 9-6',
 };
 export function Icon({ name, size = 18, s = 1.6, style, cls }) {
   const d = RS_ICONS[name];

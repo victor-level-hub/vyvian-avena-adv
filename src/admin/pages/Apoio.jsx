@@ -19,6 +19,7 @@ const STATUS_META = {
   aberto:      { label: 'Aberto',        fg: '#7fb8e8',      bg: 'rgba(96,155,220,.14)' },
   em_analise:  { label: 'Em análise',    fg: 'var(--gold-soft)', bg: 'rgba(184,147,90,.14)' },
   em_execucao: { label: 'Em execução',   fg: '#d4b585',      bg: 'rgba(212,181,133,.18)' },
+  em_aprovacao: { label: 'Em aprovação', fg: '#b9a7e8',      bg: 'rgba(150,125,220,.16)' },
   impedimento: { label: 'Impedimento',   fg: '#e08b8b',      bg: 'rgba(214,106,106,.16)' },
   resolvido:   { label: 'Resolvido',     fg: '#8fce9f',      bg: 'rgba(110,190,130,.14)' },
   cancelado:   { label: 'Cancelado',     fg: 'var(--fg-3)',  bg: 'rgba(120,120,120,.12)' },
@@ -211,20 +212,23 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
   const [busy, setBusy] = useState(false);
   const [transcrevendo, setTranscrevendo] = useState(false);
 
-  const carregar = useCallback(async () => {
+  // comForm=false: refresca ticket/anexos/histórico SEM tocar no formulário — usado
+  // após uploads/remoções de anexos, para não descartar texto ainda não guardado
+  // (era isto que "comia" a resolução escrita antes de colar os prints, 3 ago).
+  const carregar = useCallback(async (comForm = true) => {
     if (!ticketId) return;
-    setLoading(true);
+    if (comForm) setLoading(true);
     try {
       const d = await apoio.get(ticketId);
       setTicket(d.ticket); setAnexos(d.anexos || []); setEventos(d.log || []);
-      setForm({
+      if (comForm) setForm({
         titulo: d.ticket.titulo || '', descricao: d.ticket.descricao || '',
         criado_por: d.ticket.criado_por || 'Victor', urgencia: d.ticket.urgencia || 'media',
         data_prazo: d.ticket.data_prazo || '', plano_ia: d.ticket.plano_ia || '',
         impedimentos: d.ticket.impedimentos || '', resolucao: d.ticket.resolucao || '',
       });
     } catch (e) { admAlert('Erro ao carregar o ticket: ' + e.message); onClose(); }
-    finally { setLoading(false); }
+    finally { if (comForm) setLoading(false); }
   }, [ticketId, onClose]);
   useEffect(() => { carregar(); }, [carregar]);
 
@@ -260,13 +264,13 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
         const r = await apoio.uploadAnexo(ticket.id, f, { tipo, nome: f.name || (tipo === 'audio' ? 'gravacao.webm' : 'print.png') });
         if (tipo === 'audio' && extra.transcricao && r?.anexo?.id) await apoio.setTranscricao(r.anexo.id, extra.transcricao).catch(() => {});
       }
-      await carregar(); onChanged();
+      await carregar(false); onChanged();
     } catch (e) { admAlert('Erro no anexo: ' + e.message); }
     finally { setBusy(false); }
   };
   const removerAnexo = async (a) => {
     if (!(await admConfirm(`Remover «${a.nome || 'anexo'}»?`))) return;
-    try { await apoio.deleteAnexo(a.id); await carregar(); onChanged(); }
+    try { await apoio.deleteAnexo(a.id); await carregar(false); onChanged(); }
     catch (e) { admAlert('Erro: ' + e.message); }
   };
 
@@ -340,6 +344,25 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
       admToast(`${ticket.id} em execução — diga «resolver ticket ${ticket.id}» numa sessão do Claude.`);
       await carregar();
     } catch (e) { admAlert('Erro: ' + e.message); }
+    finally { setBusy(false); }
+  };
+
+  // "Enviar para Aprovação" — guarda o formulário, e o worker envia um e-mail à Dra.
+  // com os dados do ticket (+ prints de evidência anexados) e passa a «Em aprovação».
+  const enviarAprovacao = async () => {
+    if (!ticket) return;
+    const ok = await admConfirm(
+      `Enviar o ticket ${ticket.id} para aprovação da Dra.?\n\nEla recebe um e-mail com os dados do ticket (título, urgência, descrição, análise, resolução e prints de evidência) e o status passa a «Em aprovação».`,
+    );
+    if (!ok) return;
+    setBusy(true);
+    try {
+      await apoio.update(ticket.id, { ...form, data_prazo: form.data_prazo || null });
+      const r = await apoio.aprovar(ticket.id);
+      setTicket(r.ticket); onChanged();
+      admToast(`E-mail enviado à Dra. — ${ticket.id} em aprovação.`);
+      await carregar();
+    } catch (e) { admAlert('Erro ao enviar para aprovação: ' + e.message); }
     finally { setBusy(false); }
   };
 
@@ -491,11 +514,20 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
 
               {/* status manual quando já existe */}
               {ticket && !readOnly && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-                  <span style={{ ...label, marginBottom: 0 }}>Status</span>
-                  <Seg small value={ticket.status}
-                       items={Object.entries(STATUS_META).filter(([k]) => k !== 'rascunho' || ticket.status === 'rascunho').map(([k, m]) => ({ k, label: m.label }))}
-                       onChange={(v) => mudarStatus(v)} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+                    <span style={{ ...label, marginBottom: 0 }}>Status</span>
+                    <Seg small value={ticket.status}
+                         items={Object.entries(STATUS_META).filter(([k]) => k !== 'rascunho' || ticket.status === 'rascunho').map(([k, m]) => ({ k, label: m.label }))}
+                         onChange={(v) => mudarStatus(v)} />
+                  </div>
+                  <div>
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={enviarAprovacao}
+                            disabled={busy || ['rascunho', 'cancelado'].includes(ticket.status)}
+                            data-tip="A Dra. recebe um e-mail com os dados do ticket (título, urgência, prazo, descrição, análise, resolução e prints de evidência) e o status passa a «Em aprovação»">
+                      <Icon name="mail" size={13} />{busy ? 'A enviar…' : 'Enviar para Aprovação'}
+                    </button>
+                  </div>
                 </div>
               )}
 

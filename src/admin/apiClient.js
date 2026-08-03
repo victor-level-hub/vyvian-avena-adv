@@ -429,6 +429,8 @@ export const apoio = {
   abrir: (id) => request(`/api/apoio/tickets/${id}/abrir`, { method: 'POST' }),
   analisar: (id) => request(`/api/apoio/tickets/${id}/analisar`, { method: 'POST' }),
   executar: (id) => request(`/api/apoio/tickets/${id}/executar`, { method: 'POST' }),
+  // e-mail à Dra. com os dados do ticket + status «Em aprovação»
+  aprovar: (id) => request(`/api/apoio/tickets/${id}/aprovar`, { method: 'POST' }),
 
   // upload binário (print colado, ficheiro ou áudio)
   async uploadAnexo(id, blob, { tipo = 'anexo', nome } = {}) {

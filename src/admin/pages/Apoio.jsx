@@ -492,8 +492,8 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
             {/* identificação */}
             <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 16 }}>
               <div>
-                <span style={label}>Título do pedido *</span>
-                <input className="field" value={form.titulo} onChange={(e) => set('titulo')(e.target.value)} disabled={ro}
+                <label style={label} htmlFor="apoio-titulo">Título do pedido *</label>
+                <input id="apoio-titulo" className="field" value={form.titulo} onChange={(e) => set('titulo')(e.target.value)} disabled={ro}
                        placeholder="Ex.: Erro ao gerar o PDF do plano de pagamento" style={{ width: '100%', padding: '10px 14px', fontSize: 13.5, caretColor: 'var(--gold)' }} />
               </div>
 
@@ -693,6 +693,7 @@ export default function Apoio() {
       <Reveal>
         <div className="glass" style={{ padding: '16px 18px', marginBottom: 18, display: 'flex', gap: 14, flexWrap: 'wrap', alignItems: 'center' }}>
           <input className="field" placeholder="Pesquisar por ID, título ou descrição…" value={search}
+                 aria-label="Pesquisar tickets"
                  onChange={(e) => setSearch(e.target.value)}
                  style={{ flex: 1, minWidth: 220, padding: '10px 14px', fontSize: 13.5, caretColor: 'var(--gold)' }} />
           <Seg small items={FILTRO_STATUS} value={fStatus} onChange={setFStatus} />
@@ -741,7 +742,8 @@ export default function Apoio() {
                         <button type="button" className="btn btn-ghost btn-sm" onClick={() => setModal({ id: t.id, readOnly: true })} data-tip="Abrir o ticket">
                           Abrir
                         </button>{' '}
-                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setModal({ id: t.id })} data-tip="Editar o ticket">
+                        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setModal({ id: t.id })} data-tip="Editar o ticket"
+                                aria-label={`Editar o ticket ${t.id}`}>
                           <Icon name="edit" size={12} />
                         </button>
                         {/* «Efetuar Alteração» vive só dentro do ticket (pedido 3 ago) */}

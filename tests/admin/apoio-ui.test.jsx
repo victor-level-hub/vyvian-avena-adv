@@ -1849,26 +1849,26 @@ describe('acessibilidade', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Alterações guardadas.');
   });
 
-  // BUG: Apoio.jsx:495-497 (e os restantes campos do modal) — o rótulo é um
+  // CORRIGIDO (era): Apoio.jsx:495-497 (e os restantes campos do modal) — o rótulo é um
   // <span> solto, não um <label htmlFor> nem um aria-label. Um leitor de ecrã
   // (e a Dra. com lupa/teclado) não sabe a que campo pertence «Título do pedido».
   // Devia ser possível chegar ao campo por getByLabelText('Título do pedido *').
-  it.fails('o campo Título tem etiqueta associada', async () => {
+  it('o campo Título tem etiqueta associada', async () => {
     await novoTicket();
     expect(screen.getByLabelText(/Título do pedido/)).toBeInTheDocument();
   });
 
-  // BUG: Apoio.jsx:695 — a caixa de pesquisa da lista só tem placeholder,
+  // CORRIGIDO (era): Apoio.jsx:695 — a caixa de pesquisa da lista só tem placeholder,
   // que desaparece assim que se escreve; não tem etiqueta nem aria-label.
-  it.fails('a caixa de pesquisa tem etiqueta', async () => {
+  it('a caixa de pesquisa tem etiqueta', async () => {
     await montarCom([ticket()]);
     expect(screen.getByLabelText(/Pesquisar/)).toBeInTheDocument();
   });
 
-  // BUG: Apoio.jsx:744-746 — o botão do lápis (editar ticket) só tem um <svg>
+  // CORRIGIDO (era): Apoio.jsx:744-746 — o botão do lápis (editar ticket) só tem um <svg>
   // aria-hidden e um data-tip; fica sem nome acessível nenhum. Devia ter
   // aria-label="Editar o ticket" (o data-tip só serve o rato).
-  it.fails('o botão de editar da linha tem nome acessível', async () => {
+  it('o botão de editar da linha tem nome acessível', async () => {
     await montarCom([ticket()]);
     expect(within(linhaDe('AT-2026-001')).getAllByRole('button')[1]).toHaveAccessibleName();
   });

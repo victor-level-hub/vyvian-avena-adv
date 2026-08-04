@@ -1135,25 +1135,24 @@ describe('Clientes — dados estranhos da API', () => {
     expect(linhas()).toHaveLength(1);
   });
 
-  // BUG: Clients.jsx:130 — a pesquisa faz c.name.toLowerCase() sem defesa, ao
-  // contrário do e-mail, do NIF e dos nomes extra (todos com `|| ''`). Um único
-  // cliente sem nome na base de dados faz o ecrã inteiro rebentar assim que a
-  // Dra. escreve a primeira letra na pesquisa.
-  it.fails('cliente sem nome não devia rebentar a pesquisa', async () => {
+  // CORRIGIDO (era): a pesquisa fazia c.name.toLowerCase() sem defesa, ao contrário
+  // do e-mail, do NIF e dos nomes extra (todos com `|| ''`). Um único cliente sem
+  // nome fazia o ecrã inteiro cair assim que se escrevia a primeira letra.
+  it('cliente sem nome não rebenta a pesquisa', async () => {
     prepararClientes({ clientes: [cliente({ id: 'x2', name: null })] });
     renderizar(<Limite><Clients /></Limite>, { caminho: '/admin/clientes?q=ana' });
-    await screen.findByText('ECRA REBENTOU');
+    await screen.findByRole('heading', { level: 1 });
     expect(rebentou()).toBe(false);
   });
 
-  // BUG: Clients.jsx:142 — a ordenação por nome chama a.name.localeCompare(...)
-  // sem defesa; ordenar por «Cliente» com um registo sem nome deita o ecrã abaixo.
-  it.fails('cliente sem nome não devia rebentar a ordenação por nome', async () => {
+  // CORRIGIDO (era): a ordenação por nome chamava a.name.localeCompare(...) sem
+  // defesa; ordenar por «Cliente» com um registo sem nome deitava o ecrã abaixo.
+  it('cliente sem nome não rebenta a ordenação por nome', async () => {
     prepararClientes({
       clientes: [cliente({ id: 'x4', name: 'Ana' }), cliente({ id: 'x3', name: null }), cliente({ id: 'x5', name: 'Zé' })],
     });
     renderizar(<Limite><Clients /></Limite>, { caminho: '/admin/clientes?sort=name' });
-    await screen.findByText('ECRA REBENTOU');
+    await screen.findByRole('heading', { level: 1 });
     expect(rebentou()).toBe(false);
   });
 

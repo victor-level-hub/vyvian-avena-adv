@@ -7,9 +7,18 @@ import React from 'react';
 import DateInput from './datepicker';
 
 export function addMonthsISO(dateStr, months) {
-  const d = new Date(dateStr);
-  d.setMonth(d.getMonth() + months);
-  return d.toISOString().slice(0, 10);
+  // O Date.setMonth transborda: 31/01 + 1 mês dava 03/03, saltando fevereiro
+  // inteiro. Aqui o dia é limitado ao último dia do mês de destino, que é o que
+  // uma pessoa espera de um plano de pagamento («todo o dia 31, ou o último»).
+  const base = new Date(String(dateStr) + 'T00:00:00');
+  if (Number.isNaN(base.getTime())) return String(dateStr);
+  const ano = base.getFullYear();
+  const mes = base.getMonth() + months;
+  const diaPedido = base.getDate();
+  const ultimoDoDestino = new Date(ano, mes + 1, 0).getDate();
+  const d = new Date(ano, mes, Math.min(diaPedido, ultimoDoDestino));
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 
 export function parseValor(v) {

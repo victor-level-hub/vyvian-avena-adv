@@ -30,15 +30,20 @@ describe('addMonthsISO — datas de vencimento mensais', () => {
   it('atravessa o ano', () => expect(addMonthsISO('2026-11-15', 3)).toBe('2027-02-15'));
   it('aceita meses negativos', () => expect(addMonthsISO('2026-03-10', -2)).toBe('2026-01-10'));
 
-  // 31 de janeiro + 1 mês não existe em fevereiro: o Date do JS transborda para março.
-  // Não é defeito — é o comportamento conhecido — mas convém estar escrito, porque
-  // significa que um plano iniciado a 31 salta o mês seguinte.
-  it('dia 31 transborda para o mês seguinte (comportamento do Date)', () => {
-    expect(addMonthsISO('2026-01-31', 1)).toBe('2026-03-03');
+  // CORRIGIDO (era): o Date.setMonth transbordava — 31/01 + 1 mês dava 03/03 e o
+  // plano saltava fevereiro inteiro. Agora o dia é limitado ao último do mês de
+  // destino, que é o que uma pessoa espera de «todo o dia 31, ou o último».
+  it('dia 31 cai no último dia do mês seguinte, sem saltar meses', () => {
+    expect(addMonthsISO('2026-01-31', 1)).toBe('2026-02-28');
+    expect(addMonthsISO('2026-01-31', 3)).toBe('2026-04-30');
   });
 
-  it('29 de fevereiro de ano bissexto mantém-se válido', () => {
-    expect(addMonthsISO('2028-02-29', 12)).toBe('2029-03-01');
+  it('29 de fevereiro de ano bissexto cai em 28 no ano seguinte', () => {
+    expect(addMonthsISO('2028-02-29', 12)).toBe('2029-02-28');
+  });
+
+  it('um dia que existe nos dois meses mantém-se igual', () => {
+    expect(addMonthsISO('2026-01-15', 1)).toBe('2026-02-15');
   });
 });
 

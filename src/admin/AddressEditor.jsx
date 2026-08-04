@@ -17,7 +17,11 @@ export const EMPTY_ADDRESS = {
 export function composeAddress(a) {
   if (!a) return '';
   const parts = [];
-  const via = a.via_type === 'Outro' ? (a.via_name || '') : [a.via_type, a.via_name].filter(Boolean).join(' ');
+  // O tipo de via (Rua, Avenida…) só faz sentido acompanhado do nome. Sozinho,
+  // uma morada só com código postal saía como «Rua, 1700-001» — e assim ia para a
+  // pré-visualização e para os PDFs (procurações, planos, recibos).
+  const nomeVia = String(a.via_name || '').trim();
+  const via = a.via_type === 'Outro' ? nomeVia : (nomeVia ? [a.via_type, nomeVia].filter(Boolean).join(' ') : '');
   if (via) parts.push(via + (a.number ? `, Nº ${a.number}` : ''));
   else if (a.number) parts.push(`Nº ${a.number}`);
   if (a.complement) parts.push(a.complement);
@@ -46,7 +50,17 @@ export function parseAddressParts(jsonStr, fallbackString, fallbackCountry = 'PT
 }
 
 export function hasAddress(a) {
-  return !!(a && (a.via_name || a.number || a.freguesia || a.concelho || a.cp || a.bairro || a.cidade || a.cep));
+  // Faltavam distrito, estado (UF) e complemento: uma morada em que só o distrito
+  // estivesse preenchido era tratada como inexistente — não aparecia a
+  // pré-visualização e o cadastro guardava address = null, perdendo o que a Dra.
+  // tinha escrito.
+  if (!a) return false;
+  const campos = [
+    a.via_name, a.number, a.complement,
+    a.freguesia, a.concelho, a.distrito, a.cp,
+    a.bairro, a.cidade, a.estado, a.cep,
+  ];
+  return campos.some((v) => String(v ?? '').trim() !== '');
 }
 
 export default function AddressEditor({ label, value, onChange, disabled }) {

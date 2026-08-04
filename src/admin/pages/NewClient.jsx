@@ -5,7 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { clients as clientsApi, installments as installmentsApi, notifications as notifApi } from '../apiClient';
 import { IconDoc } from '../icons';
 import ContactsEditor, { cleanContacts } from '../ContactsEditor';
-import ParcelasEditor, { gerarParcelas, somaParcelas, parseValor, fmtValor } from '../ParcelasEditor';
+import ParcelasEditor, { gerarParcelas, somaParcelas, parseValor, fmtValor, addMonthsISO } from '../ParcelasEditor';
 import AddressEditor, { EMPTY_ADDRESS, composeAddress, hasAddress } from '../AddressEditor';
 import { MoneyInput, StepperInput, TagsInput, RadioCards } from '../inputs';
 import SlidingTabs from '../tabs';
@@ -22,11 +22,9 @@ function makeId(name) {
     .slice(0, 40) + '-' + Math.random().toString(36).slice(2, 6);
 }
 
-function addMonths(dateStr, months) {
-  const d = new Date(dateStr);
-  d.setMonth(d.getMonth() + months);
-  return d.toISOString().slice(0, 10);
-}
+// Reutiliza o do ParcelasEditor: eram duas copias do mesmo calculo, ambas com o
+// transbordo do setMonth que fazia um plano iniciado a 31/01 saltar fevereiro.
+const addMonths = addMonthsISO;
 
 export default function NewClient() {
   const navigate = useNavigate();
@@ -711,8 +709,11 @@ export default function NewClient() {
               </div>
             </>
           )}
-          <ContactsEditor kind="email" items={form.emails} onChange={(v) => setForm({ ...form, emails: v })} disabled={submitting} inputId="f-email" />
-          <ContactsEditor kind="phone" items={form.phones} onChange={(v) => setForm({ ...form, phones: v })} disabled={submitting} inputId="f-phone" />
+          {/* invalid/requiredFirst: a mensagem de erro diz "assinalados a vermelho"
+              mas o ContactsEditor nunca os recebia, apesar de saber pintar-se — só o
+              nome ficava marcado e a Dra. procurava um campo vermelho inexistente. */}
+          <ContactsEditor kind="email" items={form.emails} onChange={(v) => setForm({ ...form, emails: v })} disabled={submitting} inputId="f-email" requiredFirst invalid={!!invalid.email} />
+          <ContactsEditor kind="phone" items={form.phones} onChange={(v) => setForm({ ...form, phones: v })} disabled={submitting} inputId="f-phone" requiredFirst invalid={!!invalid.phone} />
           {form.personType === 'coletiva' && (
             <div className="adm-field adm-full" style={{ marginTop: '-0.5rem' }}>
               <div className="adm-field-helper">Use as labels para distinguir os contactos da empresa e do responsável.</div>

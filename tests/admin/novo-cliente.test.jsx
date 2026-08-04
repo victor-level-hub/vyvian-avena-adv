@@ -177,14 +177,14 @@ describe('composeAddress', () => {
   it('sem morada dá string vazia', () => expect(composeAddress(null)).toBe(''));
   it('undefined dá string vazia', () => expect(composeAddress(undefined)).toBe(''));
   it('objeto vazio dá string vazia', () => expect(composeAddress({})).toBe(''));
-  // BUG: AddressEditor.jsx:20-21 — o tipo de via entra sozinho na morada quando
+  // CORRIGIDO (era): AddressEditor.jsx:20-21 — o tipo de via entra sozinho na morada quando
   // o nome da via está vazio. Uma morada só com código postal é composta como
   // "Rua, 1700-001" e aparece assim na pré-visualização e nos PDFs.
-  it.fails('morada por estrear devia dar string vazia', () => {
+  it('morada por estrear dar string vazia', () => {
     expect(composeAddress(EMPTY_ADDRESS)).toBe('');
   });
 
-  it.fails('sem nome da via, o tipo de via não devia aparecer sozinho', () => {
+  it('sem nome da via, o tipo de via não aparecer sozinho', () => {
     expect(composeAddress({ ...EMPTY_ADDRESS, cp: '1700-001' })).toBe('1700-001');
   });
 
@@ -248,15 +248,15 @@ describe('hasAddress', () => {
   it('cidade conta', () => expect(hasAddress({ ...EMPTY_ADDRESS, cidade: 'Recife' })).toBe(true));
   it('CEP conta', () => expect(hasAddress({ ...EMPTY_ADDRESS, cep: '01310-100' })).toBe(true));
 
-  // BUG: AddressEditor.jsx:48-50 — hasAddress não olha para distrito, estado nem
+  // CORRIGIDO (era): AddressEditor.jsx:48-50 — hasAddress não olha para distrito, estado nem
   // complemento. Uma morada em que só o distrito está preenchido é tratada como
   // inexistente: o ecrã não mostra a pré-visualização e o cadastro guarda
   // address = null, perdendo o que a Dra. escreveu.
-  it.fails('distrito preenchido devia contar como morada', () => {
+  it('distrito preenchido contar como morada', () => {
     expect(hasAddress({ ...EMPTY_ADDRESS, distrito: 'Faro' })).toBe(true);
   });
 
-  it.fails('estado (UF) preenchido devia contar como morada', () => {
+  it('estado (UF) preenchido contar como morada', () => {
     expect(hasAddress({ ...EMPTY_ADDRESS, country: 'BR', estado: 'SP' })).toBe(true);
   });
 });
@@ -1073,10 +1073,10 @@ describe('Novo cliente — validação', () => {
     await waitFor(() => expect(document.activeElement).toBe(porId('f-email')));
   });
 
-  // BUG: NewClient.jsx:713-714 — o ContactsEditor nunca recebe `invalid`, por
+  // CORRIGIDO (era): NewClient.jsx:713-714 — o ContactsEditor nunca recebe `invalid`, por
   // isso o e-mail em falta não fica assinalado a vermelho apesar de a mensagem
   // dizer "assinalados a vermelho" (NewClient.jsx:372). Só o nome é pintado.
-  it.fails('e-mail em falta devia ficar assinalado a vermelho', async () => {
+  it('e-mail em falta fica assinalado a vermelho', async () => {
     const { utilizador } = renderizar(<NewClient />);
     await utilizador.type(porId('f-name'), 'Maria Silva');
     await utilizador.click(submeter());
@@ -2272,10 +2272,10 @@ describe('cálculo das parcelas', () => {
   it('addMonthsISO avança um mês', () => expect(addMonthsISO('2026-01-15', 1)).toBe('2026-02-15'));
   it('addMonthsISO atravessa o ano', () => expect(addMonthsISO('2026-12-10', 1)).toBe('2027-01-10'));
 
-  // BUG: ParcelasEditor.jsx:9-13 e NewClient.jsx:25-29 — o addMonths usa
+  // CORRIGIDO (era): ParcelasEditor.jsx:9-13 e NewClient.jsx:25-29 — o addMonths usa
   // Date.setMonth, que transborda quando o dia não existe no mês seguinte. Uma
   // 1.ª parcela a 31 de janeiro gera a 2.ª a 3 de março (saltando fevereiro).
-  it.fails('um vencimento a 31 devia cair no último dia do mês seguinte', () => {
+  it('um vencimento a 31 cai no último dia do mês seguinte', () => {
     expect(addMonthsISO('2026-01-31', 1)).toBe('2026-02-28');
   });
 });

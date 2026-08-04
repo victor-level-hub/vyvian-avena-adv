@@ -519,13 +519,13 @@ describe('Seo — metadados por rota (caminho do prerender)', () => {
       expect(bruto).toContain('Como decorre a primeira consulta?');
     });
 
-    // BUG: src/components/Seo.jsx:114 — o JSON-LD é injetado com
+    // CORRIGIDO (era): src/components/Seo.jsx:114 — o JSON-LD é injetado com
     // {JSON.stringify(block)} dentro de um <script>, sem escapar "</script>".
     // Um título de artigo (ou uma resposta da FAQ) que contenha essa sequência
     // fecha o script a meio: o bloco deixa de fazer parse — é exatamente a falha
     // "JSON-LD invalido" que o scripts/seo-check.mjs procura — e o resto do JSON
     // passa a ser texto visível na página. Devia sair escapado (ex.: "<\/script>").
-    it.fails('JSON-LD com </script> no texto continua a ser JSON válido', () => {
+    it('JSON-LD com </script> no texto continua a ser JSON válido', () => {
       const jsonLd = { '@context': 'https://schema.org', '@type': 'Article', name: 'a</script>b' };
       const [bruto] = cabeca({ path: '/blog/x', title: 't', desc: 'd', jsonLd }).brutos();
       expect(() => JSON.parse(bruto)).not.toThrow();
@@ -564,12 +564,12 @@ describe('Seo — metadados por rota (caminho do prerender)', () => {
       expect(c.meta('description')).toBeTruthy();
     });
 
-    // BUG: src/components/Seo.jsx:79 — sem `path`, o canonical é montado com
+    // CORRIGIDO (era): src/components/Seo.jsx:79 — sem `path`, o canonical é montado com
     // `${SITE}${path}` e sai "https://vyavenaadv.comundefined" (o mesmo na og:url).
     // Hoje nenhuma página o omite, mas uma rota nova que se esqueça do prop
     // publica um canonical inválido sem partir nada visível. Devia recair em "/"
     // (ou não emitir canonical nenhum).
-    it.fails('sem path não se publica um canonical com "undefined"', () => {
+    it('sem path não se publica um canonical com "undefined"', () => {
       const c = cabeca({});
       expect(c.canonical() ?? '').not.toContain('undefined');
     });
@@ -891,12 +891,12 @@ describe('CookieBanner — consentimento', () => {
     });
   });
 
-  // BUG: src/components/CookieBanner.jsx:13 — o localStorage é lido sem try/catch.
+  // CORRIGIDO (era): src/components/CookieBanner.jsx:13 — o localStorage é lido sem try/catch.
   // Em Safari com "bloquear todos os cookies" (ou numa iframe de terceiros) o
   // getItem atira SecurityError e o site inteiro deixa de renderizar — o banner
   // vive dentro do Layout, por cima de todas as páginas. O src/lib/analytics.js
   // faz esta leitura protegida (readConsent); aqui falta o mesmo cuidado.
-  it.fails('não rebenta o site se o localStorage estiver bloqueado', () => {
+  it('não rebenta o site se o localStorage estiver bloqueado', () => {
     vi.stubGlobal('localStorage', {
       getItem() { throw new Error('SecurityError'); },
       setItem() {},
@@ -1973,12 +1973,12 @@ describe('ScrollReveal', () => {
     });
   });
 
-  // BUG: src/components/ScrollReveal.jsx:13 — o `new IntersectionObserver` corre
+  // CORRIGIDO (era): src/components/ScrollReveal.jsx:13 — o `new IntersectionObserver` corre
   // sem guarda de suporte. Num browser sem IntersectionObserver o efeito atira
   // ReferenceError, o React desmonta a árvore e a página fica em branco — pior do
   // que não animar. Devia revelar o conteúdo (setIsVisible(true)) quando a API
   // não existe.
-  it.fails('sem IntersectionObserver o conteúdo continua a aparecer', () => {
+  it('sem IntersectionObserver o conteúdo continua a aparecer', () => {
     vi.stubGlobal('IntersectionObserver', undefined);
     expect(() => renderizar(<ScrollReveal><p>Texto</p></ScrollReveal>)).not.toThrow();
   });

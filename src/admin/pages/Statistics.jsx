@@ -371,7 +371,7 @@ function InstagramSection() {
             <Reveal d={200} cls="glass b-3" style={{ padding: '24px 26px 20px' }}>
               <PanelHead over="Crescimento" title="Evolução de seguidores"
                 note={`Últimos ${nDays} dias · agrupado por ${GRUPO_SING[gEfetivo]} (último valor de cada ${GRUPO_SING[gEfetivo]})`}
-                right={growPct != null && <span className="chip chip-gold"><Icon name="trend" size={12} />+{growPct}%</span>} />
+                right={growPct != null && <span className="chip chip-gold"><Icon name="trend" size={12} />{growPct > 0 ? '+' : ''}{growPct}%</span>} />
               <Chart series={chartSeries} id="rsig" h={210}
                      keys={[{ k: 'v', label: 'Seguidores', color: RS_C.gold }]}
                      xLabel={xPlur} yLabel="seguidores"

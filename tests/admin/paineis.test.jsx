@@ -933,10 +933,10 @@ describe('Redes Sociais — Instagram', () => {
     expect(contem(painelDe('Evolução de seguidores'), '+5.9%')).toBe(true);
   });
 
-  // BUG: Statistics.jsx:374 — o sinal «+» é fixo no JSX e o growPct já traz o
+  // CORRIGIDO (era): Statistics.jsx:374 — o sinal «+» é fixo no JSX e o growPct já traz o
   // seu próprio sinal. Quando a conta perde seguidores no período (new_followers
   // negativo, caso perfeitamente normal) o selo de crescimento sai «+-2.4%».
-  it.fails('perder seguidores não devia mostrar "+-"', async () => {
+  it('perder seguidores não devia mostrar "+-"', async () => {
     await abrir(instagram({ new_followers: -5 }));
     await screen.findByRole('heading', { name: 'Evolução de seguidores' });
     expect(texto(painelDe('Evolução de seguidores'))).not.toContain('+-');
@@ -1959,11 +1959,11 @@ describe('Calendário — vistas e navegação', () => {
     expect(screen.getByRole('button', { name: /seguinte/i })).toBeInTheDocument();
   });
 
-  // BUG: Calendar.jsx:316 — `d.setMonth(d.getMonth() + dir)` num dia 31 salta o
+  // CORRIGIDO (era): Calendar.jsx:316 — `d.setMonth(d.getMonth() + dir)` num dia 31 salta o
   // mês seguinte quando este tem 30 dias (31 de agosto + 1 mês = 31 de setembro
   // = 1 de outubro). Basta a Dra. navegar pela vista de dia até ao dia 31 e
   // voltar à vista de mês para setembro desaparecer da navegação.
-  it.fails('avançar um mês a partir do dia 31 não devia saltar um mês', async () => {
+  it('avançar um mês a partir do dia 31 não devia saltar um mês', async () => {
     const { utilizador } = await abrir();
     // encontrar o próximo dia 31 seguido de um mês com menos de 31 dias
     let passos = 0; const d = new Date(HOJE);
@@ -2372,11 +2372,11 @@ describe('Calendário — criar, editar e apagar eventos', () => {
     expect(calendarApi.createEvent.mock.calls[0][0].currency).toBe('BRL');
   });
 
-  // BUG: Calendar.jsx:353 — `String(f.amount).replace(',', '.')` só troca a
+  // CORRIGIDO (era): Calendar.jsx:353 — `String(f.amount).replace(',', '.')` só troca a
   // primeira vírgula e não tira o ponto de milhares. Um valor escrito à
   // portuguesa ("1.200,50") vira parseFloat("1.200.50") = 1.2 e o evento fica
   // guardado com €1,20 em vez de €1200,50.
-  it.fails('valor com ponto de milhares devia ser guardado por inteiro', async () => {
+  it('valor com ponto de milhares devia ser guardado por inteiro', async () => {
     const { utilizador } = await abrir();
     await utilizador.click(screen.getByRole('button', { name: /Evento/ }));
     await screen.findByRole('heading', { name: /Novo evento/ });

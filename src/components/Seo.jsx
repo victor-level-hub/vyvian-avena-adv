@@ -62,6 +62,18 @@ export const FAQ_JSONLD = (faqs) => ({
   })),
 });
 
+// Um titulo de artigo ou resposta de FAQ que contenha "</script>" fechava a tag a
+// meio: o bloco deixava de fazer parse (a falha que o seo-check.mjs procura) e o
+// resto do JSON aparecia como texto visivel na pagina. Escapar o "<" resolve-o sem
+// alterar o valor lido — "<" e o mesmo caractere para qualquer parser de JSON.
+function jsonLdSeguro(block) {
+  return JSON.stringify(block)
+    .replace(/</g, "\\u003c")
+    .replace(/>/g, "\\u003e")
+    .replace(/\u2028/g, "\\u2028")
+    .replace(/\u2029/g, "\\u2029");
+}
+
 /**
  * jsonLd aceita um objecto ou um array de objectos (ex.: Service + BreadcrumbList).
  * title/desc permitem rotas dinamicas que nao constam do ROUTE_META (ex.: /areas/{slug}).
@@ -76,7 +88,9 @@ export default function Seo({ path, jsonLd, title, desc, image, noindex: noindex
     title: title || fallback.title,
     desc: desc || fallback.desc,
   };
-  const canonical = path === "/" ? `${SITE}/` : `${SITE}${path}`;
+  // sem `path` o canonico saia "https://vyavenaadv.comundefined"
+  const rota = typeof path === "string" && path.startsWith("/") ? path : "/";
+  const canonical = rota === "/" ? `${SITE}/` : `${SITE}${rota}`;
   // og:image por pagina (ex.: artigos do blogue). Caminho relativo vira absoluto —
   // o WhatsApp e o Facebook exigem URL absoluto na og:image.
   const ogImage = image ? (image.startsWith("http") ? image : `${SITE}${image}`) : OG_IMAGE;
@@ -111,7 +125,7 @@ export default function Seo({ path, jsonLd, title, desc, image, noindex: noindex
 
       {blocks.map((block, i) => (
         <script key={i} type="application/ld+json">
-          {JSON.stringify(block)}
+          {jsonLdSeguro(block)}
         </script>
       ))}
     </Helmet>

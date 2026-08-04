@@ -10,6 +10,10 @@ export default function ScrollReveal({ children, className = "", delay = 0 }) {
   const [isVisible, setIsVisible] = useState(IS_SSR);
 
   useEffect(() => {
+    // Browser sem IntersectionObserver: mostrar o conteudo e sair. Sem esta guarda
+    // o `new IntersectionObserver` atirava ReferenceError e desmontava a arvore —
+    // pagina em branco, bem pior do que nao animar.
+    if (typeof IntersectionObserver === 'undefined') { setIsVisible(true); return undefined; }
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) {

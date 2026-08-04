@@ -1190,10 +1190,10 @@ describe('Clientes — dados estranhos da API', () => {
     expect(txt(celula(linhas()[0], 3))).toBe('€ 250,75');
   });
 
-  // BUG: Clients.jsx:37 — fmtMoney faz Number(a || 0) e não verifica o resultado.
+  // CORRIGIDO (era): Clients.jsx:37 — fmtMoney faz Number(a || 0) e não verifica o resultado.
   // Um valor que não seja número (texto do utilizador, campo corrompido) chega ao
   // ecrã como «€ NaN» na coluna do valor.
-  it.fails('valor que não é número não devia mostrar € NaN', async () => {
+  it('valor que não é número não devia mostrar € NaN', async () => {
     await montarClientes({ clientes: [cliente()], pendentes: [parcela({ amount: 'a combinar' })] });
     expect(txt(celula(linhas()[0], 3))).not.toContain('NaN');
   });
@@ -1203,17 +1203,17 @@ describe('Clientes — dados estranhos da API', () => {
     expect(txt(celula(linhas()[0], 3))).toBe('€ 100');
   });
 
-  // BUG: Clients.jsx:38 — fmtDate já devolve «—» quando não há data, mas uma data
+  // CORRIGIDO (era): Clients.jsx:38 — fmtDate já devolve «—» quando não há data, mas uma data
   // impossível de ler passa pelo guarda e sai «Invalid Date» (em inglês) na coluna
   // do próximo vencimento.
-  it.fails('data ilegível devia aparecer como travessão', async () => {
+  it('data ilegível devia aparecer como travessão', async () => {
     await montarClientes({ clientes: [cliente()], pendentes: [parcela({ due_date: '31/02/2026' })] });
     expect(txt(celula(linhas()[0], 2))).toBe('—');
   });
 
-  // BUG: Clients.jsx:53 — com uma data ilegível, daysUntil devolve NaN e o selo de
+  // CORRIGIDO (era): Clients.jsx:53 — com uma data ilegível, daysUntil devolve NaN e o selo de
   // estado sai escrito «NaND ATRASO».
-  it.fails('data ilegível não devia inventar o selo NaND ATRASO', async () => {
+  it('data ilegível não devia inventar o selo NaND ATRASO', async () => {
     await montarClientes({
       clientes: [cliente()],
       atrasadas: [parcela({ status: 'late', due_date: 'ontem' })],
@@ -1985,9 +1985,9 @@ describe('Parcelas — dados estranhos da API', () => {
     expect(txt(celula(linhas()[0], 4))).toBe('€ 340');
   });
 
-  // BUG: Installments.jsx:37 — fmtMoney faz Number(amount || 0) e devolve NaN para
+  // CORRIGIDO (era): Installments.jsx:37 — fmtMoney faz Number(amount || 0) e devolve NaN para
   // texto não numérico; a coluna do valor mostra «€ NaN» à Dra.
-  it.fails('valor que não é número não devia mostrar € NaN', async () => {
+  it('valor que não é número não devia mostrar € NaN', async () => {
     await montarParcelas([parcela({ amount: 'a combinar' })]);
     expect(txt(celula(linhas()[0], 4))).not.toContain('NaN');
   });
@@ -2002,9 +2002,9 @@ describe('Parcelas — dados estranhos da API', () => {
     expect(txt(cartaoPrevisto)).not.toContain('NaN');
   });
 
-  // BUG: Installments.jsx:18-21 — fmtDate não valida a data e a coluna do
+  // CORRIGIDO (era): Installments.jsx:18-21 — fmtDate não valida a data e a coluna do
   // vencimento mostra «Invalid Date» em inglês.
-  it.fails('data ilegível não devia aparecer como Invalid Date', async () => {
+  it('data ilegível não devia aparecer como Invalid Date', async () => {
     await montarParcelas([parcela({ due_date: `${hojeISO().slice(0, 7)}-99` })]);
     expect(txt(celula(linhas()[0], 3))).not.toContain('Invalid');
   });

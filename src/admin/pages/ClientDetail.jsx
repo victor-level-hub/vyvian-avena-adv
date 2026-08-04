@@ -755,6 +755,10 @@ export default function ClientDetail() {
     try {
       const curr = (data?.client?.country === 'BR') ? 'BRL' : 'EUR';
       await clientsApi.update(clientId, {
+        // O plan_type tem de seguir: a leitura (linha 1101) dá-lhe prioridade, por
+        // isso sem ele um cliente que passe de avença a parcelado continuava a ser
+        // lido como avença — a ficha mostrava "Avença mensal" e "N meses ativo".
+        plan_type: pf.planType,
         honorarios_total: isInst ? total : 0,
         honorarios_parcelas: isInst ? nParc : 0,
         contract_start_date: pf.startDate,

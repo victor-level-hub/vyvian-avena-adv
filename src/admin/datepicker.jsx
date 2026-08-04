@@ -11,8 +11,17 @@ const WEEKDAYS = ['S', 'T', 'Q', 'Q', 'S', 'S', 'D']; // semana a começar à se
 const pad = (n) => String(n).padStart(2, '0');
 const toISO = (y, m, d) => `${y}-${pad(m + 1)}-${pad(d)}`;
 
+// Só aceita ISO aaaa-mm-dd. Qualquer outra coisa (lixo vindo da base de dados,
+// data em formato português) devolve null em vez de "undefined/undefined/...".
+function dataValida(iso) {
+  if (typeof iso !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(iso.slice(0, 10))) return null;
+  const d = new Date(iso.slice(0, 10) + 'T00:00:00');
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
 function fmtShow(iso) {
-  const [y, m, d] = iso.split('-');
+  if (!dataValida(iso)) return '';
+  const [y, m, d] = iso.slice(0, 10).split('-');
   return `${d}/${m}/${y}`;
 }
 
@@ -27,7 +36,14 @@ export default function DateInput({ value, onChange, disabled, id, style, placeh
     const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     const onKey = (e) => { if (e.key === 'Escape') setOpen(false); };
     // fecha se algum contentor fizer scroll (o popover é fixed e ficaria "solto")
-    const onScroll = (e) => { if (ref.current && ref.current.contains(e.target)) return; setOpen(false); };
+    // No `resize` o e.target é a window, que não é um nó: o contains() atirava
+    // TypeError e o popover — que é position:fixed — ficava a flutuar fora do campo.
+    const onScroll = (e) => {
+      const alvo = e && e.target;
+      const dentro = alvo instanceof Node && ref.current && ref.current.contains(alvo);
+      if (dentro) return;
+      setOpen(false);
+    };
     document.addEventListener('mousedown', onDoc);
     document.addEventListener('keydown', onKey);
     window.addEventListener('scroll', onScroll, true);
@@ -49,7 +65,10 @@ export default function DateInput({ value, onChange, disabled, id, style, placeh
   const toggle = () => {
     if (disabled) return;
     if (!open) {
-      const base = value ? new Date(value + 'T00:00:00') : today;
+      // Data ilegível cai no mês de hoje. Sem isto, o Invalid Date propagava-se
+      // para view = {y: NaN, m: NaN} e o Array(NaN) da grelha atirava
+      // "RangeError: Invalid array length" durante o render — página em branco.
+      const base = dataValida(value) || today;
       setView({ y: base.getFullYear(), m: base.getMonth() });
       // popover em position:fixed — funciona dentro de blocos com scroll interno
       const r = ref.current.getBoundingClientRect();
@@ -84,7 +103,8 @@ export default function DateInput({ value, onChange, disabled, id, style, placeh
         onClick={toggle}
         disabled={disabled}
       >
-        <span>{value ? fmtShow(value) : placeholder}</span>
+        {/* data ilegível vale o mesmo que campo vazio: mostra o texto de ajuda */}
+        <span>{fmtShow(value) || placeholder}</span>
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" />
         </svg>

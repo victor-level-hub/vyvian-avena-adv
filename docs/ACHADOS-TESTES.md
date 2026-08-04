@@ -12,16 +12,30 @@ Correr `npm run test:log` gera `tests/relatorio.html` com o estado atual.
 
 ## ✅ Já corrigidos
 
-Quatro entradas saíram da lista. Em cada uma, o teste que a documentava passou de
+Dezoito entradas saíram da lista. Em cada uma, o teste que a documentava passou de
 `it.fails` a teste normal — é isso que prova a correção, e é isso que impede a
 regressão.
 
-| O quê | Onde | Correção |
+| O que | Onde | Correcao |
 |---|---|---|
-| Parcelas gravadas sem verificar o resultado | `NewClient.jsx:507` | passou a usar `installmentsApi.create` (que lança) e a mensagem diz que o cliente ficou criado mas o plano não |
-| Adicionar pessoa por engano trancava o cadastro | `PersonFields.jsx:37` | `personHasData` só conta o que difere do valor por omissão (o `via_type: 'Rua'` deixou de contar) |
-| Lembrete que falha uma vez nunca mais era enviado | `cron.js:57` | o dedupe passou a exigir `status = 'sent'`, como o `owner_alerts.js` já fazia |
-| URL de fonte aceitava quebras de linha | `insights.js:1330` | passa por `new URL()` e recusa espaços, quebras de linha e `< > "` |
+| Site inteiro em branco no Safari com cookies bloqueados | `CookieBanner.jsx:13` | leitura do `localStorage` dentro de `try/catch`, como o `analytics.js` ja fazia |
+| Pagina em branco sem `IntersectionObserver` | `ScrollReveal.jsx:13` | guarda de suporte: sem a API, mostra o conteudo |
+| Data mal formada rebentava a pagina (`RangeError`) | `datepicker.jsx:52,72` | `dataValida()` valida o ISO; data ilegivel cai no mes de hoje e mostra `dd/mm/aaaa` |
+| Redimensionar deixava o calendario a flutuar | `datepicker.jsx:30` | o handler ignora alvos que nao sao nos do DOM (no `resize` e a `window`) |
+| Cliente sem nome partia pesquisa e ordenacao | `Clients.jsx:130,142` | valor por omissao vazio nos dois sitios |
+| Parcela sem vencimento partia o ecra das parcelas | `Installments.jsx:149,160` | `mesDe()` devolve `null` em vez de rebentar no `.slice()` |
+| `NaN`, `Invalid Date` e `NaND ATRASO` a vista | `Clients.jsx:37,38,53` · `Installments.jsx:12,32` | formatadores validam; totais usam `valorDe()`; o selo diz «EM ATRASO» |
+| `1.200,50` gravado como `1,20` | `Calendar.jsx:353` | `parseValorPT()` trata o ponto de milhares e a virgula decimal |
+| Navegar no calendario saltava um mes | `Calendar.jsx:316` | `setDate(1)` antes de `setMonth` |
+| Dinheiro compacto em ingles (`1.2k`) | `Calendar.jsx:26` | passa a `1,2 mil` |
+| «+-2,4%» no crescimento de seguidores | `Statistics.jsx:374` | o `+` so aparece quando o valor e positivo |
+| JSON-LD partido por uma tag de fecho no texto | `Seo.jsx:114` | `jsonLdSeguro()` escapa `<`, `>` e os separadores de linha |
+| Canonico terminado em `undefined` | `Seo.jsx:79` | sem `path` valido, cai na raiz |
+| Guardar o plano nao gravava o tipo de plano | `ClientDetail.jsx:757` | envia `plan_type` |
+| Parcelas gravadas sem verificar o resultado | `NewClient.jsx:507` | usa `installmentsApi.create` e avisa que o cliente ficou criado sem plano |
+| Adicionar pessoa por engano trancava o cadastro | `PersonFields.jsx:37` | so conta o que difere do valor por omissao |
+| Lembrete que falha uma vez nunca mais era enviado | `cron.js:57` | o dedupe exige `status = 'sent'` |
+| URL de fonte aceitava quebras de linha | `insights.js:1330` | passa por `new URL()` e recusa espacos e sinais de menor/maior |
 
 ---
 
@@ -89,31 +103,7 @@ quem for procurar o código do cron.
 
 ---
 
-## 1-A. O site público inteiro em branco no Safari com cookies bloqueados
-
-**`src/components/CookieBanner.jsx:13`** lê o `localStorage` sem `try/catch`. No Safari
-com cookies bloqueados (e em navegação privada de alguns browsers) o `getItem` atira
-`SecurityError` — e como o banner vive dentro do `Layout`, **o site inteiro deixa de
-renderizar**. Não é o banner que falha: é tudo. O `analytics.js` (`readConsent`) já faz
-esta mesma leitura protegida, portanto a correção é copiar o que está ao lado.
-
-**`src/components/ScrollReveal.jsx:13`** tem o mesmo tipo de risco: `new
-IntersectionObserver` sem guarda de suporte. Num browser sem a API, atira `ReferenceError`
-e a árvore desmonta — página em branco, pior do que simplesmente não animar.
-
----
-
-## 1-B. SEO e consentimento
-
-**O JSON-LD não escapa `</script>`** — `src/components/Seo.jsx:114`
-Um título de artigo ou uma resposta de FAQ que contenha essa sequência fecha o
-`<script>` a meio: o bloco deixa de fazer parse — é exatamente a falha "JSON-LD inválido"
-que o `scripts/seo-check.mjs` procura — e o resto do JSON passa a **texto visível na
-página**.
-
-**Sem `path`, o canónico fica `https://vyavenaadv.comundefined`** — `src/components/Seo.jsx:79`
-Hoje nenhuma página omite o prop, mas uma rota nova que se esqueça dele passa
-despercebida e publica um canónico inválido.
+## 1-C. Consentimento de cookies e páginas órfãs
 
 **Os interruptores de preferências de cookies não funcionam por teclado** — `src/components/CookieBanner.jsx:99`
 São `<div>` com `onClick`, sem `role`, sem `tabIndex` e sem tratamento de teclas. Quem
@@ -128,83 +118,6 @@ não. Resultado: mal rastreada pelos motores de busca, e inacessível a quem já
 
 > Confirmado como **correto** pelos testes: recusar cookies nunca ativa a analítica nem
 > injeta o `gtag.js`, e sem consentimento nenhum evento faz pedidos de rede.
-
----
-
-## 1-C. Ecrãs que vão abaixo com um único registo estranho
-
-Todos partilham a mesma causa: um campo em falta ou ilegível usado sem defesa, num
-sítio por onde passa a lista inteira. Não é um aviso na consola — é a página em branco.
-
-**Um cliente sem nome parte a pesquisa e a ordenação** — `src/admin/pages/Clients.jsx:130,142`
-`c.name.toLowerCase()` na pesquisa e `a.name.localeCompare(...)` na ordenação não têm
-`|| ''` (o e-mail, o NIF e os nomes extra têm). Basta escrever uma letra na pesquisa, ou
-clicar na coluna «Cliente», para o ecrã cair.
-
-**Uma parcela sem data de vencimento parte o ecrã das parcelas** — `src/admin/pages/Installments.jsx:134,145`
-`i.due_date.slice(0, 7)` corre antes de qualquer filtro, por isso a lista nem chega a
-desenhar-se. Liga-se ao defeito do backend que aceita gravar `due_date` inválido.
-
-**Não há, em lado nenhum, forma de marcar uma parcela como paga**
-— `src/admin/pages/Installments.jsx:110-123` **e** `src/admin/pages/ClientDetail.jsx:524`
-
-Este é o achado mais sério do lote, e só se vê juntando as duas suítes. Nos **dois**
-ecrãs o `handleMarkPaid` existe, completo, com confirmação, chamada à API e
-recarregamento — e nos dois **nenhum botão o chama**. Na listagem, o redesenho v3 pôs a
-coluna «Lembrete» onde estava a ação; na ficha, a coluna de ações só tem
-Anexar/Ver/Remover documentos.
-
-O único caminho que resta é **anexar o PDF do recibo**, porque anexar um Recibo ou
-Fatura-Recibo marca a parcela como paga. Quem recebeu por transferência e ainda não
-emitiu o recibo na AT não tem como registar o pagamento. O código está lá inteiro nos
-dois sítios: é ligar um botão, ou decidir apagá-lo.
-
-**Também não há forma de enviar o recibo ao cliente** — `src/admin/pages/ClientDetail.jsx:629`
-O `handleSendRecibo` é código morto e a API existe e está exposta
-(`apiClient.js:288`, `recibos.sendToClient`) — e tem testes de backend a passar
-(`tests/worker/recibos.test.js`). Falta só o botão.
-
-**Guardar o plano não grava o tipo de plano** — `src/admin/pages/ClientDetail.jsx:757-761`
-O `handleSavePlan` envia `honorarios_total`, `honorarios_parcelas` e
-`contract_start_date`, mas não o `plan_type`. Como a leitura dá prioridade ao valor
-gravado (linha 1101), um cliente em avença que passe a parcelado **continua a ser lido
-como avença**: a ficha mostra "Avença mensal" e "N meses ativo" em vez de Total
-contratado / Em aberto / Progresso. O `PUT /api/clients` já aceita o campo
-(`worker/routes/clients.js:159`) — é uma linha em falta.
-
-**Números e datas ilegíveis mostrados em cru** — `Clients.jsx:37,38,53` e `Installments.jsx:15,18-21,155`
-`€ NaN` na coluna do valor, `Invalid Date` (em inglês) na do vencimento, e o selo de
-atraso a dizer **`NaND ATRASO`**. Pior: no cartão «Previsto» o total usa `Number()` cru e
-mostra `NaN`, enquanto o subtítulo, que passa pelo formatador, mostra `€ 0` — dois sítios
-do mesmo ecrã a dizer coisas diferentes.
-
----
-
-## 1-D. O seletor de datas leva a página à frente
-
-**Uma data mal formada rebenta o ecrã inteiro** — `src/admin/datepicker.jsx:52,72`
-Abrir o calendário com um `value` que não seja ISO faz `new Date('lixoT00:00:00')` →
-`Invalid Date` → `view = { y: NaN, m: NaN }` → `Array(NaN)` → **`RangeError: Invalid
-array length`** durante o render. Não é um aviso na consola: é a página em branco.
-Devia cair no mês de hoje, como já faz quando o valor está vazio. E como o
-`installments.js` aceita gravar `due_date` inválido (ver secção 2), o valor mau pode vir
-mesmo da base de dados.
-
-**Redimensionar a janela deixa o calendário a flutuar** — `src/admin/datepicker.jsx:30,34`
-O mesmo handler serve `scroll` e `resize`, mas no `resize` o `e.target` é a `window`, que
-não é um nó do DOM: `ref.current.contains(window)` atira `TypeError` e o fecho nunca
-corre. Como o popover é `position: fixed` com coordenadas já calculadas, fica fora do
-campo. Acontece num browser a sério, não é artefacto do jsdom.
-
-**Data mal formada aparece como `undefined/undefined/2026/07/14`** — `src/admin/datepicker.jsx:16`
-O `fmtShow` não valida o que recebe.
-
-**Estúdio de artigos preso no esqueleto para sempre** — `src/admin/insights/InsightsSection.jsx:419,575`
-O `carregar()` do Banco de Imagens e o do diretório de Fontes só fazem um aviso no
-`catch` e deixam o estado a `null`. Com a API em baixo, o ecrã fica **eternamente no
-esqueleto de carregamento** — sem erro visível e sem forma de tentar de novo. O
-`BancoPicker` do estúdio (`ArticleStudio.jsx:1216`) trata o mesmo caso com `setItens([])`,
-por isso a intenção está provada: falta aqui.
 
 ---
 

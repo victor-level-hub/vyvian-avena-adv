@@ -20,10 +20,27 @@ const MONTHS_PT = [
 const DAYS_PT = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 const VIS_KEY = 'vyvian_cal_visibility';
 
+// Aceita o que a Dra. escreve em português: "1.200,50", "1200,50", "1200.50".
+// A versão anterior só trocava a primeira vírgula e deixava o ponto dos milhares,
+// por isso "1.200,50" virava parseFloat("1.200.50") = 1.2 — mil vezes menos.
+function parseValorPT(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : 0;
+  const t = String(v ?? '').trim().replace(/\s/g, '');
+  if (!t) return 0;
+  // se tem vírgula, ela é o separador decimal e os pontos são de milhares
+  const normalizado = t.includes(',') ? t.replace(/\./g, '').replace(',', '.') : t;
+  const n = parseFloat(normalizado);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function fmtMoney(amount, currency = 'EUR', compact = false) {
   const symbol = currency === 'BRL' ? 'R$' : '€';
-  const n = Number(amount || 0);
-  if (compact && n >= 1000) return symbol + ' ' + (n / 1000).toFixed(1).replace('.0', '') + 'k';
+  const bruto = Number(amount);
+  const n = Number.isFinite(bruto) ? bruto : 0;
+  // compacto em português: "1,2 mil" e não "1.2k" (onde 1.200 se lê mil e duzentos)
+  if (compact && n >= 1000) {
+    return symbol + ' ' + (n / 1000).toFixed(1).replace('.', ',').replace(',0', '') + ' mil';
+  }
   return symbol + ' ' + n.toLocaleString('pt-PT', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
@@ -312,7 +329,8 @@ export default function Calendar() {
     const d = new Date(currentDate);
     if (view === 'week') d.setDate(d.getDate() + dir * 7);
     else if (view === 'day') d.setDate(d.getDate() + dir);
-    else d.setMonth(d.getMonth() + dir);
+    // dia 1 antes de mudar de mes: setMonth num dia 31 transborda (31/ago + 1 = 1/out)
+    else { d.setDate(1); d.setMonth(d.getMonth() + dir); }
     setCurrentDate(d);
     setSelectedDate(null);
   };
@@ -350,7 +368,7 @@ export default function Calendar() {
       const payload = {
         title: f.title, description: f.description || null, type_id: f.type_id,
         start_date: f.start_date, end_date: f.end_date || null, is_all_day: !!f.is_all_day,
-        amount: parseFloat(String(f.amount).replace(',', '.')) || 0, currency: f.currency,
+        amount: parseValorPT(f.amount), currency: f.currency,
         status: f.status, client_name: f.client_name || null, case_reference: f.case_reference || null,
       };
       if (evModal.mode === 'create') await calendarApi.createEvent(payload);

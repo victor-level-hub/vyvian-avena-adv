@@ -250,13 +250,13 @@ describe('DateInput — abrir e fechar', () => {
     await waitFor(() => expect(abertoCalendario()).toBe(false));
   });
 
-  // BUG: src/admin/datepicker.jsx:30/34 — o mesmo handler serve o `scroll` e o
+  // CORRIGIDO (era): src/admin/datepicker.jsx:30/34 — o mesmo handler serve o `scroll` e o
   // `resize`, mas no `resize` o e.target é a `window`, que não é um Node:
   // `ref.current.contains(window)` atira "Failed to execute 'contains' on
   // 'Node'" e o `setOpen(false)` nunca chega a correr. Resultado: redimensionar
   // a janela (ou rodar o telemóvel) deixa o calendário aberto e desalinhado do
   // campo, porque o popover é position:fixed com coordenadas já calculadas.
-  it.fails('redimensionar a janela devia fechar o calendário', async () => {
+  it('redimensionar a janela devia fechar o calendário', async () => {
     const { utilizador } = renderizar(<DateInput value="" onChange={() => {}} />);
     await utilizador.click(gatilho());
     // o TypeError do listener não pode afundar a suíte inteira
@@ -742,26 +742,29 @@ describe('DateInput — valores estranhos', () => {
     expect(gatilho()).toHaveTextContent('dd/mm/aaaa');
   });
 
-  // BUG: src/admin/datepicker.jsx:52 — abrir o calendário com um `value` que não
+  // CORRIGIDO (era): src/admin/datepicker.jsx:52 — abrir o calendário com um `value` que não
   // seja ISO faz `new Date('lixoT00:00:00')` → Invalid Date → view {y:NaN,m:NaN}
   // → `Array(NaN)` na linha 72 rebenta com RangeError e leva o ecrã todo à frente.
   // Devia cair no mês de hoje, como faz com o valor vazio.
-  it.fails('valor inválido devia cair no mês de hoje em vez de rebentar', async () => {
+  it('valor inválido devia cair no mês de hoje em vez de rebentar', async () => {
     const { utilizador } = renderizar(<DateInput value="não é data" onChange={() => {}} />);
     await utilizador.click(gatilho());
     expect(titulo()).toBe(HOJE_TITULO);
   });
 
-  // BUG: src/admin/datepicker.jsx:16 — fmtShow parte o ISO por "-" sem validar:
+  // CORRIGIDO (era): src/admin/datepicker.jsx:16 — fmtShow parte o ISO por "-" sem validar:
   // um valor mal formado aparece à Dra. como "undefined/undefined/…".
-  it.fails('valor inválido não devia aparecer como "undefined" no botão', () => {
+  it('valor inválido não devia aparecer como "undefined" no botão', () => {
     renderizar(<DateInput value="2026/07/14" onChange={() => {}} />);
     expect(gatilho().textContent).not.toContain('undefined');
   });
 
-  it('uma data com os campos trocados é mostrada tal e qual (não valida a ordem)', () => {
+  // CORRIGIDO (era): uma data fora do formato ISO era mostrada tal e qual, com os
+  // campos desencontrados. Agora o fmtShow valida e mostra o texto de ajuda.
+  it('uma data fora do formato ISO mostra o texto de ajuda em vez de campos trocados', () => {
     renderizar(<DateInput value="14-07-2026" onChange={() => {}} />);
-    expect(gatilho()).toHaveTextContent('2026/07/14');
+    expect(gatilho()).toHaveTextContent('dd/mm/aaaa');
+    expect(gatilho().textContent).not.toContain('2026/07/14');
   });
 
   it('a data com hora só usa a parte da data para mostrar', () => {

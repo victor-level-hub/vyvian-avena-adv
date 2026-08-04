@@ -34,11 +34,25 @@ function RowAvatar({ client }) {
   return <span style={{ ...base, background: 'var(--grad-gold)', color: '#1a1208' }}>{initials || 'C'}</span>;
 }
 
-const fmtMoney = (a, c = 'EUR') => (c === 'BRL' ? 'R$ ' : '€ ') + Number(a || 0).toLocaleString('pt-PT', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
-const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—');
+const fmtMoney = (a, c = 'EUR') => {
+  const n = Number(a);
+  return (c === 'BRL' ? 'R$ ' : '€ ') + (Number.isFinite(n) ? n : 0)
+    .toLocaleString('pt-PT', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+};
+// uma data ilegível vale o mesmo que data nenhuma — nunca "Invalid Date" à Dra.
+const fmtDate = (d) => {
+  if (!d) return '—';
+  const dt = new Date(d);
+  return Number.isNaN(dt.getTime())
+    ? '—'
+    : dt.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit', year: 'numeric' });
+};
+// devolve null (e não NaN) para data ilegível — senão o selo saía "NaND ATRASO"
 function daysUntil(dateStr) {
+  const alvo = new Date(dateStr);
+  if (Number.isNaN(alvo.getTime())) return null;
   const today = new Date(); today.setHours(0, 0, 0, 0);
-  return Math.round((new Date(dateStr) - today) / 86400000);
+  return Math.round((alvo - today) / 86400000);
 }
 
 function ChipEstado({ installment, client }) {
@@ -50,7 +64,11 @@ function ChipEstado({ installment, client }) {
   if (pt === 'probono') return chip('var(--fg-2)', 'var(--panel)', 'var(--edge-2)', 'PRO BONO');
   if (pt === 'oficioso' && !installment) return chip('var(--gold-soft)', 'rgba(200,150,86,.12)', 'var(--edge-2)', 'AGUARDA TRÂNSITO');
   if (!installment) return chip('#9fd0ae', 'rgba(74,124,89,.16)', 'rgba(143,208,162,.4)', 'CONCLUÍDO');
-  if (installment.status === 'late') return chip('#e0a294', 'rgba(160,75,60,.18)', 'rgba(200,110,90,.45)', `${Math.abs(daysUntil(installment.due_date))}D ATRASO`);
+  if (installment.status === 'late') {
+    const dias = daysUntil(installment.due_date);
+    return chip('#e0a294', 'rgba(160,75,60,.18)', 'rgba(200,110,90,.45)',
+      dias == null ? 'EM ATRASO' : `${Math.abs(dias)}D ATRASO`);
+  }
   if (installment.status === 'due_today') return chip('var(--gold-soft)', 'rgba(200,150,86,.16)', 'rgba(212,181,133,.45)', 'HOJE');
   if (daysUntil(installment.due_date) === 1) return chip('var(--gold-soft)', 'rgba(200,150,86,.16)', 'rgba(212,181,133,.45)', 'AMANHÃ');
   return chip('var(--fg-3)', 'var(--panel)', 'var(--edge)', 'A VENCER');
@@ -127,7 +145,7 @@ export default function Clients() {
       if (search) {
         const q = search.toLowerCase();
         return (
-          c.name.toLowerCase().includes(q) ||
+          (c.name || '').toLowerCase().includes(q) ||
           (c.extra_names || '').toLowerCase().includes(q) ||
           (c.email || '').toLowerCase().includes(q) ||
           (c.identification || '').replace(/\s/g, '').toLowerCase().includes(q.replace(/\s/g, ''))
@@ -139,7 +157,8 @@ export default function Clients() {
     out.sort((a, b) => {
       const na = nextByClient[a.id], nb = nextByClient[b.id];
       let cmp = 0;
-      if (sortBy === 'name') cmp = a.name.localeCompare(b.name, 'pt');
+      // um cliente sem nome não pode deitar o ecrã abaixo ao ordenar
+      if (sortBy === 'name') cmp = (a.name || '').localeCompare(b.name || '', 'pt');
       else if (sortBy === 'amount') cmp = Number(na?.amount || 0) - Number(nb?.amount || 0);
       else {
         const r = payRank(na) - payRank(nb);

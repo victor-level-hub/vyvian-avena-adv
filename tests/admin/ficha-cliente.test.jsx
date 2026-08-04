@@ -1275,8 +1275,20 @@ describe('Editar plano de pagamento', () => {
     await abrirPlano(utilizador);
     await utilizador.click(botao('Guardar e gerar parcelas'));
     await waitFor(() => expect(api.clienteUpdate).toHaveBeenCalledWith('cli-1', {
+      plan_type: 'installment',
       honorarios_total: 1200, honorarios_parcelas: 3, contract_start_date: '2026-01-10',
     }));
+  });
+
+  // CORRIGIDO (era): o handleSavePlan não enviava o plan_type, e como a leitura lhe
+  // dá prioridade (ClientDetail.jsx:1101), um cliente que passasse de avença a
+  // parcelado continuava a ser lido como avença — a ficha mostrava "Avença mensal".
+  it('guardar grava também o tipo de plano', async () => {
+    const { utilizador } = await abrir(PLANO);
+    await abrirPlano(utilizador);
+    await utilizador.click(botao('Guardar e gerar parcelas'));
+    await waitFor(() => expect(api.clienteUpdate).toHaveBeenCalled());
+    expect(api.clienteUpdate.mock.calls.at(-1)[1]).toHaveProperty('plan_type', 'installment');
   });
 
   it('guardar apaga as parcelas por pagar', async () => {

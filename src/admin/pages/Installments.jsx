@@ -11,12 +11,27 @@ import { RsShell, Icon, Reveal, Seg, Ticker } from '../rs/ui';
 
 function fmtMoney(amount, currency = 'EUR') {
   const symbol = currency === 'BRL' ? 'R$' : '€';
-  const n = Number(amount || 0);
+  const bruto = Number(amount);
+  const n = Number.isFinite(bruto) ? bruto : 0;
   return symbol + ' ' + n.toLocaleString('pt-PT', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
+// valor numérico seguro para somas — evita NaN nos cartões de totais
+function valorDe(amount) {
+  const n = Number(amount);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// aaaa-mm de uma data; null se não prestar. Sem esta guarda, uma parcela sem
+// due_date rebentava o ecrã inteiro no .slice(), antes de qualquer filtro.
+function mesDe(dateStr) {
+  return typeof dateStr === 'string' && dateStr.length >= 7 ? dateStr.slice(0, 7) : null;
+}
+
+// data ilegível mostra travessão, nunca "Invalid Date"
 function fmtDate(dateStr) {
   const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return '—';
   return d.toLocaleDateString('pt-PT', { day: '2-digit', month: '2-digit' });
 }
 
@@ -131,7 +146,7 @@ export default function Installments() {
       if (q && !(i.client_name || '').toLowerCase().includes(q)) return false;
       // filtro de mês
       if (monthFilter === 'current') {
-        if (i.due_date.slice(0, 7) !== currentMonth()) return false;
+        if (mesDe(i.due_date) !== currentMonth()) return false;
       } else if (monthFilter === 'all-future') {
         if (new Date(i.due_date) < today && i.status !== 'late') return false;
       }
@@ -142,7 +157,7 @@ export default function Installments() {
     }).sort((a, b) => new Date(a.due_date) - new Date(b.due_date));
   }, [statusFilter, monthFilter, search, all]);
 
-  const monthAll = all.filter((i) => i.due_date.slice(0, 7) === currentMonth());
+  const monthAll = all.filter((i) => mesDe(i.due_date) === currentMonth());
   const counts = {
     all: monthAll.length,
     paid: monthAll.filter((i) => i.status === 'paid').length,
@@ -152,11 +167,11 @@ export default function Installments() {
 
   const monthTotalEur = monthAll
     .filter((i) => i.currency === 'EUR')
-    .reduce((s, i) => s + Number(i.amount), 0);
+    .reduce((s, i) => s + valorDe(i.amount), 0);
 
   const monthPaidEur = monthAll
     .filter((i) => i.currency === 'EUR' && i.status === 'paid')
-    .reduce((s, i) => s + Number(i.amount), 0);
+    .reduce((s, i) => s + valorDe(i.amount), 0);
 
   function handleExport() {
     const headers = ['Cliente', 'Parcela', 'Vencimento', 'Valor', 'Moeda', 'Estado'];

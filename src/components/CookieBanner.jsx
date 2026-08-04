@@ -10,7 +10,13 @@ export default function CookieBanner() {
   const [prefs, setPrefs] = useState({ statistics: true, marketing: false });
 
   useEffect(() => {
-    if (!localStorage.getItem(STORAGE_KEY)) setVisible(true);
+    // No Safari com cookies bloqueados (e em navegacao privada de alguns browsers)
+    // o getItem atira SecurityError. Como este banner vive dentro do Layout, sem o
+    // try/catch a excecao subia e deixava o SITE INTEIRO em branco. O analytics.js
+    // (readConsent) ja faz esta leitura protegida.
+    let guardado = null;
+    try { guardado = localStorage.getItem(STORAGE_KEY); } catch { guardado = null; }
+    if (!guardado) setVisible(true);
   }, []);
 
   const accept = (value) => {

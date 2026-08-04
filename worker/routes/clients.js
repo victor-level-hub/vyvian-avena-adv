@@ -157,6 +157,20 @@ async function updateClient(request, env, clientId) {
   try { body = await request.json(); } catch { return jsonError('Invalid JSON', 400); }
 
   const allowed = ['name', 'email', 'phone', 'country', 'identification', 'practice_area', 'status', 'notes', 'honorarios_total', 'honorarios_parcelas', 'contract_start_date', 'first_attendance_date', 'plan_type', 'address', 'nationality', 'marital_status', 'rg', 'birth_date', 'birth_place', 'doc_type', 'doc_number', 'doc_validity', 'niss', 'filiation', 'person_type', 'rep_name', 'rep_role', 'duns', 'process_summary', 'emails', 'phones', 'rep_nif', 'rep_nationality', 'rep_address', 'address_parts', 'rep_address_parts', 'father_name', 'mother_name', 'nationalities', 'documents', 'processes'];
+  // O POST valida estes tres campos (linhas 97-110) e o PUT nao repetia a
+  // verificacao: um valor fora da lista entrava na base e a interface deixava de
+  // saber classificar o cliente.
+  const PLAN_TYPES_PUT = ['installment', 'monthly', 'oficioso', 'probono'];
+  if (body.plan_type !== undefined && !PLAN_TYPES_PUT.includes(body.plan_type)) {
+    return jsonError('plan_type inválido', 400);
+  }
+  if (body.person_type !== undefined && !['singular', 'coletiva'].includes(body.person_type)) {
+    return jsonError('person_type inválido', 400);
+  }
+  if (body.status !== undefined && !['active', 'inactive'].includes(body.status)) {
+    return jsonError('status inválido', 400);
+  }
+
   const updates = [];
   const params = [];
   for (const key of allowed) {

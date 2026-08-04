@@ -982,28 +982,28 @@ describe('defeitos conhecidos (marcados com it.fails)', () => {
     expect(res.status).toBe(201);
   });
 
-  // BUG: worker/routes/clients.js:159 — o PUT inclui plan_type na lista de
+  // CORRIGIDO (era): worker/routes/clients.js:159 — o PUT inclui plan_type na lista de
   // campos permitidos sem repetir a validação que o POST faz (linhas 97-98).
   // Um valor fora de ['installment','monthly','oficioso','probono'] entra na BD
   // e a UI deixa de saber classificar o plano.
-  it.fails('PUT devia recusar plan_type fora da lista (BUG: aceita qualquer valor)', async () => {
+  it('PUT recusa plan_type fora da lista', async () => {
     const env = envCompleto();
     semearCliente(env);
     const res = await chamar(env, 'PUT', '/api/clients/C1', { body: { plan_type: 'vitalicio' } });
     expect(res.status).toBe(400);
   });
 
-  // BUG: mesma lacuna para person_type — o POST normaliza (linha 110), o PUT não.
-  it.fails('PUT devia normalizar person_type (BUG: aceita valor arbitrário)', async () => {
+  // CORRIGIDO (era): mesma lacuna para person_type — o POST normaliza (linha 110), o PUT não.
+  it('PUT normaliza person_type', async () => {
     const env = envCompleto();
     semearCliente(env);
     await chamar(env, 'PUT', '/api/clients/C1', { body: { person_type: 'alienigena' } });
     expect(env.DB.linha('SELECT person_type FROM clients').person_type).toBe('singular');
   });
 
-  // BUG: worker/routes/clients.js:159 — status também não é validado no PUT.
+  // CORRIGIDO (era): worker/routes/clients.js:159 — status também não é validado no PUT.
   // Os filtros e o dashboard só conhecem 'active'/'inactive'.
-  it.fails('PUT devia recusar status desconhecido (BUG: aceita qualquer texto)', async () => {
+  it('PUT recusa status desconhecido', async () => {
     const env = envCompleto();
     semearCliente(env);
     const res = await chamar(env, 'PUT', '/api/clients/C1', { body: { status: 'em-ferias' } });

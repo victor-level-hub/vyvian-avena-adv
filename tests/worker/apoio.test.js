@@ -99,9 +99,13 @@ describe('encaminhamento e 404s', () => {
     expect((await json(r)).error).toBe('Not found');
   });
 
-  it('rejeita ID com sequencial de 4 dígitos (AT-2026-1234)', async () => {
+  // CORRIGIDO (era): a regex exigia exatamente 3 dígitos, por isso a partir do
+  // 1000.º ticket do ano o ticket era criado mas ficava inacessível. Agora a rota
+  // aceita 3 ou mais dígitos e devolve 404 só porque o ticket não existe.
+  it('aceita ID com sequencial de 4 dígitos e devolve 404 se não existir', async () => {
     const r = await chamar(env, 'GET', '/api/apoio/tickets/AT-2026-1234');
-    expect((await json(r)).error).toBe('Not found');
+    expect(r.status).toBe(404);
+    expect((await json(r)).error).toBe('Ticket não encontrado.');
   });
 
   it('rejeita ID em minúsculas (at-2026-001)', async () => {
@@ -390,10 +394,10 @@ describe('geração do ID AT-AAAA-NNN', () => {
     expect((await json(r)).ticket.id).toBe(`AT-${ANO}-002`);
   });
 
-  // BUG: o ID vem de COUNT(*)+1. Se um ticket intermédio for apagado, o próximo
+  // CORRIGIDO (era): o ID vem de COUNT(*)+1. Se um ticket intermédio for apagado, o próximo
   // ID repete um já existente e o INSERT rebenta com UNIQUE constraint (500).
   // worker/routes/apoio.js:51-56
-  it.fails('não repete IDs quando um ticket intermédio foi apagado', async () => {
+  it('não repete IDs quando um ticket intermédio foi apagado', async () => {
     await semear(env, `AT-${ANO}-001`);
     await semear(env, `AT-${ANO}-002`);
     env.DB.exec(`DELETE FROM tickets WHERE id = 'AT-${ANO}-001'`);
@@ -401,11 +405,11 @@ describe('geração do ID AT-AAAA-NNN', () => {
     expect(r.status).toBe(201);
   });
 
-  // BUG: a partir do 1000.º ticket do ano o ID passa a ter 4 dígitos
+  // CORRIGIDO (era): a partir do 1000.º ticket do ano o ID passa a ter 4 dígitos
   // (AT-AAAA-1000) e deixa de casar com a regex das rotas por ticket — o ticket
   // é criado mas fica inacessível (404 em GET/PATCH/ações).
   // worker/routes/apoio.js:55 vs :160
-  it.fails('mantém o ticket acessível a partir do 1000.º do ano', async () => {
+  it('mantém o ticket acessível a partir do 1000.º do ano', async () => {
     env.DB.exec(`INSERT INTO tickets (id, titulo, criado_por)
       SELECT 'AT-${ANO}-' || printf('%03d', n), 'x', 'Victor'
       FROM (WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM c WHERE n < 999) SELECT n FROM c)`);

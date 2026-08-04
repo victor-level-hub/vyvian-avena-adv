@@ -50,9 +50,17 @@ async function log(env, ticketId, evento, detalhe, autor) {
 
 async function novoId(env) {
   const ano = HOJE_LX().data.slice(0, 4);
-  const r = await env.DB.prepare(`SELECT COUNT(*) AS n FROM tickets WHERE id LIKE ?`)
-    .bind(`AT-${ano}-%`).first();
-  return `AT-${ano}-${String((r?.n || 0) + 1).padStart(3, "0")}`;
+  // O COUNT(*) repetia IDs depois de apagar um ticket intermédio (o INSERT
+  // rebentava com violação de chave única). Passa a contar a partir do MAIOR
+  // número já usado no ano, que nunca anda para trás.
+  const r = await env.DB.prepare(
+    `SELECT MAX(CAST(substr(id, 9) AS INTEGER)) AS ultimo FROM tickets WHERE id LIKE ?`
+  ).bind(`AT-${ano}-%`).first();
+  const proximo = (r?.ultimo || 0) + 1;
+  // padStart(3) mantém AT-2026-001; a partir do 1000.º cresce naturalmente e a
+  // rota já o aceita (a regex antiga exigia exatamente 3 dígitos e o ticket, uma
+  // vez criado, ficava inacessível em GET, PATCH e em todas as ações).
+  return `AT-${ano}-${String(proximo).padStart(3, "0")}`;
 }
 
 async function carregarTicket(env, id) {
@@ -159,7 +167,7 @@ export async function handleApoio(request, env, path, session) {
   }
 
   // ---- rotas por ticket ----
-  m = path.match(/^\/api\/apoio\/tickets\/(AT-\d{4}-\d{3})(\/(abrir|analisar|executar|aprovar|anexos))?$/);
+  m = path.match(/^\/api\/apoio\/tickets\/(AT-\d{4}-\d{3,})(\/(abrir|analisar|executar|aprovar|anexos))?$/);
   if (!m) return jsonError("Not found", 404);
   const id = m[1];
   const acao = m[3] || null;

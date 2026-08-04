@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login } from '../auth';
 import { PasswordInput } from '../inputs';
+import { primeiraRotaPermitida } from '../perms';
 
 export default function Login() {
   const navigate = useNavigate();
@@ -18,7 +19,10 @@ export default function Login() {
     try {
       const result = await login(email, password);
       if (result.ok) {
-        navigate('/admin/painel');
+        // Ia sempre para o painel: quem nao tem essa aba aterrava numa rota
+        // proibida e so era salvo pelo bounce do PermGate; quem nao tem aba
+        // nenhuma voltava ao login ja autenticado.
+        navigate(primeiraRotaPermitida());
       } else {
         setError(result.error);
       }

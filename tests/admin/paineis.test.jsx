@@ -727,11 +727,11 @@ describe('Painel — listas de vencimentos e de atrasos', () => {
     expect(within(painelDe('Parcelas vencidas')).getByText('10d atraso')).toBeInTheDocument();
   });
 
-  // BUG: Dashboard.jsx:80 e :152 — o painel usa o emoji colorido 🌿 nas notas
+  // CORRIGIDO (era): Dashboard.jsx:80 e :152 — o painel usa o emoji colorido 🌿 nas notas
   // "Sem atrasos 🌿" / "Sem atrasos. 🌿". A regra do projeto é interface só com
   // glifos e SVGs monocromáticos (src/admin/icons.jsx); um emoji colorido
   // desalinha com o resto da Área Privada e depende da fonte do sistema.
-  it.fails('o painel não devia usar emojis coloridos', async () => {
+  it('o painel não usa emojis coloridos', async () => {
     await abrir(painelVazio());
     expect(EMOJI.test(document.body.textContent)).toBe(false);
   });

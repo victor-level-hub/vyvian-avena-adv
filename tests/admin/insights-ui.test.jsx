@@ -1326,12 +1326,12 @@ describe('Estúdio — título e descrição', () => {
     expect(guardarBtn()).toHaveTextContent('Guardar');
   });
 
-  // BUG: ArticleStudio.jsx:608 — a caixa da descrição SEO não tem rótulo
+  // CORRIGIDO (era): ArticleStudio.jsx:608 — a caixa da descrição SEO não tem rótulo
   // acessível nenhum (nem aria-label, nem <label>, nem id): o «Descrição SEO»
   // ao lado é um <span class="overline">. O título logo acima tem
   // aria-label="Título do artigo" (linha 597) — a descrição devia ter o
   // equivalente, senão quem usa leitor de ecrã ouve só «caixa de texto».
-  it.fails('a descrição SEO devia ter rótulo acessível, como o título', async () => {
+  it('a descrição SEO tem rótulo acessível, como o título', async () => {
     await abrirEstudio();
     expect(screen.getByLabelText(/Descrição SEO/)).toBeInTheDocument();
   });

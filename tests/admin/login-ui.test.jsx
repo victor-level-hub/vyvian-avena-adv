@@ -265,12 +265,12 @@ describe('entrar com as credenciais certas', () => {
     await waitFor(() => expect(navegou).toHaveBeenCalledWith('/admin/painel'));
   });
 
-  // BUG — src/admin/pages/Login.jsx:21: o destino está fixo em '/admin/painel'
+  // CORRIGIDO (era) — src/admin/pages/Login.jsx:21: o destino está fixo em '/admin/painel'
   // em vez de `primeiraRotaPermitida()` (src/admin/perms.js:23). Quem não tem a
   // aba «Painel» aterra numa rota proibida e só não fica preso porque o PermGate
   // (AdminApp.jsx:35) o atira logo para outro lado — e quem não tem aba nenhuma
   // é devolvido ao ecrã de login já autenticado.
-  it.fails('devia abrir na primeira aba permitida, não sempre no painel', async () => {
+  it('abre na primeira aba permitida, não sempre no painel', async () => {
     apiAuth.login.mockResolvedValue({ token: 't', user: { ...UTILIZADOR, permissions: ['apoio'] } });
     const v = montar();
     await entrar(v);

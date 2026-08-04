@@ -606,6 +606,7 @@ export default function ArticleStudio({ articleId, onClose }) {
                 </span>
               </div>
               <textarea rows={1} ref={descRef} value={descricao} maxLength={200}
+                        aria-label="Descrição SEO"
                         onChange={(e) => { setDescricao(e.target.value); setSujo(true); }}
                         style={{ width: '100%', background: 'none', border: 0, resize: 'none', overflow: 'hidden', fontSize: 14, lineHeight: 1.6, color: 'var(--fg-2)', marginTop: 8, outline: 'none' }} />
               <div style={{ height: 3, borderRadius: 9, background: 'var(--edge)', overflow: 'hidden', marginTop: 6 }}>

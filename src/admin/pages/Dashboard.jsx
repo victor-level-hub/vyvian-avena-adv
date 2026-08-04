@@ -77,7 +77,7 @@ export default function Dashboard() {
   const kpis = [
     { icon: 'trend', label: `Receita prevista (${upcomingDays}d)`, valor: <Ticker value={eurRev?.total || 0} prefix={'€ '} />, nota: brlRev ? `+ ${fmtMoney(brlRev.total, 'BRL')} em BRL` : 'Apenas EUR este período' },
     { icon: 'users', label: 'Clientes ativos', valor: <Ticker value={counts.active_clients} />, nota: `${counts.paid_last_30d} parcelas pagas (30d)` },
-    { icon: 'info', label: 'Em atraso', valor: <Ticker value={counts.late} />, nota: counts.late === 0 ? 'Sem atrasos 🌿' : 'Requer ação', danger: counts.late > 0 },
+    { icon: 'info', label: 'Em atraso', valor: <Ticker value={counts.late} />, nota: counts.late === 0 ? 'Sem atrasos' : 'Requer ação', danger: counts.late > 0 },
     { icon: 'clock', label: 'Próximos vencimentos', valor: <Ticker value={counts.pending + counts.due_today} />, nota: `${counts.due_today} hoje · ${counts.pending} a vir` },
   ];
 
@@ -149,7 +149,7 @@ export default function Dashboard() {
             <PanelHead over="Atenção" title="Parcelas vencidas"
                        note={alerts.length ? 'Clique num cliente para tratar a cobrança.' : undefined} />
             {alerts.length === 0 ? (
-              <div style={{ padding: '26px 4px', fontSize: 13, color: 'var(--fg-3)' }}>Sem atrasos. 🌿</div>
+              <div style={{ padding: '26px 4px', fontSize: 13, color: 'var(--fg-3)' }}>Sem atrasos.</div>
             ) : (
               <div style={{ display: 'grid', gap: 8 }}>
                 {alerts.map((i, k) => (

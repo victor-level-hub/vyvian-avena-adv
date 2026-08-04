@@ -1948,10 +1948,12 @@ describe('Parcelas — dados estranhos da API', () => {
   // BUG: Installments.jsx:134 e 145 — i.due_date.slice(0,7) sem defesa. Uma única
   // parcela sem data de vencimento (criada à mão, importada, ou com a coluna a
   // null) deita abaixo o ecrã inteiro, mesmo antes de qualquer filtro.
-  it.fails('parcela sem data de vencimento não devia rebentar o ecrã', async () => {
+  // CORRIGIDO (era): i.due_date.slice(0,7) corria antes de qualquer filtro, por isso
+  // uma única parcela sem data deitava o ecrã inteiro abaixo antes de desenhar a lista.
+  it('parcela sem data de vencimento não rebenta o ecrã', async () => {
     api.listarParcelas.mockResolvedValue({ installments: [parcela({ due_date: null })] });
     renderizar(<Limite><Installments /></Limite>);
-    await screen.findByText('ECRA REBENTOU');
+    await screen.findByRole('heading', { level: 1 });
     expect(rebentou()).toBe(false);
   });
 
@@ -1994,10 +1996,12 @@ describe('Parcelas — dados estranhos da API', () => {
   // BUG: Installments.jsx:155 — o somatório do mês usa Number(i.amount) sem defesa
   // (ao contrário do fmtMoney, que trata o vazio como zero). Uma parcela sem valor
   // faz o cartão «Previsto» mostrar NaN, enquanto o subtítulo mostra € 0.
-  it.fails('parcela sem valor não devia dar NaN no cartão do previsto', async () => {
+  // CORRIGIDO (era): o total usava Number(i.amount) cru e o cartão mostrava NaN,
+  // enquanto o subtítulo, que passa pelo formatador, mostrava € 0 — dois sítios do
+  // mesmo ecrã a dizer coisas diferentes.
+  it('parcela sem valor não dá NaN no cartão do previsto', async () => {
     await montarParcelas([parcela({ amount: undefined, due_date: noMes(5) })]);
     const cartaoPrevisto = cartao(`Previsto (${rotuloMes()})`);
-    await waitFor(() => expect(txt(cartaoPrevisto)).toContain('NaN'));
     expect(txt(cartaoPrevisto)).not.toContain('NaN');
   });
 

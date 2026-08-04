@@ -617,11 +617,11 @@ describe('GET /api/apoio/tickets/:id (detalhe)', () => {
     expect(b.log.map((l) => l.evento)).toEqual(['aberto', 'criado']);
   });
 
-  // BUG: created_at tem resolução ao segundo e a ordenação é só por created_at.
+  // CORRIGIDO (era): created_at tem resolução ao segundo e a ordenação é só por created_at.
   // Dois eventos no mesmo segundo (criar + abrir, o fluxo normal do ecrã) saem
   // pela ordem de inserção, ou seja o mais antigo aparece em primeiro lugar.
   // worker/routes/apoio.js:173
-  it.fails('mostra o evento mais recente primeiro mesmo dentro do mesmo segundo', async () => {
+  it('mostra o evento mais recente primeiro mesmo dentro do mesmo segundo', async () => {
     await chamar(env, 'POST', '/api/apoio/tickets', { body: { titulo: 't' } });
     await chamar(env, 'POST', `/api/apoio/tickets/${T1}/abrir`);
     const b = await json(await chamar(env, 'GET', `/api/apoio/tickets/${T1}`));

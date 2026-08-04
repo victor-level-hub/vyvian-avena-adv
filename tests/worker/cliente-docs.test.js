@@ -135,10 +135,10 @@ describe('POST /api/upload-tokens', () => {
     expect(env.DB.linha(`SELECT instructions FROM upload_tokens`).instructions).toBe(null);
   });
 
-  // BUG: o payload do JWT tem sub/email/name/initials/role (worker/routes/auth.js:63-71),
+  // CORRIGIDO (era): o payload do JWT tem sub/email/name/initials/role (worker/routes/auth.js:63-71),
   // nunca `user`. Logo `session?.user` é sempre undefined e o created_by fica NULL —
   // perde-se o rasto de quem criou o link de upload. Devia ser session?.email ou session?.sub.
-  it.fails('regista quem criou o link (created_by)', async () => {
+  it('regista quem criou o link (created_by)', async () => {
     await criarToken();
     expect(env.DB.linha(`SELECT created_by FROM upload_tokens`).created_by).toBe('v@exemplo.pt');
   });

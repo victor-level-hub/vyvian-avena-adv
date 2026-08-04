@@ -60,7 +60,10 @@ export async function handleUploadTokens(request, env, path, session) {
     const expires = new Date(Date.now() + validDays * 86400_000).toISOString();
     await env.DB.prepare(
       "INSERT INTO upload_tokens (token, client_id, instructions, expires_at, created_by) VALUES (?,?,?,?,?)"
-    ).bind(token, client_id, instructions || null, expires, session?.user || null).run();
+    ).bind(token, client_id, instructions || null, expires,
+      // `session?.user` nao existe no payload do JWT (tem sub/email/name/initials/role),
+      // por isso o created_by ficava sempre NULL e perdia-se o rasto de quem criou o link.
+      session?.email || session?.name || session?.sub || null).run();
     return jsonResponse({ ok: true, token, expires_at: expires, client: { id: c.id, name: c.name }, days: validDays });
   }
 

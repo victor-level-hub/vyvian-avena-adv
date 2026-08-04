@@ -2103,11 +2103,11 @@ describe('Calendário — eventos, feriados e vencimentos na grelha', () => {
     expect(norm(celula(20).textContent)).toContain('R$ 500');
   });
 
-  // BUG: Calendar.jsx:26 — a forma compacta usa o ponto decimal inglês
+  // CORRIGIDO (era): Calendar.jsx:26 — a forma compacta usa o ponto decimal inglês
   // ("€ 1.2k") num ecrã que é todo em português (o resto usa vírgula decimal e
   // ponto de milhares). Numa grelha em que "1.2" se lê como mil e duzentos, é
   // um número ambíguo em cima de dinheiro.
-  it.fails('o valor compacto devia usar a vírgula decimal portuguesa', async () => {
+  it('o valor compacto usa a vírgula decimal portuguesa', async () => {
     await abrir(null, [parcela({ due_date: noMes(20), amount: 1200 })]);
     expect(norm(celula(20).textContent)).toContain('€ 1,2k');
   });

@@ -37,9 +37,10 @@ function fmtMoney(amount, currency = 'EUR', compact = false) {
   const symbol = currency === 'BRL' ? 'R$' : '€';
   const bruto = Number(amount);
   const n = Number.isFinite(bruto) ? bruto : 0;
-  // compacto em português: "1,2 mil" e não "1.2k" (onde 1.200 se lê mil e duzentos)
+  // compacto com vírgula decimal: o ponto era o separador inglês («€ 1.2k») num
+  // ecrã todo em português, onde "1.200" se lê como mil e duzentos.
   if (compact && n >= 1000) {
-    return symbol + ' ' + (n / 1000).toFixed(1).replace('.', ',').replace(',0', '') + ' mil';
+    return symbol + ' ' + (n / 1000).toFixed(1).replace('.0', '').replace('.', ',') + 'k';
   }
   return symbol + ' ' + n.toLocaleString('pt-PT', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }

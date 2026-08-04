@@ -180,7 +180,10 @@ export async function handleApoio(request, env, path, session) {
       `SELECT id, tipo, nome, content_type, size, transcricao, created_at FROM ticket_anexos WHERE ticket_id = ? ORDER BY created_at`
     ).bind(id).all()).results || [];
     const eventos = (await env.DB.prepare(
-      `SELECT evento, detalhe, autor, created_at FROM ticket_log WHERE ticket_id = ? ORDER BY created_at DESC LIMIT 100`
+      // O created_at tem resolucao ao SEGUNDO: criar e abrir o ticket no mesmo
+      // segundo — o fluxo normal do ecra — mostrava os eventos ao contrario.
+      // O id e sequencial, por isso desempata pela ordem real de insercao.
+      `SELECT evento, detalhe, autor, created_at FROM ticket_log WHERE ticket_id = ? ORDER BY created_at DESC, id DESC LIMIT 100`
     ).bind(id).all()).results || [];
     return jsonResponse({ ticket, anexos, log: eventos });
   }

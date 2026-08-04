@@ -86,7 +86,12 @@ cliente sem tabelas. (Os testes criam-nas localmente; ver o topo de
 `tests/worker/cliente-docs.test.js` para o esquema deduzido.)
 
 > As duas últimas são a mesma doença: **`migrations/` não descreve a base de dados real.**
-> Vale a pena exportar o esquema de produção e escrever as migrações em falta.
+>
+> **Já há SQL escrito para isto** em `migracoes-pendentes/` — deliberadamente FORA de
+> `migrations/`, porque o `wrangler d1 migrations apply` corre essa pasta inteira e um
+> `ALTER TABLE` sobre colunas que já existem em produção parte a cadeia de migrações.
+> O `LEIA-ME.md` de lá explica como confirmar o que existe e aplicar em segurança.
+> É a única entrada desta lista que exige uma decisão sobre a base de dados a sério.
 
 ---
 

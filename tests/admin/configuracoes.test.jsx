@@ -1439,12 +1439,12 @@ describe('Editar utilizador', () => {
     expect(caixa(/^Acesso total/)).not.toBeChecked();
   });
 
-  // BUG: Configuracoes.jsx:89-101 — depois de mudar as SUAS PRÓPRIAS permissões,
+  // CORRIGIDO (era): Configuracoes.jsx:89-101 — depois de mudar as SUAS PRÓPRIAS permissões,
   // nada atualiza a sessão guardada no sessionStorage. A pessoa continua a ver
   // (e a navegar) as abas que acabou de tirar a si mesma até sair e voltar a
   // entrar. O servidor recusa os pedidos, mas o menu mente. Devia recarregar a
   // sessão (auth.me) ou forçar novo login.
-  it.fails('despromover-se a si própria devia refletir-se logo na sessão local', async () => {
+  it('despromover-se a si própria refletir-se logo na sessão local', async () => {
     const { utilizador: u } = await montar([EU]);
     await abrirEditar(u, 'Vyvian Avena');
     await u.click(caixa(/^Acesso total/));
@@ -1524,39 +1524,43 @@ describe('Foto de perfil no modal', () => {
     expect(configApi.uploadFoto).not.toHaveBeenCalled();
   });
 
-  it('a foto que falha mostra a mensagem de erro', async () => {
+  // CORRIGIDO (era): a falha da foto rebentava no mesmo try da criacao e o ecra
+  // dizia so «Erro:», sem revelar que a conta JA tinha sido criada. Agora a foto e
+  // um extra: avisa-se que nao foi carregada, sem esconder o resto.
+  it('a foto que falha avisa sem esconder que a conta ficou gravada', async () => {
     configApi.uploadFoto.mockRejectedValue(new Error('Imagem vazia ou acima de 5 MB.'));
     const { utilizador: u } = await montar();
     await abrirNovo(u);
     await preencherMinimo(u);
     fireEvent.change(inputFoto(), { target: { files: [ficheiro('enorme.png', 'image/png')] } });
     await u.click(btnGuardar());
-    expect(await screen.findByText('Erro: Imagem vazia ou acima de 5 MB.')).toBeInTheDocument();
+    expect(await screen.findByText(/fotografia nao foi carregada/i)).toBeInTheDocument();
+    expect(configApi.createUser).toHaveBeenCalled();
   });
 
-  // BUG: Configuracoes.jsx:94-95 — o upload da foto corre DENTRO do mesmo try do
+  // CORRIGIDO (era): Configuracoes.jsx:94-95 — o upload da foto corre DENTRO do mesmo try do
   // createUser. Se a foto falhar, o utilizador já foi criado (e o convite já
   // seguiu) mas o ecrã só diz «Erro:», não fecha o modal nem recarrega a lista.
   // A Dra. carrega outra vez em «Criar» e leva um "e-mail duplicado" sem
   // perceber porquê. A falha da foto não devia esconder que a conta foi criada.
-  it.fails('foto falhada não devia esconder que o utilizador foi criado', async () => {
+  it('foto falhada não esconde que o utilizador foi criado', async () => {
     configApi.uploadFoto.mockRejectedValue(new Error('Imagem acima de 5 MB.'));
     const { utilizador: u } = await montar();
     await abrirNovo(u);
     await preencherMinimo(u);
     fireEvent.change(inputFoto(), { target: { files: [ficheiro('enorme.png', 'image/png')] } });
     await u.click(btnGuardar());
-    await screen.findByText('Erro: Imagem acima de 5 MB.');
+    await screen.findByText(/fotografia nao foi carregada/i);
     expect(configApi.listUsers).toHaveBeenCalledTimes(2);
   });
 
-  it.fails('foto falhada na edição não devia esconder que a alteração foi gravada', async () => {
+  it('foto falhada na edição não esconde que a alteração foi gravada', async () => {
     configApi.uploadFoto.mockRejectedValue(new Error('Imagem acima de 5 MB.'));
     const { utilizador: u } = await montar();
     await abrirEditar(u, 'Ana Lima');
     fireEvent.change(inputFoto(), { target: { files: [ficheiro('enorme.png', 'image/png')] } });
     await u.click(btnGuardar());
-    await screen.findByText('Erro: Imagem acima de 5 MB.');
+    await screen.findByText(/fotografia nao foi carregada/i);
     expect(configApi.listUsers).toHaveBeenCalledTimes(2);
   });
 });
@@ -1717,11 +1721,11 @@ describe('Reenviar convite', () => {
     expect(configApi.listUsers).toHaveBeenCalledTimes(1);
   });
 
-  // BUG: Configuracoes.jsx:219-224 — o botão «Reenviar convite» não tem estado
+  // CORRIGIDO (era): Configuracoes.jsx:219-224 — o botão «Reenviar convite» não tem estado
   // ocupado nem fica desativado enquanto o pedido corre. Dois cliques seguidos
   // geram DOIS tokens; o link do primeiro e-mail (que a pessoa pode já ter
   // aberto) morre em silêncio. Devia bloquear-se enquanto envia.
-  it.fails('clicar duas vezes devia enviar um convite só', async () => {
+  it('clicar duas vezes enviar um convite só', async () => {
     const { promessa, resolver } = adiar();
     configApi.reenviarConvite.mockReturnValue(promessa);
     const { utilizador: u } = await montar(convidada());

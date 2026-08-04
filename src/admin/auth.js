@@ -42,3 +42,17 @@ export function getSession() {
 export function isAuthenticated() {
   return !!getToken() && !!getSession();
 }
+
+// Atualiza os dados do utilizador guardados na sessao (ex.: depois de mudar as
+// PROPRIAS permissoes em Configuracoes). Sem isto o menu continuava a mostrar
+// abas a que ja nao se tem acesso — o servidor recusa, mas a interface mentia
+// ate sair e voltar a entrar.
+export function atualizarSessao(campos) {
+  try {
+    const atual = getSession();
+    if (!atual) return null;
+    const novo = { ...atual, ...campos };
+    sessionStorage.setItem(USER_KEY, JSON.stringify(novo));
+    return novo;
+  } catch { return null; }
+}

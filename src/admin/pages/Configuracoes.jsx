@@ -4,7 +4,7 @@
 // Sem tabela de perfis: acesso por flags de aba + «Gerir utilizadores».
 import React, { useState, useEffect, useCallback } from 'react';
 import { config as configApi } from '../apiClient';
-import { getSession } from '../auth';
+import { getSession, atualizarSessao } from '../auth';
 import { SkeletonPage } from '../skeletons';
 import { admToast } from '../toasts';
 import { admConfirm, admAlert } from '../dialogs';
@@ -86,13 +86,27 @@ function UserModal({ user, onClose, onChanged }) {
     if (!form.permissions.length) { admAlert('Escolha pelo menos uma aba de acesso.'); return; }
     setBusy(true);
     try {
+      // A foto e um extra: se falhar, a conta JA foi criada (e o convite JA seguiu).
+      // Deixa-la rebentar no mesmo try fazia o ecra dizer so «Erro:», nao fechar o
+      // modal e nao recarregar a lista — a Dra. carregava outra vez em «Criar» e
+      // levava um «e-mail duplicado» sem perceber porque.
+      const enviarFoto = async (uid) => {
+        if (!fotoFile || !uid) return;
+        try { await configApi.uploadFoto(uid, fotoFile); }
+        catch { admToast('A conta ficou gravada, mas a fotografia nao foi carregada.', { kind: 'error' }); }
+      };
       if (editar) {
         await configApi.updateUser(user.id, form);
-        if (fotoFile) await configApi.uploadFoto(user.id, fotoFile);
+        await enviarFoto(user.id);
+        // Mudar as PROPRIAS permissoes tem de refletir-se ja na sessao local.
+        const sessao = getSession();
+        if (sessao && String(user.id) === String(sessao.sub ?? sessao.id)) {
+          atualizarSessao({ permissions: form.permissions, name: form.name });
+        }
         admToast('Utilizador atualizado.');
       } else {
         const r = await configApi.createUser(form);
-        if (fotoFile && r.user?.id) await configApi.uploadFoto(r.user.id, fotoFile);
+        await enviarFoto(r.user?.id);
         admToast(r.convite_enviado
           ? `Utilizador criado — convite enviado para ${form.email}.`
           : 'Utilizador criado, mas o envio do e-mail falhou. Use «Reenviar convite».',
@@ -216,11 +230,17 @@ export default function Configuracoes() {
     try { await configApi.deleteUser(u.id); admToast('Utilizador apagado.'); carregar(); }
     catch (e) { admAlert('Erro: ' + e.message); }
   };
+  const [reenviando, setReenviando] = useState(null);
   const reenviar = async (u) => {
+    // Dois cliques geravam dois tokens e o link do primeiro e-mail — que a pessoa
+    // pode ja ter aberto — morria em silencio.
+    if (reenviando) return;
+    setReenviando(u.id);
     try {
       const r = await configApi.reenviarConvite(u.id);
       admToast(r.ok ? `Convite reenviado para ${u.email}.` : 'O envio do e-mail falhou: ' + (r.envio?.error || ''), r.ok ? {} : { kind: 'error' });
     } catch (e) { admAlert('Erro: ' + e.message); }
+    finally { setReenviando(null); }
   };
 
   if (loading) return <SkeletonPage kpis={0} rows={4} />;

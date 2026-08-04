@@ -312,18 +312,18 @@ describe('GET /api/installments/upcoming', () => {
     expect([...datas].sort()).toEqual(datas);
   });
 
-  // BUG: worker/routes/installments.js:58 — parseInt('abc') dá NaN, que é ligado ao
+  // CORRIGIDO (era): worker/routes/installments.js:58 — parseInt('abc') dá NaN, que é ligado ao
   // modificador `date('now','+' || ? || ' days')` e devolve NULL, logo a lista sai
   // VAZIA em silêncio. Um parâmetro inválido devia cair no default de 30 dias (ou
   // dar 400), nunca fingir que não há vencimentos.
-  it.fails('days não numérico volta ao default de 30 dias', async () => {
+  it('days não numérico volta ao default de 30 dias', async () => {
     const b = await json(await rota('GET', '/api/installments/upcoming?days=abc'));
     expect(b.installments.map((p) => p.id)).toEqual(['ontem', 'hoje', 'daqui5']);
   });
 
-  // BUG: worker/routes/installments.js:58 — days negativo produz o modificador
+  // CORRIGIDO (era): worker/routes/installments.js:58 — days negativo produz o modificador
   // '+-5 days', inválido em SQLite → NULL → lista vazia, sem erro nenhum.
-  it.fails('days negativo não engole silenciosamente os atrasos', async () => {
+  it('days negativo não engole silenciosamente os atrasos', async () => {
     const b = await json(await rota('GET', '/api/installments/upcoming?days=-5'));
     expect(b.installments.map((p) => p.id)).toContain('ontem');
   });
@@ -726,10 +726,10 @@ describe('PATCH /api/installments/:id', () => {
     expect(env.DB.linha('SELECT amount FROM installments WHERE id = ?', 'par-1').amount).toBe(100);
   });
 
-  // BUG: worker/routes/installments.js:109 — ao contrário do createInstallment
+  // CORRIGIDO (era): worker/routes/installments.js:109 — ao contrário do createInstallment
   // (que faz `body || {}`), aqui lê-se `body.action` diretamente; com o corpo JSON
   // `null` rebenta com TypeError e a rota devolve 500 em vez de 400.
-  it.fails('corpo JSON `null` devolve 400 em vez de rebentar', async () => {
+  it('corpo JSON `null` devolve 400 em vez de rebentar', async () => {
     const r = await patch('null'); // corpo literal `null`
     expect(r.status).toBe(400);
   });

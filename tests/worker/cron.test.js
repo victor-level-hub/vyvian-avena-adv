@@ -433,19 +433,22 @@ describe('runDailyCron — seleção pelas regras', () => {
     expect((await runDailyCron(env)).notified).toBe(0);
   });
 
-  it('days_before não numérico desliga a regra em silêncio (documenta o estrago)', async () => {
+  // CORRIGIDO (era): a regra desligava-se em silêncio, sem erro nem registo.
+  it('days_before não numérico é assinalado no resumo, não ignorado em silêncio', async () => {
     await parcela('p1', { due_date: dia(3) });
     await regra('r1', { days_before: 'abc' });
     const s = await runDailyCron(env);
-    expect(s).toMatchObject({ notified: 0, errors: 0 });
+    expect(s.notified).toBe(0);
+    expect(s.errors).toBeGreaterThan(0);
+    expect(JSON.stringify(s.details)).toMatch(/days_before/);
   });
 
-  // BUG: worker/cron.js:52 — days_before negativo produz o modificador
+  // CORRIGIDO (era): worker/cron.js:52 — days_before negativo produz o modificador
   // '+-3 days', inválido em SQLite, que devolve NULL: a regra deixa de apanhar
   // seja o que for, sem erro nenhum. A rota de criação (worker/routes/
   // notifications.js:62) aceita qualquer valor. Devia validar-se o campo ou,
   // pelo menos, o cron devia registar a regra como impossível.
-  it.fails('days_before negativo não desaparece em silêncio', async () => {
+  it('days_before negativo não desaparece em silêncio', async () => {
     await parcela('p1', { due_date: dia(-3) });
     await regra('r1', { days_before: -3 });
     const s = await runDailyCron(env);

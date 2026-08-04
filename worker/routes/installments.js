@@ -56,7 +56,11 @@ async function listInstallments(request, env) {
 
 async function upcoming(request, env) {
   const url = new URL(request.url);
-  const days = parseInt(url.searchParams.get('days') || '30', 10);
+  // `days=abc` dava NaN e `days=-5` produzia o modificador '+-5 days': ambos
+  // invalidos em SQLite, que devolvia NULL e a lista saia VAZIA em silencio — como
+  // se nao houvesse nada a vencer. Um parametro estranho cai no valor por omissao.
+  const diasBruto = parseInt(url.searchParams.get('days') || '30', 10);
+  const days = Number.isFinite(diasBruto) && diasBruto >= 0 ? Math.min(diasBruto, 3650) : 30;
 
   const result = await env.DB.prepare(`
     SELECT i.*, c.name as client_name, c.country as client_country, c.phone as client_phone, c.email as client_email
@@ -116,7 +120,9 @@ async function createInstallment(request, env) {
 
 async function updateInstallment(request, env, id) {
   let body;
-  try { body = await request.json(); } catch { return jsonError('Invalid JSON', 400); }
+  // corpo JSON literal `null`: o request.json() devolve null e o body.action
+  // rebentava com TypeError (500) — o createInstallment ja fazia `body || {}`.
+  try { body = (await request.json()) || {}; } catch { return jsonError('Invalid JSON', 400); }
 
   const allowed = ['status', 'paid_date', 'payment_method', 'amount', 'due_date', 'notes', 'receipt_path', 'wa_sent_at', 'installment_number', 'total_installments'];
   const updates = [];

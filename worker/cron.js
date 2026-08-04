@@ -44,13 +44,22 @@ export async function runDailyCron(env, ctx) {
 
   for (const rule of rules.results || []) {
     try {
+      // days_before negativo ou nao numerico produzia o modificador '+-3 days'
+      // (invalido em SQLite -> NULL) e a regra deixava de apanhar seja o que for,
+      // sem erro nem registo. Regras assim ficam de fora, com nota no resumo.
+      const diasRegra = Number(rule.days_before);
+      if (!Number.isInteger(diasRegra) || diasRegra < 0 || diasRegra > 365) {
+        summary.details.push(`regra ${rule.id}: days_before inválido (${rule.days_before}) — ignorada`);
+        summary.errors++;
+        continue;
+      }
       const parcelas = await env.DB.prepare(`
         SELECT i.*, c.name AS client_name, c.email AS client_email, c.phone AS client_phone, c.country AS client_country
         FROM installments i JOIN clients c ON c.id = i.client_id
         WHERE i.client_id = ?
           AND i.status IN ('pending', 'due_today', 'late')
           AND date(i.due_date) = date('now', '+' || ? || ' days')
-      `).bind(rule.client_id, rule.days_before).all();
+      `).bind(rule.client_id, diasRegra).all();
 
       for (const p of parcelas.results || []) {
         // Dedupe: já houve envio BEM SUCEDIDO deste canal para esta parcela hoje?

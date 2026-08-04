@@ -580,8 +580,19 @@ async function solicitarPublicacao(env, id) {
   if (!a.imagem_escolhida) return jsonError("Escolha a imagem de capa primeiro", 400);
   if (!a.titulo || a.titulo.length > 60) return jsonError("Título obrigatório com máx. 60 caracteres", 400);
   if (!a.descricao || a.descricao.length > 155) return jsonError("Descrição SEO obrigatória com máx. 155 caracteres", 400);
-  const slug = a.slug || slugify(a.titulo);
-  if (!slug) return jsonError("Não foi possível gerar o URL (slug) a partir do título", 400);
+  const slugBase = a.slug || slugify(a.titulo);
+  if (!slugBase) return jsonError("Não foi possível gerar o URL (slug) a partir do título", 400);
+  // Dois artigos com o mesmo título produziam o mesmo slug e nada o impedia: o
+  // pipeline escreve <slug>.md no repositório, por isso o segundo sobrepunha-se
+  // silenciosamente ao primeiro em /blog/<slug>. Acrescenta-se -2, -3, … ao repetido.
+  let slug = slugBase;
+  for (let n = 2; n < 50; n++) {
+    const usado = await env.DB.prepare(
+      `SELECT id FROM insight_articles WHERE slug = ? AND id != ?`
+    ).bind(slug, id).first();
+    if (!usado) break;
+    slug = `${slugBase}-${n}`;
+  }
   // Rede de segurança para rascunhos gerados antes do aviso legal determinístico:
   // nenhum artigo segue para o blogue sem o parágrafo de fecho.
   const mdFinal = comAvisoLegal(normalizarBlocos(a.markdown), a.idioma);
@@ -755,8 +766,12 @@ Responde EXCLUSIVAMENTE com JSON válido:
     return jsonError(`Falha a posicionar as imagens: ${e.message}`, 502);
   }
 
+  // Validar contra `imgs` (as imagens que pertencem MESMO a este artigo) e não
+  // contra `ids` (o que foi pedido): bastava uma imagem válida no pedido para uma
+  // imagem de outro artigo entrar no corpo deste.
+  const idsDoArtigo = new Set(imgs.map((im) => Number(im.id)));
   const colocacoes = (plano.colocacoes || [])
-    .filter((c) => ids.includes(Number(c.image_id)))
+    .filter((c) => idsDoArtigo.has(Number(c.image_id)))
     .map((c) => ({
       id: Number(c.image_id),
       apos: Math.max(1, Math.min(blocos.length - 2, Number(c.apos_bloco) || 1)),

@@ -1137,10 +1137,10 @@ describe('POST /api/insights/articles/:id/publicar', () => {
     expect(b.article.markdown).toMatch(/não constitui aconselhamento jurídico/);
   });
 
-  // BUG: dois artigos com o mesmo título produzem o mesmo slug e nada o impede —
+  // CORRIGIDO (era): dois artigos com o mesmo título produzem o mesmo slug e nada o impede —
   // o pipeline escreve <slug>.md no repo, por isso o segundo artigo sobrepõe-se
   // silenciosamente ao primeiro em /blog/<slug>. worker/routes/insights.js:583.
-  it.fails('não deixa dois artigos ficarem com o mesmo slug', async () => {
+  it('não deixa dois artigos ficarem com o mesmo slug', async () => {
     const a1 = artigoPronto({ titulo: 'Nacionalidade portuguesa em 2026' });
     const a2 = artigoPronto({ titulo: 'Nacionalidade portuguesa em 2026' });
     const s1 = (await json(await chamar('POST', `/api/insights/articles/${a1.id}/publicar`))).article.slug;
@@ -1670,19 +1670,22 @@ describe('POST /api/insights/articles/:id/inserir-imagens', () => {
     expect((await chamar('POST', `/api/insights/articles/${a.id}/inserir-imagens`, { body: { image_ids: [img.id] } })).status).toBe(502);
   });
 
-  // BUG: o filtro final valida a colocação contra os ids PEDIDOS (`ids`) e não
+  // CORRIGIDO (era): o filtro final valida a colocação contra os ids PEDIDOS (`ids`) e não
   // contra as imagens que pertencem mesmo ao artigo (`imgs`) — basta uma imagem
   // válida no pedido para uma imagem de outro artigo entrar no corpo deste.
   // worker/routes/insights.js:758-764.
-  it.fails('não insere no corpo uma imagem que é de outro artigo', async () => {
+  it('não insere no corpo uma imagem que é de outro artigo', async () => {
     const a = semearArtigo({ markdown: MD });
     const minha = semearImagem(a.id);
     const alheia = semearImagem(semearArtigo().id);
     usarIA([geminiJson({ colocacoes: [{ image_id: alheia.id, apos_bloco: 2, alt: 'intrusa' }] })]);
-    const b = await json(await chamar('POST', `/api/insights/articles/${a.id}/inserir-imagens`, {
+    const res = await chamar('POST', `/api/insights/articles/${a.id}/inserir-imagens`, {
       body: { image_ids: [minha.id, alheia.id] },
-    }));
-    expect(b.article.markdown).not.toContain(`/api/insights/images/${alheia.id}`);
+    });
+    // Sobrando zero colocações válidas, a rota recusa em vez de inserir a intrusa.
+    expect(res.status).toBe(502);
+    const md = env.DB.linha('SELECT markdown FROM insight_articles WHERE id = ?', a.id).markdown;
+    expect(md).not.toContain(`/api/insights/images/${alheia.id}`);
   });
 });
 

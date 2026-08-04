@@ -115,6 +115,21 @@ beforeAll(() => {
 });
 
 /* ═══════════════ utilitários ═══════════════ */
+// Os KPIs sao desenhados por <Ticker>, que anima o numero. Esperar so pelo <h1>
+// deixava a asserçao correr antes de o React ter pintado o valor final: com 36
+// ficheiros em paralelo isso falhava de vez em quando, sempre num teste diferente.
+// Aqui esperamos que o texto do ecra deixe de mudar entre duas leituras.
+async function ecraEstavel() {
+  let anterior = null;
+  await waitFor(() => {
+    const agora = document.body.textContent;
+    const estavel = anterior !== null && agora === anterior;
+    anterior = agora;
+    if (!estavel) throw new Error('ecra ainda a atualizar');
+  });
+}
+
+
 
 // pt-PT separa os milhares com espaço inseparável e alguns formatos usam o
 // espaço estreito — comparar com espaço normal falharia com strings idênticas.
@@ -383,6 +398,7 @@ describe('Painel — carregamento, erro e vazio', () => {
   const abrir = async () => {
     const r = renderizar(<Dashboard />);
     await screen.findByRole('heading', { level: 1 });
+    await ecraEstavel();
     return r;
   };
 
@@ -461,6 +477,7 @@ describe('Painel — cabeçalho e KPIs', () => {
     if (dados) dashboardApi.get.mockResolvedValue(dados);
     const r = renderizar(<Dashboard />);
     await screen.findByRole('heading', { level: 1 });
+    await ecraEstavel();
     return r;
   };
 
@@ -563,6 +580,7 @@ describe('Painel — janela dos próximos vencimentos', () => {
   const abrir = async () => {
     const r = renderizar(<Dashboard />);
     await screen.findByRole('heading', { level: 1 });
+    await ecraEstavel();
     return r;
   };
 
@@ -614,6 +632,7 @@ describe('Painel — listas de vencimentos e de atrasos', () => {
     dashboardApi.get.mockResolvedValue(dados);
     const r = renderizar(<Dashboard />);
     await screen.findByRole('heading', { level: 1 });
+    await ecraEstavel();
     return r;
   };
 

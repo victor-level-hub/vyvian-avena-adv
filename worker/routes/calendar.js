@@ -60,16 +60,23 @@ async function createEvent(request, env) {
   if (!type) return jsonError('Tipo de data não existe', 400);
   if (body.status && !STATUS_OK.includes(body.status)) return jsonError('status inválido', 400);
 
-  const eid = body.id || ('evt-' + crypto.randomUUID().slice(0, 13));
-  await env.DB.prepare(`
-    INSERT INTO calendar_events (id, title, description, type_id, start_date, end_date, is_all_day, amount, currency, status, client_name, case_reference, source, is_recurring, recurrence_rule)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?)
-  `).bind(
-    eid, title, body.description || null, type_id, start_date, body.end_date || null,
-    body.is_all_day === false ? 0 : 1, Number(body.amount) || 0, body.currency || 'EUR',
-    body.status || 'none', body.client_name || null, body.case_reference || null,
-    body.is_recurring ? 1 : 0, body.recurrence_rule || null,
+  const eid = body.id || ('evt-' + crypto.randomUUID().slice(0, 13));
+  try {
+    await env.DB.prepare(`
+    INSERT INTO calendar_events (id, title, description, type_id, start_date, end_date, is_all_day, amount, currency, status, client_name, case_reference, source, is_recurring, recurrence_rule)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'manual', ?, ?)
+  `).bind(
+    eid, title, body.description || null, type_id, start_date, body.end_date || null,
+    body.is_all_day === false ? 0 : 1, Number(body.amount) || 0, body.currency || 'EUR',
+    body.status || 'none', body.client_name || null, body.case_reference || null,
+    body.is_recurring ? 1 : 0, body.recurrence_rule || null,
   ).run();
+  } catch (e) {
+    // id repetido violava a chave primária e saía 500 com o detalhe do SQL
+    const r = erroDeRestricao(e);
+    if (r) return jsonError(r.texto, r.status);
+    throw e;
+  }
 
   return jsonResponse({ ok: true, id: eid }, 201);
 }
@@ -78,6 +85,22 @@ async function updateEvent(request, env, id) {
   let body;
   try { body = await request.json(); } catch { return jsonError('Invalid JSON', 400); }
   if (body.status && !STATUS_OK.includes(body.status)) return jsonError('status inválido', 400);
+  // O POST exige título; o PUT deixava passar title = '' e o evento ficava sem nome
+  // no calendário.
+  if (body.title !== undefined && !String(body.title).trim()) {
+    return jsonError('O título não pode ficar vazio.', 400);
+  }
+  // `if (body.type_id)` deixava passar '' sem validar, o UPDATE violava a chave
+  // estrangeira e o pedido saía 500 em vez de 400.
+  if (body.type_id !== undefined && !String(body.type_id).trim()) {
+    return jsonError('Tipo de data inválido', 400);
+  }
+  if (body.start_date !== undefined && !dataISOValida(body.start_date)) {
+    return jsonError('A data de início tem de estar no formato aaaa-mm-dd.', 400);
+  }
+  if (body.end_date && !dataISOValida(body.end_date)) {
+    return jsonError('A data de fim tem de estar no formato aaaa-mm-dd.', 400);
+  }
   if (body.type_id) {
     const type = await env.DB.prepare('SELECT id FROM calendar_types WHERE id = ?').bind(body.type_id).first();
     if (!type) return jsonError('Tipo de data não existe', 400);
@@ -101,6 +124,14 @@ async function updateEvent(request, env, id) {
 }
 
 async function deleteEvent(env, id) {
+  // O cabeçalho da rota promete apagar só eventos manuais, mas o DELETE apagava
+  // qualquer linha — incluindo os feriados nacionais semeados com source='system',
+  // que ninguém consegue repor sem correr a migração outra vez.
+  const ev = await env.DB.prepare('SELECT source FROM calendar_events WHERE id = ?').bind(id).first();
+  if (!ev) return jsonError('Evento não encontrado', 404);
+  if (ev.source === 'system') {
+    return jsonError('Este é um evento do sistema (feriado) e não pode ser apagado.', 400);
+  }
   const result = await env.DB.prepare('DELETE FROM calendar_events WHERE id = ?').bind(id).run();
   if (result.meta.changes === 0) return jsonError('Evento não encontrado', 404);
   return jsonResponse({ ok: true });

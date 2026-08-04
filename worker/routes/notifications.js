@@ -1,5 +1,6 @@
 // worker/routes/notifications.js
 import { jsonResponse, jsonError } from '../lib/response.js';
+import { erroDeRestricao } from '../lib/validar.js';
 import { runDailyCron } from '../cron.js'; // Fase 2
 
 export async function handleNotifications(request, env, path, session) {
@@ -56,10 +57,23 @@ async function createRule(request, env) {
     return jsonError('Campos obrigatórios em falta', 400);
   }
 
-  await env.DB.prepare(`
-    INSERT INTO notification_rules (id, client_id, channel, days_before, enabled, template_id)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).bind(id, client_id, channel, days_before ?? 3, enabled ? 1 : 0, template_id || null).run();
+  // days_before negativo ou não numérico produzia o modificador '+-3 days' (ou NaN)
+  // no cron: a regra deixava de apanhar seja o que for, sem erro nem registo.
+  const dias = Number(days_before ?? 3);
+  if (!Number.isInteger(dias) || dias < 0 || dias > 365) {
+    return jsonError('days_before tem de ser um número inteiro entre 0 e 365.', 400);
+  }
+  try {
+    await env.DB.prepare(`
+      INSERT INTO notification_rules (id, client_id, channel, days_before, enabled, template_id)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).bind(id, client_id, channel, dias, enabled ? 1 : 0, template_id || null).run();
+  } catch (e) {
+    // cliente inexistente ou id repetido chegavam ao cliente como 500 com SQL à mistura
+    const r = erroDeRestricao(e);
+    if (r) return jsonError(r.texto, r.status);
+    throw e;
+  }
 
   return jsonResponse({ ok: true, id }, 201);
 }
@@ -133,7 +147,10 @@ async function updateTemplate(request, env, id) {
 
 async function listLog(request, env) {
   const url = new URL(request.url);
-  const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 200);
+  // `Math.min(parseInt('abc'), 200)` dá NaN e ia direto para o LIMIT: o driver
+  // recusava e o pedido saía 500; no D1 o NaN vira null e devolvia o registo todo.
+  const limitBruto = parseInt(url.searchParams.get('limit') || '50', 10);
+  const limit = Number.isFinite(limitBruto) && limitBruto > 0 ? Math.min(limitBruto, 200) : 50;
   const clientId = url.searchParams.get('client_id');
 
   let sql = `

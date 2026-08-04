@@ -231,10 +231,10 @@ describe('POST /api/calendar/events', () => {
     expect(r.status).toBe(400);
   });
 
-  // BUG: o INSERT não trata a colisão de chave primária — repetir o id rebenta com
+  // CORRIGIDO (era): o INSERT não trata a colisão de chave primária — repetir o id rebenta com
   // "UNIQUE constraint failed" e o router devolve 500 em vez de um 409 tratado
   // (worker/routes/calendar.js:58-66 + worker/index.js:208-211).
-  it.fails('responde 409 quando o id já existe', async () => {
+  it('responde 409 quando o id já existe', async () => {
     await cal('POST', '/api/calendar/events', { ...EVENTO, id: 'evt-repetido' });
     const r = await cal('POST', '/api/calendar/events', { ...EVENTO, id: 'evt-repetido' });
     expect(r.status).toBe(409);
@@ -325,19 +325,19 @@ describe('PUT /api/calendar/events/:id', () => {
       .toBe('Natal (editado)');
   });
 
-  // BUG: o POST exige título, o PUT não — title = '' passa a validação (só
+  // CORRIGIDO (era): o POST exige título, o PUT não — title = '' passa a validação (só
   // `body[key] !== undefined`) e apaga o título do evento
   // (worker/routes/calendar.js:82-87). Fica um evento sem nome no calendário.
-  it.fails('não deixa esvaziar o título de um evento', async () => {
+  it('não deixa esvaziar o título de um evento', async () => {
     const id = await criarEvento();
     const r = await cal('PUT', `/api/calendar/events/${id}`, { title: '' });
     expect(r.status).toBe(400);
   });
 
-  // BUG: `if (body.type_id)` deixa passar type_id = '' sem validação
+  // CORRIGIDO (era): `if (body.type_id)` deixa passar type_id = '' sem validação
   // (worker/routes/calendar.js:75-78) — o UPDATE viola a chave estrangeira e o
   // pedido rebenta com 500 em vez de devolver 400.
-  it.fails('recusa um type_id vazio com 400', async () => {
+  it('recusa um type_id vazio com 400', async () => {
     const id = await criarEvento();
     const r = await cal('PUT', `/api/calendar/events/${id}`, { type_id: '' });
     expect(r.status).toBe(400);
@@ -373,11 +373,11 @@ describe('DELETE /api/calendar/events/:id', () => {
     expect(env.DB.conta('calendar_events', "title = 'B'")).toBe(1);
   });
 
-  // BUG: o cabeçalho da rota diz «DELETE /api/calendar/events/:id -> apagar evento
+  // CORRIGIDO (era): o cabeçalho da rota diz «DELETE /api/calendar/events/:id -> apagar evento
   // (manuais)», mas deleteEvent (worker/routes/calendar.js:97-101) apaga qualquer
   // linha — inclusive os feriados nacionais semeados com source = 'system', que
   // ninguém consegue repor sem correr a migração outra vez.
-  it.fails('não apaga eventos de sistema', async () => {
+  it('não apaga eventos de sistema', async () => {
     const r = await cal('DELETE', '/api/calendar/events/2026-feriado-natal');
     expect(r.status).toBe(400);
   });
@@ -724,17 +724,17 @@ describe('/api/notifications/rules', () => {
     expect((await nots('POST', '/api/notifications/rules', 'xpto')).status).toBe(400);
   });
 
-  // BUG: createRule (worker/routes/notifications.js:59-62) não confirma que o cliente
+  // CORRIGIDO (era): createRule (worker/routes/notifications.js:59-62) não confirma que o cliente
   // existe. A chave estrangeira rebenta e o router devolve 500 com o detalhe do SQL
   // em vez de um 400 dizendo que o cliente não existe.
-  it.fails('recusa uma regra para um cliente inexistente com 400', async () => {
+  it('recusa uma regra para um cliente inexistente com 400', async () => {
     const r = await nots('POST', '/api/notifications/rules',
       { id: 'r9', client_id: 'nao-existe', channel: 'email', enabled: true });
     expect(r.status).toBe(400);
   });
 
-  // BUG: mesma origem — repetir o id viola a chave primária e sai 500 em vez de 409.
-  it.fails('responde 409 quando o id da regra já existe', async () => {
+  // CORRIGIDO (era): mesma origem — repetir o id viola a chave primária e sai 500 em vez de 409.
+  it('responde 409 quando o id da regra já existe', async () => {
     await regra();
     const r = await regra();
     expect(r.status).toBe(409);
@@ -882,11 +882,11 @@ describe('GET /api/notifications/log', () => {
     expect(b.log).toEqual([]);
   });
 
-  // BUG: `Math.min(parseInt('abc', 10), 200)` dá NaN e vai direto para o LIMIT
+  // CORRIGIDO (era): `Math.min(parseInt('abc', 10), 200)` dá NaN e vai direto para o LIMIT
   // (worker/routes/notifications.js:136,146-149) — não há queda para o valor por
   // omissão. O driver de SQLite recusa o NaN («datatype mismatch») e o pedido sai
   // com 500; no D1 o NaN vira null e o LIMIT desaparece, devolvendo o registo todo.
-  it.fails('um limite não numérico cai no valor por omissão', async () => {
+  it('um limite não numérico cai no valor por omissão', async () => {
     const r = await nots('GET', '/api/notifications/log?limit=abc');
     expect(r.status).toBe(200);
     expect(Array.isArray((await json(r)).log)).toBe(true);

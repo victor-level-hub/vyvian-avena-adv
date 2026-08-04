@@ -65,24 +65,24 @@ export default function Contacto() {
                 {/* Nome + Email */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="font-body text-xs tracking-widest uppercase text-forest/60 mb-2 block">
+                    <label htmlFor="contacto-name" className="font-body text-xs tracking-widest uppercase text-forest/60 mb-2 block">
                       Nome *
                     </label>
                     <input
                       type="text"
-                      name="name"
+                      name="name" id="contacto-name"
                       required
                       className="w-full border border-border bg-warmwhite px-4 py-3 font-body text-sm text-forest focus:outline-none focus:border-gold transition-colors"
                     />
                     <ValidationError field="name" prefix="Nome" errors={state.errors} className="text-red-500 text-xs mt-1 font-body" />
                   </div>
                   <div>
-                    <label className="font-body text-xs tracking-widest uppercase text-forest/60 mb-2 block">
+                    <label htmlFor="contacto-email" className="font-body text-xs tracking-widest uppercase text-forest/60 mb-2 block">
                       Email *
                     </label>
                     <input
                       type="email"
-                      name="email"
+                      name="email" id="contacto-email"
                       required
                       className="w-full border border-border bg-warmwhite px-4 py-3 font-body text-sm text-forest focus:outline-none focus:border-gold transition-colors"
                     />
@@ -93,21 +93,21 @@ export default function Contacto() {
                 {/* Telefone + Área */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="font-body text-xs tracking-widest uppercase text-forest/60 mb-2 block">
+                    <label htmlFor="contacto-phone" className="font-body text-xs tracking-widest uppercase text-forest/60 mb-2 block">
                       Telefone
                     </label>
                     <input
                       type="tel"
-                      name="phone"
+                      name="phone" id="contacto-phone"
                       className="w-full border border-border bg-warmwhite px-4 py-3 font-body text-sm text-forest focus:outline-none focus:border-gold transition-colors"
                     />
                   </div>
                   <div>
-                    <label className="font-body text-xs tracking-widest uppercase text-forest/60 mb-2 block">
+                    <label htmlFor="contacto-area" className="font-body text-xs tracking-widest uppercase text-forest/60 mb-2 block">
                       Área de interesse
                     </label>
                     <select
-                      name="area"
+                      name="area" id="contacto-area"
                       className="w-full border border-border bg-warmwhite px-4 py-3 font-body text-sm text-forest focus:outline-none focus:border-gold transition-colors"
                     >
                       <option value="">Selecione uma área</option>
@@ -120,11 +120,11 @@ export default function Contacto() {
 
                 {/* Mensagem */}
                 <div>
-                  <label className="font-body text-xs tracking-widest uppercase text-forest/60 mb-2 block">
+                  <label htmlFor="contacto-message" className="font-body text-xs tracking-widest uppercase text-forest/60 mb-2 block">
                     Mensagem *
                   </label>
                   <textarea
-                    name="message"
+                    name="message" id="contacto-message"
                     required
                     rows={5}
                     className="w-full border border-border bg-warmwhite px-4 py-3 font-body text-sm text-forest focus:outline-none focus:border-gold transition-colors resize-none"

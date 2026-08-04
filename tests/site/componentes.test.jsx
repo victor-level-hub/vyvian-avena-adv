@@ -831,12 +831,12 @@ describe('CookieBanner — consentimento', () => {
       expect(analitica.applyConsent).not.toHaveBeenCalled();
     });
 
-    // BUG: src/components/CookieBanner.jsx:99 — os interruptores de cada família
+    // CORRIGIDO (era): src/components/CookieBanner.jsx:99 — os interruptores de cada família
     // são <div> com onClick: sem role, sem tabIndex e sem tratamento de teclas.
     // Quem navega só com teclado (ou com leitor de ecrã) não consegue escolher as
     // preferências — só "aceitar tudo" ou "só essenciais". Deviam ser <button
     // role="switch" aria-checked> ou uma checkbox com rótulo.
-    it.fails('os interruptores são operáveis por teclado', async () => {
+    it('os interruptores são operáveis por teclado', async () => {
       const { utilizador } = await abrir();
       const interruptor = screen.getByRole('switch', { name: /estatísticos/i });
       await utilizador.type(interruptor, '{Space}');
@@ -1586,14 +1586,14 @@ describe('Footer', () => {
     expect(container.querySelector('footer')).toBeTruthy();
   });
 
-  // BUG: src/components/Footer.jsx — o rodapé não liga à Política de Cookies.
+  // CORRIGIDO (era): src/components/Footer.jsx — o rodapé não liga à Política de Cookies.
   // A página existe, é indexável e entra no sitemap (scripts/routes.mjs), mas o
   // único caminho para lá no site com Layout é o banner de cookies — que
   // desaparece assim que o visitante decide. Fica uma página órfã (mal rastreada,
   // como avisa o seo-check) e, num sítio de advogada, a informação de privacidade
   // deixa de estar acessível a quem já consentiu. A página /links tem a ligação;
   // o rodapé do site não.
-  it.fails('liga à Política de Cookies', () => {
+  it('liga à Política de Cookies', () => {
     renderizar(<Footer />);
     expect(screen.getByRole('link', { name: /Pol[íi]tica de Cookies/i }))
       .toHaveAttribute('href', '/politica-cookies');

@@ -1951,10 +1951,10 @@ describe('Calendário — vistas e navegação', () => {
     expect(await screen.findByText(esperado)).toBeInTheDocument();
   });
 
-  // BUG: Calendar.jsx:531 e :533 — os botões de período anterior/seguinte só
+  // CORRIGIDO (era): Calendar.jsx:531 e :533 — os botões de período anterior/seguinte só
   // levam um ícone e um data-tip; não têm texto nem aria-label, por isso não
   // têm nome acessível nenhum (leitor de ecrã anuncia "botão").
-  it.fails('os botões de navegação deviam ter nome acessível', async () => {
+  it('os botões de navegação deviam ter nome acessível', async () => {
     await abrir();
     expect(screen.getByRole('button', { name: /seguinte/i })).toBeInTheDocument();
   });

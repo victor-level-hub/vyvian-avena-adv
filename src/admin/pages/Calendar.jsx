@@ -546,9 +546,9 @@ export default function Calendar() {
                 <div className="gcal-sub">{numVenc} vencimentos · {fmtMoney(totalEur)} previstos (EUR)</div>
               </div>
               <div style={{ display: 'flex', gap: 6 }}>
-                <button className="gcal-btn" onClick={() => navigate(-1)} data-tip="Período anterior"><Icon name="chevL" size={13} /></button>
+                <button className="gcal-btn" onClick={() => navigate(-1)} data-tip="Período anterior" aria-label="Período anterior"><Icon name="chevL" size={13} /></button>
                 <button className="gcal-btn" onClick={goToday}>Hoje</button>
-                <button className="gcal-btn" onClick={() => navigate(1)} data-tip="Período seguinte"><Icon name="chevR" size={13} /></button>
+                <button className="gcal-btn" onClick={() => navigate(1)} data-tip="Período seguinte" aria-label="Período seguinte"><Icon name="chevR" size={13} /></button>
               </div>
             </div>
 

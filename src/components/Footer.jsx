@@ -85,10 +85,16 @@ export default function Footer() {
           </div>
         </div>
 
-        <div className="mt-12 pt-8 border-t border-warmwhite/10 flex items-center justify-center">
+        {/* A Política de Cookies era uma página órfã: indexável e no sitemap, mas o
+            único caminho para lá era o banner de consentimento — que desaparece assim
+            que o visitante decide. Quem já consentiu deixava de a conseguir alcançar. */}
+        <div className="mt-12 pt-8 border-t border-warmwhite/10 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 text-center">
           <p className="text-xs text-warmwhite/60">
             © {new Date().getFullYear()} Vyvian Avena — Advogada. Todos os direitos reservados.
           </p>
+          <Link to="/politica-cookies" className="text-xs text-warmwhite/60 hover:text-gold transition-colors underline underline-offset-2">
+            Política de Cookies
+          </Link>
         </div>
       </div>
     </footer>

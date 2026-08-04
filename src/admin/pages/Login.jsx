@@ -48,8 +48,9 @@ export default function Login() {
 
           <form onSubmit={handleSubmit}>
             <div className="adm-field">
-              <label>E-mail</label>
+              <label htmlFor="login-email">E-mail</label>
               <input
+                id="login-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -59,8 +60,9 @@ export default function Login() {
               />
             </div>
             <div className="adm-field">
-              <label>Palavra-passe</label>
+              <label htmlFor="login-password">Palavra-passe</label>
               <PasswordInput
+                id="login-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"

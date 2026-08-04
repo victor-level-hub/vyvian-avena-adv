@@ -267,17 +267,20 @@ export default function Configuracoes() {
                         <Icon name="refresh" size={12} />Reenviar convite
                       </button>
                     )}
-                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setModal({ user: u })} data-tip="Editar utilizador">
+                    <button type="button" className="btn btn-ghost btn-sm" onClick={() => setModal({ user: u })} data-tip="Editar utilizador"
+                            aria-label={`Editar ${u.name || u.email}`}>
                       <Icon name="edit" size={12} />
                     </button>
                     {u.id !== eu?.id && (
                       <button type="button" className="btn btn-ghost btn-sm" onClick={() => apagar(u)} data-tip="Apagar utilizador"
+                              aria-label={`Apagar ${u.name || u.email}`}
                               style={{ color: '#e08b8b' }}>
                         <Icon name="trash" size={12} />
                       </button>
                     )}
                     <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAberto((a) => ({ ...a, [u.id]: !exp }))}
-                            data-tip={exp ? 'Ocultar acessos' : 'Ver a que abas tem acesso'} aria-expanded={exp}>
+                            data-tip={exp ? 'Ocultar acessos' : 'Ver a que abas tem acesso'} aria-expanded={exp}
+                            aria-label={`${exp ? 'Ocultar' : 'Ver'} os acessos de ${u.name || u.email}`}>
                       <Icon name="chev" size={13} style={{ transform: exp ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }} />
                     </button>
                   </div>

@@ -162,11 +162,11 @@ describe('o formulário que a Dra. vê', () => {
     expect(v.botao()).toBeEnabled();
   });
 
-  // BUG (acessibilidade) — src/admin/pages/Login.jsx:51 e :62: os <label> não têm
+  // CORRIGIDO (era, acessibilidade) — src/admin/pages/Login.jsx:51 e :62: os <label> não têm
   // `htmlFor` e não envolvem o campo, por isso não estão ligados a nada. Um leitor
   // de ecrã anuncia "campo de edição" sem dizer qual, e clicar na etiqueta não
   // foca o campo. Devia ser <label htmlFor="email"> + <input id="email">.
-  it.fails('as etiquetas deviam estar ligadas aos campos', () => {
+  it('as etiquetas deviam estar ligadas aos campos', () => {
     montar();
     expect(screen.getByLabelText('E-mail')).toBeInTheDocument();
     expect(screen.getByLabelText('Palavra-passe')).toBeInTheDocument();

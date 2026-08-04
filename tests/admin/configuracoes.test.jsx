@@ -449,17 +449,17 @@ describe('Configurações — o próprio utilizador e o estado do convite', () =
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Convite por concluir');
   });
 
-  // BUG: Configuracoes.jsx:270-282 — os botões de editar, apagar e expandir só
+  // CORRIGIDO (era): Configuracoes.jsx:270-282 — os botões de editar, apagar e expandir só
   // têm ícone (aria-hidden) e um data-tip; não têm aria-label nem texto. Para um
   // leitor de ecrã são três botões sem nome — num ecrã onde um deles apaga um
   // utilizador. O ModalClose do mesmo projeto já usa aria-label, por isso é
   // esquecimento, não convenção.
-  it.fails('o botão de apagar devia ter nome acessível', async () => {
+  it('o botão de apagar devia ter nome acessível', async () => {
     await montar([utilizador()]);
     expect(screen.getByRole('button', { name: /apagar/i })).toBeInTheDocument();
   });
 
-  it.fails('o botão de editar devia ter nome acessível', async () => {
+  it('o botão de editar devia ter nome acessível', async () => {
     await montar([utilizador()]);
     expect(screen.getByRole('button', { name: /editar/i })).toBeInTheDocument();
   });

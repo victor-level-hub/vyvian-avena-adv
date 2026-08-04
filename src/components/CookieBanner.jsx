@@ -102,10 +102,20 @@ export default function CookieBanner() {
                     <p style={{ color: '#faf8f4', fontSize: '13px', fontWeight: 500, margin: '0 0 2px' }}>{item.label}</p>
                     <p style={{ color: 'rgba(250,248,244,0.5)', fontSize: '12px', margin: 0 }}>{item.desc}</p>
                   </div>
-                  <div
+                  {/* Interruptor a sério: era um <div> com onClick, sem papel nem
+                      tabIndex, por isso quem navega por teclado ou com leitor de ecrã
+                      não conseguia escolher preferências granulares — só "aceitar
+                      tudo" ou "só essenciais". Num consentimento RGPD isso não serve. */}
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={item.locked || !!prefs[item.key]}
+                    aria-label={item.label}
+                    disabled={item.locked}
                     onClick={() => !item.locked && setPrefs(p => ({ ...p, [item.key]: !p[item.key] }))}
                     style={{
                       width: '40px', height: '22px', borderRadius: '11px', flexShrink: 0,
+                      padding: 0, border: 'none', appearance: 'none',
                       background: (item.locked || prefs[item.key]) ? '#b8935a' : 'rgba(250,248,244,0.2)',
                       cursor: item.locked ? 'default' : 'pointer', position: 'relative', transition: 'background 0.2s',
                     }}
@@ -115,7 +125,7 @@ export default function CookieBanner() {
                       left: (item.locked || prefs[item.key]) ? '21px' : '3px',
                       width: '16px', height: '16px', borderRadius: '50%', background: '#faf8f4', transition: 'left 0.2s',
                     }} />
-                  </div>
+                  </button>
                 </div>
               ))}
             </div>

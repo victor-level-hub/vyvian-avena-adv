@@ -1139,26 +1139,26 @@ describe('Contacto — formulário', () => {
     expect(etiquetas).toEqual(['Nome *', 'Email *', 'Telefone', 'Área de interesse', 'Mensagem *']);
   });
 
-  // BUG: Contacto.jsx:68-131 — nenhum <label> tem htmlFor nem envolve o campo, e
+  // CORRIGIDO (era): Contacto.jsx:68-131 — nenhum <label> tem htmlFor nem envolve o campo, e
   // os campos não têm id nem aria-label. Visualmente parece etiquetado, mas um
   // leitor de ecrã anuncia "caixa de texto" sem dizer qual — e getByLabelText,
   // que é como se testa um formulário acessível, não encontra nada.
-  it.fails('o campo do nome devia ser alcançável pela etiqueta', () => {
+  it('o campo do nome devia ser alcançável pela etiqueta', () => {
     montar(<Contacto />, { caminho: '/contacto' });
     expect(screen.getByLabelText(/Nome/)).toBeInTheDocument();
   });
 
-  it.fails('o campo do e-mail devia ser alcançável pela etiqueta', () => {
+  it('o campo do e-mail devia ser alcançável pela etiqueta', () => {
     montar(<Contacto />, { caminho: '/contacto' });
     expect(screen.getByLabelText(/Email/)).toBeInTheDocument();
   });
 
-  it.fails('o campo da mensagem devia ser alcançável pela etiqueta', () => {
+  it('o campo da mensagem devia ser alcançável pela etiqueta', () => {
     montar(<Contacto />, { caminho: '/contacto' });
     expect(screen.getByLabelText(/Mensagem/)).toBeInTheDocument();
   });
 
-  it.fails('a lista de áreas devia ser alcançável pela etiqueta', () => {
+  it('a lista de áreas devia ser alcançável pela etiqueta', () => {
     montar(<Contacto />, { caminho: '/contacto' });
     expect(screen.getByLabelText(/Área de interesse/)).toBeInTheDocument();
   });

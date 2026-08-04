@@ -1918,12 +1918,12 @@ describe('Parcelas — exportar CSV', () => {
 // PARCELAS — marcar como paga
 // ═════════════════════════════════════════════════════════════════════════════
 describe('Parcelas — marcar como paga', () => {
-  // BUG: Installments.jsx:110-123 — o handleMarkPaid (com confirmação, chamada a
+  // CORRIGIDO (era): Installments.jsx:110-123 — o handleMarkPaid (com confirmação, chamada a
   // installmentsApi.markPaid e recarregamento) continua no ficheiro, mas nenhum
   // botão o chama: o redesign v3 deixou a coluna «Lembrete» no lugar da acção.
   // Neste ecrã já não há forma de marcar uma parcela como paga — a Dra. tem de
   // entrar na ficha do cliente. O estado markingPaid também nunca é lido.
-  it.fails('devia haver forma de marcar uma parcela como paga na listagem', async () => {
+  it('devia haver forma de marcar uma parcela como paga na listagem', async () => {
     await montarParcelas([parcela({ status: 'late' })], { extras: true });
     // dentro da linha da parcela — os filtros lá em cima também dizem «PAGAS»
     expect(within(linhas()[0]).getByRole('button', { name: /pag/i })).toBeInTheDocument();

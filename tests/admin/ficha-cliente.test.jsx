@@ -790,12 +790,12 @@ describe('Parcelas — marcar e desmarcar como paga', () => {
     await waitFor(() => expect(alertar).toHaveBeenCalledWith(expect.stringContaining('parcela bloqueada')));
   });
 
-  // BUG: ClientDetail.jsx:524 — handleMarkPaid existe mas NENHUM botão o chama
+  // CORRIGIDO (era): ClientDetail.jsx:524 — handleMarkPaid existe mas NENHUM botão o chama
   // (a coluna de ações só tem Anexar/Ver/Remover documentos). A única forma de
   // marcar uma parcela como paga é anexar-lhe um PDF de Recibo ou Fatura-Recibo:
   // quem recebeu por transferência e ainda não emitiu o recibo não consegue
   // registar o pagamento nesta tabela.
-  it.fails('devia haver um botão para marcar a parcela como paga', async () => {
+  it('devia haver um botão para marcar a parcela como paga', async () => {
     await abrir({ installments: TRES_PARCELAS });
     expect(within(linhaDaParcela(2)).getByRole('button', { name: /marcar/i })).toBeInTheDocument();
   });
@@ -983,11 +983,11 @@ describe('Parcelas — documentos anexados', () => {
     expect(within(linhaDaParcela(1)).queryByRole('button', { name: /^Ver / })).toBeNull();
   });
 
-  // BUG: ClientDetail.jsx:629 — handleSendRecibo (recibosApi.sendToClient) não
+  // CORRIGIDO (era): ClientDetail.jsx:629 — handleSendRecibo (recibosApi.sendToClient) não
   // tem botão nenhum na ficha. Com o Recibo Verde anexado, não há forma de o
   // enviar ao cliente a partir deste ecrã, apesar de a API existir e de o
   // apiClient a expor (apiClient.js:288).
-  it.fails('devia dar para enviar o recibo anexado ao cliente', async () => {
+  it('devia dar para enviar o recibo anexado ao cliente', async () => {
     comDoc('recibo');
     await abrir({ installments: [parcela(1)] });
     await within(linhaDaParcela(1)).findByRole('button', { name: /^Ver Recibo/ });

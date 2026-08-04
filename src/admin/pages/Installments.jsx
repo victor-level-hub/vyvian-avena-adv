@@ -313,6 +313,24 @@ export default function Installments() {
                             )}
                           </button>
                         )}
+                        {/* Repõe o registo de pagamento: o handleMarkPaid existia mas
+                            ficou sem botão quando esta coluna passou a ser «Lembrete». */}
+                        {i.status !== 'paid' && (
+                          <button
+                            type="button"
+                            className="btn btn-sm"
+                            data-tip="Registar o pagamento com a data de hoje"
+                            style={{
+                              whiteSpace: 'nowrap', lineHeight: 1.25, padding: '6px 12px', fontSize: 11,
+                              marginLeft: 6, background: 'var(--panel)', border: '1px solid var(--edge-2)',
+                              color: 'var(--fg-2)', borderRadius: 999, cursor: 'pointer',
+                            }}
+                            disabled={markingPaid === i.id}
+                            onClick={() => handleMarkPaid(i.id)}
+                          >
+                            {markingPaid === i.id ? 'A registar…' : 'Marcar paga'}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );

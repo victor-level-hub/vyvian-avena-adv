@@ -27,13 +27,19 @@ async function login(request, env) {
   }
 
   const { email, password } = body || {};
-  if (!email || !password) {
+  // Exigir texto: um email que seja objeto ou array ia direto ao .bind(), o D1
+  // lançava e o catch global devolvia 500 com detalhe interno a um anónimo.
+  if (typeof email !== 'string' || typeof password !== 'string' || !email.trim() || !password) {
     return jsonError('Preencha e-mail e palavra-passe.', 400);
   }
+  // Os utilizadores são criados sempre em minúsculas (worker/routes/config.js:130).
+  // Sem normalizar aqui, quem escrevesse "Dra@Exemplo.pt" — o que o teclado do
+  // telemóvel faz sozinho — levava "Credenciais inválidas" com a password certa.
+  const emailNorm = email.trim().toLowerCase();
 
   const user = await env.DB.prepare(
-    'SELECT id, email, password_hash, name, initials, role, cargo, phone, permissions, photo_key, status FROM users WHERE email = ?'
-  ).bind(email).first();
+    'SELECT id, email, password_hash, name, initials, role, cargo, phone, permissions, photo_key, status FROM users WHERE lower(trim(email)) = ?'
+  ).bind(emailNorm).first();
 
   // Mensagem genérica para não revelar se o utilizador existe
   if (!user) {

@@ -1064,28 +1064,45 @@ describe('dispatchOwnerAlert', () => {
     expect(fetchPadrao.chamadas).toHaveLength(2);
   });
 
-  // BUG: worker/lib/owner_alerts.js:64 — `r.ok === undefined ? true : r.ok` trata um
+  // CORRIGIDO (era): worker/lib/owner_alerts.js:64 — `r.ok === undefined ? true : r.ok` trata um
   // envio SALTADO (sendEmail devolve { skipped: true } quando falta a RESEND_API_KEY)
   // como sucesso: fica gravado 'sent' no log e o dedupe cala o alerta o resto do dia.
   // A Dra. nunca recebe nada e o painel diz que foi enviado.
-  it.fails('sem RESEND_API_KEY o envio saltado não é dado como enviado', async () => {
+  it('sem RESEND_API_KEY o envio saltado não é dado como enviado', async () => {
     env.RESEND_API_KEY = '';
     const out = await dispatchOwnerAlert(env, await cfg(), 'vence_hoje', ALERTA);
     expect(out.email).not.toBe('sent');
   });
 
-  it('sem RESEND_API_KEY não há sequer chamada de rede (documenta o estrago)', async () => {
+  it('sem RESEND_API_KEY não há chamada de rede e o log diz «skipped»', async () => {
     env.RESEND_API_KEY = '';
     await dispatchOwnerAlert(env, await cfg(), 'vence_hoje', ALERTA);
     expect(fetchPadrao.chamadas).toHaveLength(0);
-    expect(logs()[0].status).toBe('sent'); // ... e mesmo assim ficou "enviado"
+    expect(logs()[0].status).toBe('skipped');
   });
 
-  // BUG: worker/lib/owner_alerts.js:37 — o id do log é
+  it('o motivo do envio saltado fica registado', async () => {
+    env.RESEND_API_KEY = '';
+    await dispatchOwnerAlert(env, await cfg(), 'vence_hoje', ALERTA);
+    expect(String(logs()[0].error_message || '')).toMatch(/RESEND_API_KEY|saltado/i);
+  });
+
+  it('um envio saltado não bloqueia a tentativa seguinte (o dedupe só conta os enviados)', async () => {
+    env.RESEND_API_KEY = '';
+    await dispatchOwnerAlert(env, await cfg(), 'vence_hoje', ALERTA);
+    // repõe a chave E o mock de rede — não depender do fetch ambiente evita que
+    // este teste passe ou falhe consoante o ficheiro que correu antes
+    env.RESEND_API_KEY = 'chave';
+    vi.stubGlobal('fetch', mockFetch({ json: { id: 'email-2' } }));
+    const r = await dispatchOwnerAlert(env, await cfg(), 'vence_hoje', ALERTA);
+    expect(r.email).toBe('sent');
+  });
+
+  // CORRIGIDO (era): worker/lib/owner_alerts.js:37 — o id do log é
   // `oal_${tipo}_${canal}_${Date.now()}`, com resolução de milissegundo. Dois alertas
   // do mesmo tipo/canal no mesmo milissegundo (caso normal do pagamento_recebido, que
   // usa dedupe=false) colidem na PRIMARY KEY e o segundo registo perde-se.
-  it.fails('dois alertas no mesmo milissegundo geram dois registos', async () => {
+  it('dois alertas no mesmo milissegundo geram dois registos', async () => {
     vi.useFakeTimers({ toFake: ['Date'] });
     vi.setSystemTime(new Date('2026-08-03T10:00:00Z'));
     await dispatchOwnerAlert(env, await cfg(), 'vence_hoje', { ...ALERTA, dedupe: false });

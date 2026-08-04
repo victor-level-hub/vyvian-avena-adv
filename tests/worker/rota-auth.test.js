@@ -278,27 +278,31 @@ describe('POST /api/auth/login — normalização do e-mail', () => {
     expect((await login({ email: EMAIL, password: PASSWORD })).status).toBe(200);
   });
 
-  // BUG: a consulta é `WHERE email = ?` com o valor cru (worker/routes/auth.js:34-36),
+  // CORRIGIDO (era): a consulta é `WHERE email = ?` com o valor cru (worker/routes/auth.js:34-36),
   // mas a criação de utilizadores normaliza sempre para minúsculas
   // (worker/routes/config.js:130). Quem escreva a primeira letra em maiúscula —
   // o que o teclado do telemóvel faz sozinho — leva "Credenciais inválidas."
   // Devia ser `WHERE email = lower(trim(?))` ou normalizar antes do bind.
-  it.fails('devia aceitar o e-mail escrito com maiúsculas', async () => {
+  it('devia aceitar o e-mail escrito com maiúsculas', async () => {
     expect((await login({ email: 'Dra@Exemplo.pt', password: PASSWORD })).status).toBe(200);
   });
 
-  it.fails('devia aceitar o e-mail todo em maiúsculas', async () => {
+  it('devia aceitar o e-mail todo em maiúsculas', async () => {
     expect((await login({ email: EMAIL.toUpperCase(), password: PASSWORD })).status).toBe(200);
   });
 
-  // BUG: mesma origem — o e-mail nunca é aparado. Colar o endereço com um espaço
+  // CORRIGIDO (era): mesma origem — o e-mail nunca é aparado. Colar o endereço com um espaço
   // à frente ou atrás (o autocompletar do telemóvel acrescenta-o) impede a entrada.
-  it.fails('devia aceitar o e-mail com espaços à volta', async () => {
+  it('devia aceitar o e-mail com espaços à volta', async () => {
     expect((await login({ email: `  ${EMAIL}  `, password: PASSWORD })).status).toBe(200);
   });
 
-  it('e-mail com espaço à volta devolve o mesmo 401 genérico (comportamento atual)', async () => {
-    const res = await login({ email: ` ${EMAIL}`, password: PASSWORD });
+  it('e-mail com espaço à frente entra na mesma', async () => {
+    expect((await login({ email: ` ${EMAIL}`, password: PASSWORD })).status).toBe(200);
+  });
+
+  it('um e-mail que não existe continua a dar o 401 genérico', async () => {
+    const res = await login({ email: 'ninguem@exemplo.pt', password: PASSWORD });
     expect(res.status).toBe(401);
     expect((await json(res)).error).toBe('Credenciais inválidas.');
   });
@@ -366,27 +370,32 @@ describe('POST /api/auth/login — corpo do pedido inválido', () => {
     expect(descodificar(token).role).toBe('user');
   });
 
-  it('a password é coagida a texto: 12345 numérico valida o hash de "12345"', async () => {
+  // CORRIGIDO (era): a password numérica era coagida a texto e validava o hash de
+  // "12345". Agora exige-se texto nos dois campos — é o mesmo cuidado que impede o
+  // e-mail não-textual de chegar ao .bind().
+  it('uma password que não é texto é recusada com 400', async () => {
     await env.DB.prepare(`UPDATE users SET password_hash = ?`).bind(await hashPassword('12345', ITER)).run();
-    expect((await login({ email: EMAIL, password: 12345 })).status).toBe(200);
+    expect((await login({ email: EMAIL, password: 12345 })).status).toBe(400);
   });
 
   // BUG (robustez): o e-mail vai direto para o `.bind()` sem validação de tipo
   // (worker/routes/auth.js:36). Um objeto ou um array não é ligável a um
   // parâmetro SQL — o D1 lança, o erro sobe ao catch global do worker/index.js
   // e um anónimo recebe 500 (com detalhe interno) em vez de 400/401.
-  it.fails('devia responder 400/401 a um e-mail que é um objeto, não rebentar', async () => {
+  it('devia responder 400/401 a um e-mail que é um objeto, não rebentar', async () => {
     const res = await login({ email: { $ne: null }, password: PASSWORD });
     expect([400, 401]).toContain(res.status);
   });
 
-  it.fails('devia responder 400/401 a um e-mail que é um array, não rebentar', async () => {
+  it('devia responder 400/401 a um e-mail que é um array, não rebentar', async () => {
     const res = await login({ email: [EMAIL], password: PASSWORD });
     expect([400, 401]).toContain(res.status);
   });
 
-  it('confirma que o e-mail não-textual rebenta mesmo (documenta o defeito acima)', async () => {
-    await expect(login({ email: { $ne: null }, password: PASSWORD })).rejects.toThrow();
+  it('o e-mail não-textual é recusado antes de chegar à base de dados', async () => {
+    const res = await login({ email: { $ne: null }, password: PASSWORD });
+    expect(res.status).toBe(400);
+    expect(env.DB.queries.some((q) => /FROM users/i.test(q.sql))).toBe(false);
   });
 
   // O registo vem da própria BD, logo não é alcançável por um anónimo; fica

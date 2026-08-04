@@ -507,12 +507,12 @@ describe('GET /api/stats/engagement', () => {
     expect(f.interactions).toBe(10);
   });
 
-  // BUG: em by_format (worker/routes/stats.js:284-297) o numerador da taxa soma as
+  // CORRIGIDO (era): em by_format (worker/routes/stats.js:284-297) o numerador da taxa soma as
   // interações de TODAS as publicações do formato, mas o denominador só soma o
   // alcance das que já têm insights. Basta uma peça sem insights para a taxa do
   // formato ficar inflacionada — aqui dá 5% quando a leitura honesta é 2%. A taxa
   // por publicação (linha 274) está bem protegida; esta não.
-  it.fails('a taxa por formato só conta as interações das publicações com alcance', async () => {
+  it('a taxa por formato só conta as interações das publicações com alcance', async () => {
     semearPost('i1', { likes: 4 });
     semearPost('i2', { likes: 6 });
     semearInsights('i1', { reach: 200, interacoes: 4 });

@@ -34,7 +34,10 @@ async function registar(env, alertType, channel, status, preview, errorMsg) {
     `INSERT INTO owner_alert_log (id, alert_type, channel, status, sent_date, message_preview, error_message)
      VALUES (?, ?, ?, ?, ?, ?, ?)`
   ).bind(
-    `oal_${alertType}_${channel}_${Date.now()}`,
+    // O Date.now() tem resolução de milissegundo: dois alertas do mesmo tipo e
+    // canal no mesmo milissegundo (caso normal do pagamento_recebido, que corre
+    // com dedupe desligado) colidiam na chave primária e o segundo perdia-se.
+    `oal_${alertType}_${channel}_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`,
     alertType, channel, status, hoje(), (preview || "").slice(0, 200), errorMsg || null
   ).run();
 }
@@ -61,9 +64,15 @@ export async function dispatchOwnerAlert(env, config, alertType, { subject, text
       const r = canal === "email"
         ? await sendEmail(env, { to: destino, subject, text })
         : await sendWhatsApp(env, { phone: destino, message: `${subject}\n\n${text}` });
-      const ok = r && (r.ok === undefined ? true : r.ok);
-      await registar(env, alertType, canal, ok ? "sent" : "error", text, ok ? null : JSON.stringify(r).slice(0, 300));
-      resultados[canal] = ok ? "sent" : "error";
+      // Um envio SALTADO (sem RESEND_API_KEY, sem destino) não é sucesso. Antes
+      // ficava gravado como "sent" e o dedupe calava o alerta o resto do dia: a
+      // Dra. não recebia nada e o painel garantia que tinha sido enviado.
+      const estado = r && r.skipped ? "skipped" : (r && (r.ok === undefined ? true : r.ok)) ? "sent" : "error";
+      const detalhe = estado === "sent" ? null
+        : estado === "skipped" ? String(r.reason || "envio saltado").slice(0, 300)
+        : JSON.stringify(r).slice(0, 300);
+      await registar(env, alertType, canal, estado, text, detalhe);
+      resultados[canal] = estado;
     } catch (e) {
       await registar(env, alertType, canal, "error", text, String(e).slice(0, 300));
       resultados[canal] = "error";

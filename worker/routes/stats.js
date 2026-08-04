@@ -282,10 +282,22 @@ async function engagementStats(env, rangeKey, days) {
   // Desempenho por formato — responde a "o que devo publicar mais?".
   const byFormatMap = {};
   for (const p of posts) {
-    const f = (byFormatMap[p.format] ||= { format: p.format, posts: 0, interactions: 0, reach: 0, has_reach: false });
+    const f = (byFormatMap[p.format] ||= {
+      format: p.format, posts: 0, interactions: 0,
+      reach: 0, has_reach: false,
+      // Numerador da taxa: só as interações das publicações que TAMBÉM têm alcance
+      // recolhido. Antes o numerador somava tudo e o denominador só as que tinham
+      // insights, o que inflacionava a taxa (5% onde a leitura honesta é 2%) — e é
+      // com este número que se decidem as campanhas.
+      interactions_com_reach: 0,
+    });
     f.posts++;
     f.interactions += p.interactions;
-    if (typeof p.reach === 'number') { f.reach += p.reach; f.has_reach = true; }
+    if (typeof p.reach === 'number') {
+      f.reach += p.reach;
+      f.interactions_com_reach += p.interactions;
+      f.has_reach = true;
+    }
   }
   const by_format = Object.values(byFormatMap).map((f) => ({
     format: f.format,
@@ -293,7 +305,7 @@ async function engagementStats(env, rangeKey, days) {
     interactions: f.interactions,
     avg_interactions: Math.round(f.interactions / f.posts),
     reach: f.has_reach ? f.reach : null,
-    rate: f.has_reach && f.reach ? (f.interactions / f.reach) * 100 : null,
+    rate: f.has_reach && f.reach ? (f.interactions_com_reach / f.reach) * 100 : null,
   })).sort((a, b) => b.avg_interactions - a.avg_interactions);
 
   // Melhor dia da semana por interações (das publicações que temos).

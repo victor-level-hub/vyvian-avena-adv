@@ -1845,6 +1845,33 @@ export default function ClientDetail() {
                     <td><StatusBadge installment={i} onUnmark={handleUnmarkPaid} /></td>
                     <td>
                       <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                        {/* Registar o pagamento sem depender de haver PDF do recibo:
+                            quem recebeu por transferência e ainda não emitiu na AT
+                            não tinha, até aqui, forma nenhuma de o registar. */}
+                        {i.status !== 'paid' && (
+                          <button
+                            type="button"
+                            className="adm-btn"
+                            data-tip="Registar o pagamento com a data de hoje (sem anexar documento)"
+                            style={{ fontSize: '0.7rem', padding: '0.32rem 0.7rem', whiteSpace: 'nowrap' }}
+                            disabled={markingPaid === i.id}
+                            onClick={() => handleMarkPaid(i.id)}
+                          >
+                            {markingPaid === i.id ? 'A registar…' : 'Marcar paga'}
+                          </button>
+                        )}
+                        {reciboInfo[i.id]?.recibo?.exists && (
+                          <button
+                            type="button"
+                            className="adm-btn"
+                            data-tip="Enviar o recibo anexado ao e-mail do cliente"
+                            style={{ fontSize: '0.7rem', padding: '0.32rem 0.7rem', whiteSpace: 'nowrap' }}
+                            disabled={sendBusy === i.id}
+                            onClick={() => handleSendRecibo(i.id)}
+                          >
+                            {sendBusy === i.id ? 'A enviar…' : 'Enviar ao cliente'}
+                          </button>
+                        )}
                         {DOC_TIPOS.map(([tipo, label]) => {
                           const doc = reciboInfo[i.id]?.[tipo];
                           const busy = reciboBusy === i.id;

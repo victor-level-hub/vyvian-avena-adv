@@ -466,14 +466,14 @@ describe('contexto que os prompts têm de levar', () => {
     const f = usarIA(geminiJson(ARTIGO_IA));
     await insights('POST', '/api/insights/articles', { body: { topic_id: t.id } });
     const p = promptDe(f);
-    expect(p).toContain('ASSUNTO: IRN muda prazos');
-    expect(p).toContain('CONTEXTO: O IRN publicou nova instrução.');
+    expect(p).toMatch(/ASSUNTO:\s*<<<\s*IRN muda prazos/);
+    expect(p).toMatch(/CONTEXTO:\s*<<<\s*O IRN publicou nova instrução\./);
     expect(p).toContain('- IRN: Nota — https://irn.justica.gov.pt/x');
   });
 
   it('num tema livre o contexto manda a IA procurar as fontes oficiais', async () => {
     const p = promptDe(await cenarios['geração de artigo']());
-    expect(p).toContain('CONTEXTO: Tema proposto diretamente pela Dra. Vyvian.');
+    expect(p).toMatch(/CONTEXTO:\s*<<<\s*Tema proposto diretamente pela Dra\. Vyvian\./);
     expect(p).toContain('(procura tu as fontes oficiais)');
   });
 
@@ -521,12 +521,12 @@ describe('contexto que os prompts têm de levar', () => {
 
   it('a ficha da fonte leva o URL que a Dra. colou', async () => {
     const p = promptDe(await cenarios['ficha de uma fonte nova']());
-    expect(p).toContain('acompanhar esta fonte de conteúdo jurídico/imigração: https://fonte-nova-de-teste.pt');
+    expect(p).toMatch(/acompanhar esta fonte de conteúdo jurídico\/imigração:\s*<<<\s*https:\/\/fonte-nova-de-teste\.pt/);
   });
 
   it('a análise do ticket leva título, urgência e descrição', async () => {
     const p = promptDe(await cenarios['análise do ticket']());
-    expect(p).toContain('Título: O botão Guardar não guarda');
+    expect(p).toMatch(/Título:\s*<<<\s*O botão Guardar não guarda/);
     expect(p).toContain('Urgência: alta');
     expect(p).toContain('Ao clicar em Guardar no cadastro nada acontece.');
   });
@@ -535,7 +535,7 @@ describe('contexto que os prompts têm de levar', () => {
     await semearTicket({ descricao: '' });
     const f = usarIA(geminiJson(ANALISE_IA));
     await apoio('POST', `/api/apoio/tickets/${TICKET}/analisar`);
-    expect(promptDe(f)).toContain('Descrição:\n(sem descrição)');
+    expect(promptDe(f)).toMatch(/Descrição:\s*<<<\s*\(sem descrição\)/);
   });
 });
 
@@ -695,7 +695,8 @@ describe('injeção — o texto do utilizador não pode mandar no modelo', () =>
     const f = usarIA(geminiJson(ANALISE_IA));
     await apoio('POST', `/api/apoio/tickets/${TICKET}/analisar`);
     const p = promptDe(f);
-    expect(p).toContain(`Título: ${HOSTIL}`);
+    expect(p).toContain(HOSTIL);
+    expect(p).toMatch(/Título:\s*<<</);
     expect(p).toContain('"complexidade": "baixa" | "media" | "alta"');
     expect(p).toContain('em português europeu');
   });
@@ -756,7 +757,8 @@ describe('injeção — o texto do utilizador não pode mandar no modelo', () =>
     const f = usarIA(geminiJson(ARTIGO_IA));
     await insights('POST', '/api/insights/articles', { body: { tema: HOSTIL } });
     const p = promptDe(f);
-    expect(p).toContain(`ASSUNTO: ${HOSTIL}`);
+    expect(p).toContain(HOSTIL);
+    expect(p).toMatch(/ASSUNTO:\s*<<</);
     expect(p.indexOf('"palavras_chave"')).toBeGreaterThan(p.indexOf(HOSTIL));
     expect(p).toContain('PADRÃO EDITORIAL DO BLOGUE');
   });
@@ -774,7 +776,8 @@ describe('injeção — o texto do utilizador não pode mandar no modelo', () =>
     const f = usarIA(geminiJson(ARTIGO_IA));
     await insights('POST', '/api/insights/articles', { body: { topic_id: t.id } });
     const p = promptDe(f);
-    expect(p).toContain(`ASSUNTO: ${HOSTIL}`);
+    expect(p).toContain(HOSTIL);
+    expect(p).toMatch(/ASSUNTO:\s*<<</);
     expect(p).toContain('Responde EXCLUSIVAMENTE com JSON válido:');
   });
 
@@ -903,48 +906,48 @@ describe('injeção — o texto do utilizador não pode mandar no modelo', () =>
 
 // ═══════════════════════════════════════════════════ 7) isolamento (defeitos)
 
-describe('isolamento do conteúdo do utilizador (defeitos por corrigir)', () => {
-  // BUG: worker/routes/apoio.js:238 — o título do ticket é interpolado logo a
+describe('isolamento do conteúdo do utilizador', () => {
+  // CORRIGIDO (era): worker/routes/apoio.js:238 — o título do ticket é interpolado logo a
   // seguir a «Título: », sem fence, tag ou marcador que diga ao modelo onde
   // acaba a instrução e onde começa texto de terceiros.
-  it.fails('o título do ticket vem isolado das instruções por um delimitador', async () => {
+  it('o título do ticket vem isolado das instruções por um delimitador', async () => {
     await semearTicket({ titulo: HOSTIL });
     const f = usarIA(geminiJson(ANALISE_IA));
     await apoio('POST', `/api/apoio/tickets/${TICKET}/analisar`);
     expect(isoladoDasInstrucoes(promptDe(f), HOSTIL)).toBe(true);
   });
 
-  // BUG: worker/routes/apoio.js:241 — a descrição do ticket é a ÚLTIMA coisa do
+  // CORRIGIDO (era): worker/routes/apoio.js:241 — a descrição do ticket é a ÚLTIMA coisa do
   // prompt. Não há delimitador antes nem instrução depois a re-ancorar o
   // formato: a última palavra que o modelo lê é escrita por quem abriu o ticket.
-  it.fails('depois da descrição do ticket ainda vem instrução do sistema', async () => {
+  it('depois da descrição do ticket ainda vem instrução do sistema', async () => {
     await semearTicket({ descricao: HOSTIL });
     const f = usarIA(geminiJson(ANALISE_IA));
     await apoio('POST', `/api/apoio/tickets/${TICKET}/analisar`);
     expect(promptDe(f).trimEnd().endsWith(HOSTIL)).toBe(false);
   });
 
-  // BUG: worker/routes/insights.js:411 — o tema escrito pela Dra. (ou o título
+  // CORRIGIDO (era): worker/routes/insights.js:411 — o tema escrito pela Dra. (ou o título
   // da sugestão, que veio de um modelo com pesquisa web) entra a seguir a
   // «ASSUNTO: » sem qualquer fronteira.
-  it.fails('o tema do artigo vem isolado das instruções por um delimitador', async () => {
+  it('o tema do artigo vem isolado das instruções por um delimitador', async () => {
     const f = usarIA(geminiJson(ARTIGO_IA));
     await insights('POST', '/api/insights/articles', { body: { tema: HOSTIL } });
     expect(isoladoDasInstrucoes(promptDe(f), HOSTIL)).toBe(true);
   });
 
-  // BUG: worker/routes/insights.js:918-919 — as correções que a Dra. escreve
+  // CORRIGIDO (era): worker/routes/insights.js:918-919 — as correções que a Dra. escreve
   // entram no prompt sem delimitador; o artigo inteiro (linha 916) também.
-  it.fails('as instruções de correção vêm isoladas por um delimitador', async () => {
+  it('as instruções de correção vêm isoladas por um delimitador', async () => {
     const a = semearArtigo();
     const f = usarIA(geminiJson(CORRECAO_IA));
     await insights('POST', `/api/insights/articles/${a.id}/corrigir`, { body: { instrucoes: HOSTIL } });
     expect(isoladoDasInstrucoes(promptDe(f), HOSTIL)).toBe(true);
   });
 
-  // BUG: worker/routes/insights.js:874 — o trecho selecionado no editor é
+  // CORRIGIDO (era): worker/routes/insights.js:874 — o trecho selecionado no editor é
   // Markdown arbitrário (pode trazer fences) e entra sem fronteira própria.
-  it.fails('o trecho selecionado vem isolado por um delimitador', async () => {
+  it('o trecho selecionado vem isolado por um delimitador', async () => {
     const a = semearArtigo();
     const f = usarIA(geminiJson({ texto: 'ok', notas: '' }));
     await insights('POST', `/api/insights/articles/${a.id}/corrigir`, {
@@ -953,21 +956,31 @@ describe('isolamento do conteúdo do utilizador (defeitos por corrigir)', () => 
     expect(isoladoDasInstrucoes(promptDe(f), HOSTIL)).toBe(true);
   });
 
-  // BUG: worker/routes/insights.js:515-516 — o corpo do artigo em avaliação
+  // CORRIGIDO (era): worker/routes/insights.js:515-516 — o corpo do artigo em avaliação
   // entra a seguir a «CORPO (Markdown):» sem fence, apesar de ser Markdown
   // escrito por um modelo e depois editado à mão.
-  it.fails('o corpo do artigo em avaliação vem isolado por um delimitador', async () => {
+  it('o corpo do artigo em avaliação vem isolado por um delimitador', async () => {
     const a = semearArtigo({ markdown: HOSTIL });
     const f = usarIA(geminiJson(AVALIACAO_IA));
     await insights('POST', `/api/insights/articles/${a.id}/avaliar`);
     expect(isoladoDasInstrucoes(promptDe(f), HOSTIL)).toBe(true);
   });
 
-  // BUG: worker/routes/insights.js:1337 — idem para o URL da fonte.
-  it.fails('o URL da fonte vem isolado por um delimitador', async () => {
+  // CORRIGIDO (era): worker/routes/insights.js:1337 — idem para o URL da fonte.
+  // CORRIGIDO (era): o URL entrava no prompt sem fronteira. Agora ha duas defesas:
+  // um "URL" com espacos e recusado a entrada (nem chega a haver chamada a IA), e
+  // o URL legitimo vai entre delimitadores.
+  it('um URL com texto atrás é recusado antes de chegar ao prompt', async () => {
     const f = usarIA(geminiJson(FONTE_IA));
-    await insights('POST', '/api/insights/sources', { body: { url: `https://x.pt ${HOSTIL}` } });
-    expect(isoladoDasInstrucoes(promptDe(f), HOSTIL)).toBe(true);
+    const res = await insights('POST', '/api/insights/sources', { body: { url: `https://x.pt ${HOSTIL}` } });
+    expect(res.status).toBe(400);
+    expect(f.chamadas).toHaveLength(0);
+  });
+
+  it('o URL legítimo vem isolado por um delimitador', async () => {
+    const f = usarIA(geminiJson(FONTE_IA));
+    await insights('POST', '/api/insights/sources', { body: { url: 'https://dre.pt/legislacao' } });
+    expect(isoladoDasInstrucoes(promptDe(f), 'https://dre.pt/legislacao')).toBe(true);
   });
 });
 

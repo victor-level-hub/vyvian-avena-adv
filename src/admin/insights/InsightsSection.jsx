@@ -416,7 +416,12 @@ function BancoImagens({ onAbrirArtigo }) {
   const [imagens, setImagens] = useState(null);
   const [ampliada, setAmpliada] = useState(null); // item aberto em grande
 
-  const carregar = () => api.imageBank().then((d) => setImagens(d.images || [])).catch((e) => admToast(e.message, { kind: 'error' }));
+  // O .catch() so avisava e deixava o estado a null, por isso o ecra ficava
+  // ETERNAMENTE no esqueleto de carregamento quando a API falhava. Passa a lista
+  // vazia (e o aviso mantem-se) — e o BancoPicker do estudio ja fazia assim.
+  const carregar = () => api.imageBank()
+    .then((d) => setImagens(d.images || []))
+    .catch((e) => { admToast(e.message, { kind: 'error' }); setImagens([]); });
   useEffect(() => { carregar(); }, []);
 
   const remover = async (item) => {
@@ -572,7 +577,10 @@ function Fontes() {
   const [novaId, setNovaId] = useState(null);
   const [fire, setFire] = useState(0);
 
-  const carregar = () => api.sources().then((d) => setFontes(d.sources)).catch((e) => admToast(e.message, { kind: 'error' }));
+  // mesmo defeito: sem isto o diretorio de fontes nunca saia do esqueleto
+  const carregar = () => api.sources()
+    .then((d) => setFontes(d.sources || []))
+    .catch((e) => { admToast(e.message, { kind: 'error' }); setFontes([]); });
   useEffect(() => { carregar(); }, []);
 
   const adicionar = async (e) => {

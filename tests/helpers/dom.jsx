@@ -9,13 +9,19 @@
 // useNavigate/Link e rebenta sem ele.
 import React from 'react';
 import { afterEach, expect, vi } from 'vitest';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, render, configure } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import * as matchers from '@testing-library/jest-dom/matchers';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 
 expect.extend(matchers);
 afterEach(() => { cleanup(); });
+
+// O `findBy*`/`waitFor` esgota ao fim de 1 s por omissão. Com 36 ficheiros a correr
+// em paralelo, uma máquina ocupada faz esse segundo expirar em testes que estão
+// perfeitamente bons — e um teste intermitente estraga a confiança na suíte toda.
+// 5 s dá folga sem esconder um ecrã que não chega mesmo a atualizar.
+configure({ asyncUtilTimeout: 5000 });
 
 // Renderiza dentro de um MemoryRouter. `rota` e `caminho` servem para ecrãs que
 // leem parâmetros do URL (ex.: /admin/clientes/:id).

@@ -229,10 +229,10 @@ describe('POST /api/apoio/tickets (criação)', () => {
     expect((await chamar(env, 'POST', '/api/apoio/tickets', { body: '123', headers: { 'Content-Type': 'application/json' } })).status).toBe(400);
   });
 
-  // BUG: request.json() devolve null para o corpo literal "null"; o .catch() não
+  // CORRIGIDO (era): request.json() devolve null para o corpo literal "null"; o .catch() não
   // dispara e `body.titulo` rebenta com TypeError (500 no worker) em vez de 400.
   // worker/routes/apoio.js:137-138
-  it.fails('devolve 400 (e não uma exceção) para o corpo literal null', async () => {
+  it('devolve 400 (e não uma exceção) para o corpo literal null', async () => {
     const r = await chamar(env, 'POST', '/api/apoio/tickets', { body: 'null', headers: { 'Content-Type': 'application/json' } });
     expect(r.status).toBe(400);
   });
@@ -831,24 +831,24 @@ describe('PATCH /api/apoio/tickets/:id (edição)', () => {
     expect((await chamar(env, 'PATCH', `/api/apoio/tickets/${T2}`, { body: { titulo: 'x' } })).status).toBe(404);
   });
 
-  // BUG: `titulo` é NOT NULL na tabela, mas o PATCH converte "" em NULL sem
+  // CORRIGIDO (era): `titulo` é NOT NULL na tabela, mas o PATCH converte "" em NULL sem
   // validar — o UPDATE rebenta com NOT NULL constraint (500) em vez de 400.
   // worker/routes/apoio.js:201
-  it.fails('recusa apagar o título com string vazia', async () => {
+  it('recusa apagar o título com string vazia', async () => {
     const r = await chamar(env, 'PATCH', `/api/apoio/tickets/${T1}`, { body: { titulo: '' } });
     expect(r.status).toBe(400);
   });
 
-  // BUG: mesmo problema em `criado_por` (NOT NULL).
+  // CORRIGIDO (era): mesmo problema em `criado_por` (NOT NULL).
   // worker/routes/apoio.js:201
-  it.fails('recusa apagar o criado_por com string vazia', async () => {
+  it('recusa apagar o criado_por com string vazia', async () => {
     const r = await chamar(env, 'PATCH', `/api/apoio/tickets/${T1}`, { body: { criado_por: '' } });
     expect(r.status).toBe(400);
   });
 
-  // BUG: corpo literal "null" faz `c in body` rebentar com TypeError (500).
+  // CORRIGIDO (era): corpo literal "null" faz `c in body` rebentar com TypeError (500).
   // worker/routes/apoio.js:180-185
-  it.fails('trata o corpo literal null sem rebentar', async () => {
+  it('trata o corpo literal null sem rebentar', async () => {
     const r = await chamar(env, 'PATCH', `/api/apoio/tickets/${T1}`, { body: 'null', headers: { 'Content-Type': 'application/json' } });
     expect(r.status).toBe(200);
   });
@@ -1151,18 +1151,18 @@ describe('POST /api/apoio/tickets/:id/analisar', () => {
     expect((await json(r)).ticket.status).toBe('aberto');
   });
 
-  // BUG: se o modelo devolver JSON válido que não é um objeto (ex.: uma string
+  // CORRIGIDO (era): se o modelo devolver JSON válido que não é um objeto (ex.: uma string
   // ou null), `out.plano = ...` rebenta com TypeError em vez de 502.
   // worker/routes/apoio.js:254-258
-  it.fails('devolve 502 quando a IA devolve uma string JSON em vez de um objeto', async () => {
+  it('devolve 502 quando a IA devolve uma string JSON em vez de um objeto', async () => {
     vi.stubGlobal('fetch', mockFetch({ json: { candidates: [{ content: { parts: [{ text: '"não sei"' }] } }] } }));
     const r = await chamar(env, 'POST', `/api/apoio/tickets/${T1}/analisar`);
     expect(r.status).toBe(502);
   });
 
-  // BUG: idem para o literal null.
+  // CORRIGIDO (era): idem para o literal null.
   // worker/routes/apoio.js:254-258
-  it.fails('devolve 502 quando a IA devolve null', async () => {
+  it('devolve 502 quando a IA devolve null', async () => {
     vi.stubGlobal('fetch', mockFetch({ json: { candidates: [{ content: { parts: [{ text: 'null' }] } }] } }));
     const r = await chamar(env, 'POST', `/api/apoio/tickets/${T1}/analisar`);
     expect(r.status).toBe(502);
@@ -1522,7 +1522,7 @@ describe('POST /api/apoio/tickets/:id/anexos (upload)', () => {
 
   it('a chave R2 fica sob apoio/<ticket>/', async () => {
     const r = await chamar(env, 'POST', `/api/apoio/tickets/${T1}/anexos?nome=a.png`, { binario: bytes(4) });
-    expect((await json(r)).anexo.r2_key).toMatch(new RegExp(`^apoio/${T1}/\\d+-a\\.png$`));
+    expect((await json(r)).anexo.r2_key).toMatch(new RegExp(`^apoio/${T1}/\\d+-[0-9a-f]{8}-a\\.png$`));
   });
 
   it('usa application/octet-stream quando não há Content-Type útil', async () => {
@@ -1629,7 +1629,7 @@ describe('POST /api/apoio/tickets/:id/anexos (upload)', () => {
   it('neutraliza travessias de diretório na chave R2', async () => {
     const r = await chamar(env, 'POST', `/api/apoio/tickets/${T1}/anexos?nome=${encodeURIComponent('../../etc/passwd')}`, { binario: bytes(4) });
     const { anexo } = await json(r);
-    expect(anexo.r2_key).toMatch(new RegExp(`^apoio/${T1}/\\d+-\\.\\._\\.\\._etc_passwd$`));
+    expect(anexo.r2_key).toMatch(new RegExp(`^apoio/${T1}/\\d+-[0-9a-f]{8}-\\.\\._\\.\\._etc_passwd$`));
     expect(anexo.r2_key).not.toContain('/etc/');
   });
 
@@ -1644,7 +1644,7 @@ describe('POST /api/apoio/tickets/:id/anexos (upload)', () => {
     const r = await chamar(env, 'POST', `/api/apoio/tickets/${T1}/anexos?nome=${nome}`, { binario: bytes(4) });
     const { anexo } = await json(r);
     expect(anexo.nome).toHaveLength(204);
-    expect(anexo.r2_key.split('/').pop().split('-').slice(1).join('-')).toHaveLength(80);
+    expect(anexo.r2_key.split('/').pop().split('-').slice(2).join('-')).toHaveLength(80);
   });
 
   it('mantém pontos, hífens e underscores no nome sanitizado', async () => {
@@ -1673,20 +1673,20 @@ describe('POST /api/apoio/tickets/:id/anexos (upload)', () => {
     expect(env.DB.conta('ticket_anexos')).toBe(0);
   });
 
-  // BUG: decodeURIComponent sem try/catch — um `nome` com uma sequência de
+  // CORRIGIDO (era): decodeURIComponent sem try/catch — um `nome` com uma sequência de
   // percentagem inválida (ex.: 100%25.pdf mal codificado, «%zz») rebenta com
   // URIError e devolve 500 em vez de 400.
   // worker/routes/apoio.js:368
-  it.fails('não rebenta com um nome de ficheiro com percentagem inválida', async () => {
+  it('não rebenta com um nome de ficheiro com percentagem inválida', async () => {
     const r = await chamar(env, 'POST', `/api/apoio/tickets/${T1}/anexos?nome=100%zz.pdf`, { binario: bytes(4) });
     expect(r.status).toBe(201);
   });
 
-  // BUG: a chave R2 é `Date.now()-nome`; dois uploads do mesmo nome no mesmo
+  // CORRIGIDO (era): a chave R2 é `Date.now()-nome`; dois uploads do mesmo nome no mesmo
   // milissegundo geram a mesma chave, o segundo sobrepõe o primeiro no R2 e as
   // duas linhas passam a apontar para o mesmo objeto (apagar uma apaga as duas).
   // worker/routes/apoio.js:375
-  it.fails('gera chaves R2 distintas para dois uploads no mesmo milissegundo', async () => {
+  it('gera chaves R2 distintas para dois uploads no mesmo milissegundo', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-03T10:00:00Z'));
     const a = (await json(await chamar(env, 'POST', `/api/apoio/tickets/${T1}/anexos?nome=p.png`, { binario: bytes(4, 1) }))).anexo;

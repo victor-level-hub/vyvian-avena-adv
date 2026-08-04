@@ -801,12 +801,12 @@ describe('Banco de Imagens', () => {
     expect(await screen.findByText('502 no banco')).toBeInTheDocument();
   });
 
-  // BUG: InsightsSection.jsx:419 — quando api.imageBank() falha, o catch só faz
+  // CORRIGIDO (era): InsightsSection.jsx:419 — quando api.imageBank() falha, o catch só faz
   // toast e deixa `imagens` a null: o ecrã fica preso no esqueleto de carregamento
   // para sempre. O BancoPicker do estúdio (ArticleStudio.jsx:1216) trata o mesmo
   // caso com setItens([]) — aqui devia cair no estado vazio em vez de deixar a
   // Dra. a olhar para um carregamento eterno depois de o toast desaparecer.
-  it.fails('falha a carregar o banco devia sair do estado de carregamento', async () => {
+  it('falha a carregar o banco devia sair do estado de carregamento', async () => {
     api.imageBank.mockRejectedValue(new Error('502 no banco'));
     const { utilizador } = renderizar(<Redes />);
     await irParaImagens(utilizador);
@@ -937,10 +937,10 @@ describe('Fontes — listagem', () => {
     expect(await screen.findByText('503 no diretório')).toBeInTheDocument();
   });
 
-  // BUG: InsightsSection.jsx:575 — igual ao Banco de Imagens: o catch só faz
+  // CORRIGIDO (era): InsightsSection.jsx:575 — igual ao Banco de Imagens: o catch só faz
   // toast e deixa `fontes` a null, por isso o diretório fica preso no esqueleto
   // de carregamento e a Dra. nunca vê a lista nem um estado vazio honesto.
-  it.fails('falha a carregar as fontes devia sair do estado de carregamento', async () => {
+  it('falha a carregar as fontes devia sair do estado de carregamento', async () => {
     api.sources.mockRejectedValue(new Error('503 no diretório'));
     const { utilizador } = renderizar(<Redes />);
     await irParaFontes(utilizador);

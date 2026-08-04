@@ -107,7 +107,8 @@ export async function handleApoio(request, env, path, session) {
     }
     if (method === "PATCH") {
       // guarda a transcrição de um anexo de áudio
-      const body = await request.json().catch(() => ({}));
+      // corpo literal "null": o request.json() devolve null, o .catch() nao dispara
+      const body = (await request.json().catch(() => ({}))) || {};
       if (typeof body.transcricao !== "string") return jsonError("Campo transcricao em falta.", 400);
       await env.DB.prepare(`UPDATE ticket_anexos SET transcricao = ? WHERE id = ?`)
         .bind(body.transcricao, anexo.id).run();
@@ -134,7 +135,8 @@ export async function handleApoio(request, env, path, session) {
       return jsonResponse({ tickets: results || [] });
     }
     if (method === "POST") {
-      const body = await request.json().catch(() => ({}));
+      // corpo literal "null": o request.json() devolve null, o .catch() nao dispara
+      const body = (await request.json().catch(() => ({}))) || {};
       if (!body.titulo || !String(body.titulo).trim()) return jsonError("Título obrigatório.", 400);
       const id = await novoId(env);
       const abrir = body.status === "aberto";
@@ -177,7 +179,8 @@ export async function handleApoio(request, env, path, session) {
 
   // edição
   if (!acao && method === "PATCH") {
-    const body = await request.json().catch(() => ({}));
+    // corpo literal "null": o request.json() devolve null, o .catch() nao dispara
+    const body = (await request.json().catch(() => ({}))) || {};
     const sets = [];
     const binds = [];
     const mudancas = [];
@@ -198,6 +201,11 @@ export async function handleApoio(request, env, path, session) {
         mudancas.push(c);
       }
       sets.push(`${c} = ?`);
+      // titulo e criado_por sao NOT NULL: converter "" em NULL fazia o UPDATE
+      // rebentar com violacao de restricao (500) em vez de um 400 explicavel.
+      if ((c === "titulo" || c === "criado_por") && String(v ?? "").trim() === "") {
+        return jsonError(`O campo ${c === "titulo" ? "titulo" : "criado por"} nao pode ficar vazio.`, 400);
+      }
       binds.push(v === "" ? null : v);
     }
     if (!sets.length) return jsonResponse({ ok: true, ticket });
@@ -253,6 +261,11 @@ ${ticket.descricao || "(sem descrição)"}`;
     let out = null;
     try { out = JSON.parse(raw.replace(/^```(?:json)?\s*/i, "").replace(/```$/, "").trim()); }
     catch { return jsonError("Resposta da IA não pôde ser interpretada.", 502); }
+    // JSON valido que nao e objeto (string, numero, null) fazia o `out.plano = ...`
+    // rebentar com TypeError em vez de devolver 502.
+    if (!out || typeof out !== "object" || Array.isArray(out)) {
+      return jsonError("Resposta da IA não pôde ser interpretada.", 502);
+    }
     // o modelo às vezes devolve o plano como array de passos — normalizar para texto
     const texto = (v) => v == null ? null : Array.isArray(v) ? v.map(String).join("\n") : typeof v === "object" ? JSON.stringify(v) : String(v);
     out.plano = texto(out.plano);
@@ -365,14 +378,20 @@ ${ticket.descricao || "(sem descrição)"}`;
     const url = new URL(request.url);
     const tipo = url.searchParams.get("tipo") || "anexo";
     if (!TIPOS_ANEXO.includes(tipo)) return jsonError("Tipo de anexo inválido.", 400);
-    const nome = decodeURIComponent(url.searchParams.get("nome") || "") ||
+    // decodeURIComponent atira URIError com uma sequência de percentagem inválida
+    // (ex.: "%zz"): sem guarda, um nome de ficheiro estranho dava 500.
+    let nomeCru = url.searchParams.get("nome") || "";
+    try { nomeCru = decodeURIComponent(nomeCru); } catch { /* fica o valor cru */ }
+    const nome = nomeCru ||
       (tipo === "audio" ? "gravacao.webm" : tipo.startsWith("print") ? "print.png" : "anexo");
     const ct = request.headers.get("Content-Type") || "application/octet-stream";
     const buf = await request.arrayBuffer();
     if (!buf.byteLength) return jsonError("Ficheiro vazio.", 400);
     if (buf.byteLength > MAX_ANEXO) return jsonError("Ficheiro demasiado grande (máx. 20 MB).", 413);
     const seguro = nome.replace(/[^\w.\-]+/g, "_").slice(0, 80);
-    const r2key = `apoio/${id}/${Date.now()}-${seguro}`;
+    // sufixo aleatório: dois uploads do mesmo nome no mesmo milissegundo geravam a
+    // mesma chave e o segundo sobrepunha o primeiro no R2 (apagar um apagava os dois).
+    const r2key = `apoio/${id}/${Date.now()}-${crypto.randomUUID().slice(0, 8)}-${seguro}`;
     await env.RECIBOS.put(r2key, buf, { httpMetadata: { contentType: ct } });
     const res = await env.DB.prepare(
       `INSERT INTO ticket_anexos (ticket_id, tipo, nome, content_type, size, r2_key) VALUES (?, ?, ?, ?, ?, ?) RETURNING *`

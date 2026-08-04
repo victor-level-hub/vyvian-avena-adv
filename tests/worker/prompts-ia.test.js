@@ -1414,11 +1414,14 @@ describe('robustez — respostas estranhas do modelo', () => {
     expect(env.DB.linha('SELECT plano_ia FROM tickets WHERE id = ?', TICKET).plano_ia).toBe(null);
   });
 
-  it('uma lista em vez de objeto na análise grava tudo a NULL, sem 500', async () => {
+  // CORRIGIDO (era): uma lista era tratada como objeto e gravava tudo a NULL em
+  // silêncio, como se a análise tivesse corrido. Agora é recusada como resposta
+  // ilegível — 502 — e o ticket fica intacto.
+  it('uma lista em vez de objeto na análise devolve 502 e não toca no ticket', async () => {
     await semearTicket();
     usarIA(geminiJson(['baixa']));
     const res = await apoio('POST', `/api/apoio/tickets/${TICKET}/analisar`);
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(502);
     const t = env.DB.linha('SELECT complexidade, plano_ia, complexidade_justificacao FROM tickets WHERE id = ?', TICKET);
     expect(t).toEqual({ complexidade: null, plano_ia: null, complexidade_justificacao: null });
   });

@@ -405,3 +405,34 @@ O comentário do código diz que sobrevivem, mas `ON DELETE CASCADE` leva-as à 
 O `TextEncoder` trata `undefined` como o valor por omissão (string vazia), não como o
 texto `"undefined"`. Não é explorável hoje (a rota de login exige os dois campos), mas
 qualquer chamador novo precisa de saber.
+
+---
+
+## 6. Timbrado dos PDFs (agosto 2026)
+
+Os três documentos que saem do escritório — recibo, procuração e plano de
+pagamento — passaram a usar o timbrado do modelo Word aprovado pela Dra.
+(`worker/lib/timbrado.js`): faixa verde na margem direita, faixa fina no topo e a
+coluna em marca de água. Saíram a barra escura à esquerda do recibo e o
+cabeçalho verde da procuração e do plano.
+
+**O corte pedido:** no modelo, a faixa larga de baixo ocupava 17,2% da largura da
+página e entrava ~17pt dentro da área de texto. Foi estreitada em 42% (constante
+`CORTE_FAIXA`), passando a 10% — fica toda dentro da margem direita e o texto
+ganha o respiro que faltava.
+
+Defeitos encontrados ao escrever `tests/worker/pdfs.test.js`, todos já corrigidos:
+
+| O quê | Onde |
+|---|---|
+| Uma procuração comprida perdia texto: escrevia para fora da folha, sem mudar de página | `procgen.js` |
+| Colunas da tabela e cartões de totais em coordenadas fixas, que caíam fora da margem nova | `planogen.js` |
+| O rodapé («Plano n.º … · Pág. 1/2 …») corria por baixo da faixa verde | `planogen.js` |
+| O plano saía sem autoria nenhuma, ao contrário do recibo e da procuração | `planogen.js` |
+| Um valor ilegível escrevia **NaN** no recibo e no plano — num documento que vai para o cliente | `pdfgen.js`, `planogen.js` |
+
+> Como se testa um PDF sem o ver: descomprime-se o fluxo de conteúdo e leem-se os
+> operadores. Dá para afirmar factos duros — «a data aparece», «nenhuma linha
+> passa a margem» (medindo a largura real com as métricas da fonte), «um plano de
+> 40 parcelas passa a duas páginas». O que **não** dá é julgar o aspeto: para isso
+> é preciso olhar para o documento.

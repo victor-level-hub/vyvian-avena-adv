@@ -3,7 +3,7 @@
 // PT: comprovativo de cortesia (com observação fiscal). BR: idem, com quitação em prosa.
 // Uma só família tipográfica (Helvetica) para coesão visual.
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { LOGO_WHITE_PNG } from "./logo.js";
+import { desenharTimbrado, embutirLogoTimbrado, MARGEM, A4, VERDE_FAIXA } from "./timbrado.js";
 
 const FOREST = rgb(0.0706, 0.1882, 0.1647); // #12302a barra lateral
 const GOLD   = rgb(0.7216, 0.5765, 0.3529); // #b8935a detalhes
@@ -19,7 +19,10 @@ const ESCRITORIO = {
 };
 
 function fmtMoney(amount, currency) {
-  const n = Math.round(Number(amount || 0) * 100) / 100;
+  // valor ilegivel vale zero: um "NaN" num recibo que vai para o cliente e
+  // pior do que um zero, e o extenso mais abaixo tambem contava com um numero.
+  const bruto = Number(amount);
+  const n = Math.round((Number.isFinite(bruto) ? bruto : 0) * 100) / 100;
   const [int, dec] = n.toFixed(2).split(".");
   const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
   const body = `${grouped},${dec}`;
@@ -41,7 +44,8 @@ function fmtDateLong(iso) {
 }
 
 function extenso(valor, currency) {
-  valor = Math.round(Number(valor || 0) * 100) / 100;
+  const v0 = Number(valor);
+  valor = Math.round((Number.isFinite(v0) ? v0 : 0) * 100) / 100;
   const inteiro = Math.floor(valor);
   const cent = Math.round((valor - inteiro) * 100);
   const u = ["","um","dois","tr\u00eas","quatro","cinco","seis","sete","oito","nove","dez","onze","doze","treze","catorze","quinze","dezasseis","dezassete","dezoito","dezanove"];
@@ -72,16 +76,18 @@ export async function generateReciboPDF({ client, installment, receiptNumber }) 
   doc.setAuthor("Vyvian Avena Advogada");
   doc.setProducer("vyvian-avena-adv");
 
-  const page = doc.addPage([595.28, 841.89]); // A4
+  // timbrado da Dra. (worker/lib/timbrado.js). A barra escura à esquerda saiu: a
+  // identidade passou a ser a faixa verde à direita e a coluna em marca de água.
+  const logoTimbrado = await embutirLogoTimbrado(doc).catch(() => null);
+  const page = doc.addPage(A4);
+  desenharTimbrado(page, logoTimbrado);
   const { width, height } = page.getSize();
   const F  = await doc.embedFont(StandardFonts.Helvetica);
   const FB = await doc.embedFont(StandardFonts.HelveticaBold);
   const FO = await doc.embedFont(StandardFonts.HelveticaOblique);
 
-  const SIDE_W = 168; // ~28% barra lateral
-  const PAD = 32;     // padding interno da área principal
-  const MX = SIDE_W + PAD; // margem esquerda da área principal
-  const RX = width - PAD;  // margem direita
+  const MX = MARGEM.esquerda;        // margem esquerda
+  const RX = width - MARGEM.direita; // margem direita (já conta com a faixa)
 
   const txt = (s, x, y, { font = F, size = 10, color = INK, spacing = 0 } = {}) =>
     page.drawText(String(s == null ? "" : s), { x, y, size, font, color, characterSpacing: spacing });
@@ -100,41 +106,30 @@ export async function generateReciboPDF({ client, installment, receiptNumber }) 
     return y;
   }
 
-  // ===== BARRA LATERAL =====
-  page.drawRectangle({ x: 0, y: 0, width: SIDE_W, height, color: FOREST });
+  // ===== IDENTIFICAÇÃO (topo, sobre o timbrado) =====
+  txt("VYVIAN AVENA", MX, height - 78, { font: FB, size: 17, color: VERDE_FAIXA, spacing: 1 });
+  txt("A D V O G A D A", MX, height - 94, { font: F, size: 8, color: MUTE, spacing: 2.6 });
 
-  // logo (centrada no topo da barra)
-  try {
-    const logo = await doc.embedPng(LOGO_WHITE_PNG);
-    const lw = SIDE_W - 44, lh = lw * (logo.height / logo.width);
-    page.drawImage(logo, { x: 22, y: height - 64 - lh / 2, width: lw, height: lh });
-  } catch (e) {
-    txt("VYVIAN AVENA", 22, height - 64, { font: FB, size: 13, color: CREAM, spacing: 1 });
-  }
-
-  // dados rápidos na barra
-  let sy = height - 150;
+  // dados do recibo, alinhados à direita da área de escrita (antes viviam na barra)
+  let sy = height - 74;
   const sideItem = (label, value) => {
-    txt(label.toUpperCase(), 22, sy, { font: FB, size: 7, color: GOLD, spacing: 1.2 }); sy -= 13;
-    for (const ln of String(value || "\u2014").split("\n")) { txt(ln, 22, sy, { font: F, size: 9, color: SIDE_TXT }); sy -= 12; }
-    sy -= 10;
+    txtR(label.toUpperCase(), RX, sy, { font: FB, size: 6.8, color: VERDE_FAIXA, spacing: 1.2 }); sy -= 11;
+    for (const ln of String(value || "\u2014").split("\n")) { txtR(ln, RX, sy, { font: F, size: 8.5, color: INK }); sy -= 11; }
+    sy -= 6;
   };
-  sideItem("Recibo n.\u00ba", receiptNumber);
-  sideItem("Data de emiss\u00e3o", fmtDate(new Date().toISOString()));
+  sideItem("Recibo n.º", receiptNumber);
+  sideItem("Data de emissão", fmtDate(new Date().toISOString()));
   sideItem("Data do pagamento", fmtDate(installment.paid_date));
-  sideItem("Forma de pagamento", installment.payment_method || "\u2014");
-  if (installment.notes) sideItem("Refer\u00eancia", installment.notes);
-
-  // rodapé da barra
-  txt("vyavenaadv.com", 22, 40, { font: F, size: 8, color: SIDE_TXT });
+  sideItem("Forma de pagamento", installment.payment_method || "—");
+  if (installment.notes) sideItem("Referência", installment.notes);
 
   // ===== ÁREA PRINCIPAL =====
   let y = height - 70;
 
   // título
-  txt("RECIBO DE PAGAMENTO", MX, y, { font: FB, size: 20, color: FOREST, spacing: 1 }); y -= 24;
+  txt("RECIBO DE PAGAMENTO", MX, y, { font: FB, size: 18, color: VERDE_FAIXA, spacing: 1 }); y -= 22;
   txt("DE HONOR\u00c1RIOS", MX, y, { font: FB, size: 20, color: FOREST, spacing: 1 }); y -= 14;
-  page.drawLine({ start: { x: MX, y }, end: { x: RX, y }, thickness: 1.5, color: GOLD }); y -= 30;
+  page.drawLine({ start: { x: MX, y }, end: { x: RX, y }, thickness: 1.2, color: VERDE_FAIXA }); y -= 28;
 
   // dois blocos: PRESTADORA | CLIENTE
   const colGap = 24;
@@ -142,8 +137,8 @@ export async function generateReciboPDF({ client, installment, receiptNumber }) 
   const cxL = MX, cxR = MX + colW + colGap;
   const blockTop = y;
 
-  txt("PRESTADORA DOS SERVI\u00c7OS", cxL, y, { font: FB, size: 8, color: GOLD, spacing: 1 });
-  txt(country === "BR" ? "PAGADOR / CLIENTE" : "CLIENTE / PAGADOR", cxR, y, { font: FB, size: 8, color: GOLD, spacing: 1 });
+  txt("PRESTADORA DOS SERVI\u00c7OS", cxL, y, { font: FB, size: 8, color: VERDE_FAIXA, spacing: 1 });
+  txt(country === "BR" ? "PAGADOR / CLIENTE" : "CLIENTE / PAGADOR", cxR, y, { font: FB, size: 8, color: VERDE_FAIXA, spacing: 1 });
   let yL = y - 15, yR = y - 15;
 
   // prestadora
@@ -174,7 +169,7 @@ export async function generateReciboPDF({ client, installment, receiptNumber }) 
 
   // ===== TABELA DE VALORES =====
   // cabeçalho
-  page.drawRectangle({ x: MX, y: y - 18, width: RX - MX, height: 22, color: FOREST });
+  page.drawRectangle({ x: MX, y: y - 18, width: RX - MX, height: 22, color: VERDE_FAIXA });
   txt("DESCRI\u00c7\u00c3O", MX + 10, y - 13, { font: FB, size: 8, color: CREAM, spacing: 0.5 });
   txtR("VALOR", RX - 10, y - 13, { font: FB, size: 8, color: CREAM, spacing: 0.5 });
   y -= 18;
@@ -191,11 +186,11 @@ export async function generateReciboPDF({ client, installment, receiptNumber }) 
   const totW = 200, totX = RX - totW;
   page.drawRectangle({ x: totX, y: y - 30, width: totW, height: 30, color: CREAM });
   txt("TOTAL RECEBIDO", totX + 10, y - 12, { font: FB, size: 8, color: GOLD, spacing: 0.5 });
-  txtR(fmtMoney(installment.amount, currency), RX - 10, y - 24, { font: FB, size: 14, color: FOREST });
+  txtR(fmtMoney(installment.amount, currency), RX - 10, y - 24, { font: FB, size: 14, color: VERDE_FAIXA });
   y -= 44;
 
   // valor por extenso
-  txt("VALOR POR EXTENSO", MX, y, { font: FB, size: 7.5, color: GOLD, spacing: 1 }); y -= 13;
+  txt("VALOR POR EXTENSO", MX, y, { font: FB, size: 7.5, color: VERDE_FAIXA, spacing: 1 }); y -= 13;
   y = wrap(extenso(installment.amount, currency) + ".", MX, y, { font: FO, size: 10, color: INK, lh: 14 });
   y -= 14;
 
@@ -217,7 +212,7 @@ export async function generateReciboPDF({ client, installment, receiptNumber }) 
   const sigY = 150, sigX = RX - 200;
   page.drawLine({ start: { x: sigX, y: sigY + 2 }, end: { x: RX, y: sigY + 2 }, thickness: 0.8, color: GOLD });
   txt("A prestadora dos servi\u00e7os,", sigX, sigY + 18, { font: FO, size: 9, color: MUTE });
-  txtCenter("Dra. Vyvian Avena", sigX, RX, sigY - 12, { font: FB, size: 11, color: FOREST });
+  txtCenter("Dra. Vyvian Avena", sigX, RX, sigY - 12, { font: FB, size: 11, color: VERDE_FAIXA });
   txtCenter("Advogada", sigX, RX, sigY - 25, { font: F, size: 8.5, color: MUTE });
 
   function txtCenter(s, x1, x2, yy, o = {}) {

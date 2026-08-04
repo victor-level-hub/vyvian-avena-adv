@@ -41,8 +41,14 @@ async function login(request, env) {
     'SELECT id, email, password_hash, name, initials, role, cargo, phone, permissions, photo_key, status FROM users WHERE lower(trim(email)) = ?'
   ).bind(emailNorm).first();
 
-  // Mensagem genérica para não revelar se o utilizador existe
+  // Mensagem genérica para não revelar se o utilizador existe — e o MESMO trabalho
+  // criptográfico nos dois casos. Sem isto, um e-mail inexistente respondia de
+  // imediato enquanto um existente corria o PBKDF2 de 100 000 iterações: a
+  // diferença de dezenas de milissegundos revelava que contas existem, apesar de a
+  // mensagem ser igual. Verifica-se contra um hash-isco antes de responder.
+  const HASH_ISCO = 'pbkdf2-sha256$100000$aXNjby1zYWx0LTE2Ynl0ZQ==$aXNjby1oYXNoLXBhcmEtY29tcGFyYWNhbw==';
   if (!user) {
+    await verifyPassword(password, HASH_ISCO).catch(() => false);
     return jsonError('Credenciais inválidas.', 401);
   }
 

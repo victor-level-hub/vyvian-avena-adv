@@ -250,12 +250,12 @@ describe('POST /api/auth/login — credenciais recusadas', () => {
     expect((await login({ email: 'a'.repeat(10000) + '@exemplo.pt', password: PASSWORD })).status).toBe(401);
   });
 
-  // BUG (enumeração de utilizadores por tempo de resposta): com e-mail inexistente
+  // CORRIGIDO (era: enumeração de utilizadores por tempo de resposta): com e-mail inexistente
   // a rota devolve 401 imediatamente (worker/routes/auth.js:39-41), sem correr o
   // PBKDF2 de 100 000 iterações que corre quando o e-mail existe. A diferença de
   // dezenas de milissegundos permite descobrir que contas existem no escritório.
   // Corrige-se verificando a password contra um hash-isco antes de responder.
-  it.fails('devia gastar o mesmo trabalho criptográfico com um e-mail inexistente', async () => {
+  it('gasta o mesmo trabalho criptográfico com um e-mail inexistente', async () => {
     const espia = vi.spyOn(crypto.subtle, 'deriveBits');
     await login({ email: 'ninguem@exemplo.pt', password: PASSWORD });
     expect(espia).toHaveBeenCalled();

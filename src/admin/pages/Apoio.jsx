@@ -525,13 +525,23 @@ function TicketModal({ ticketId, onClose, onChanged, readOnlyInicial }) {
                               placeholder="Descreva o erro, a melhoria ou a nova demanda… (ou dite por voz)" />
               </div>
 
+              {/* pend.audio entra na lista: o áudio ditado num ticket AINDA POR CRIAR
+                  não era desenhado em lado nenhum e a Dra. não via que a gravação tinha
+                  ficado anexada — só a transcrição entrava na descrição. */}
               <PasteZone label="Prints e ficheiros do pedido (Ctrl+V para colar)"
                          hint="Clique aqui e cole um print com Ctrl+V, ou escolha ficheiros…"
-                         pendentes={[...pend.print_abertura, ...pend.anexo]}
+                         pendentes={[...pend.print_abertura, ...pend.anexo, ...pend.audio]}
                          guardados={[...anexosPor('print_abertura'), ...anexosPor('anexo'), ...anexosPor('audio')]}
                          onPaste={(fs) => (ro ? null : anexar('print_abertura', fs))}
                          onPickFiles={(fs) => (ro ? null : anexar('anexo', fs))}
-                         onRemovePendente={(i) => { if (ro) return; const nPr = pend.print_abertura.length; if (i < nPr) rmPend('print_abertura', i); else rmPend('anexo', i - nPr); }}
+                         onRemovePendente={(i) => {
+                           if (ro) return;
+                           const nPr = pend.print_abertura.length;
+                           const nAn = pend.anexo.length;
+                           if (i < nPr) rmPend('print_abertura', i);
+                           else if (i < nPr + nAn) rmPend('anexo', i - nPr);
+                           else rmPend('audio', i - nPr - nAn);
+                         }}
                          onRemoveGuardado={ro ? null : removerAnexo} />
 
               {/* IA */}

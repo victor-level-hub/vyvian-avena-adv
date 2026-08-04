@@ -1643,12 +1643,12 @@ describe('ditar por voz', () => {
     expect(screen.queryByRole('button', { name: /Ditar por voz/ })).not.toBeInTheDocument();
   });
 
-  // BUG: Apoio.jsx:530 — a zona de anexos só desenha `pend.print_abertura` e
+  // CORRIGIDO (era): Apoio.jsx:530 — a zona de anexos só desenha `pend.print_abertura` e
   // `pend.anexo`. Num ticket AINDA POR CRIAR, o áudio ditado vai para `pend.audio`
   // e não aparece em lado nenhum: a Dra. não vê que a gravação ficou anexada
   // (só a transcrição entra na descrição). Devia aparecer na zona do pedido,
   // como aparece depois de o ticket existir.
-  it.fails('o áudio ditado num ticket novo fica visível na zona de anexos', async () => {
+  it('o áudio ditado num ticket novo fica visível na zona de anexos', async () => {
     const { utilizador } = await novoTicket();
     await utilizador.click(screen.getByRole('button', { name: /Ditar por voz/ }));
     await utilizador.click(await screen.findByRole('button', { name: /Parar/ }));

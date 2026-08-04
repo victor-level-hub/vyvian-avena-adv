@@ -1419,19 +1419,25 @@ describe('Editar plano de pagamento', () => {
     expect(confirmar).not.toHaveBeenCalled();
   });
 
-  // BUG: ClientDetail.jsx:757-761 — handleSavePlan grava honorarios_total,
+  // CORRIGIDO (era): ClientDetail.jsx:757-761 — handleSavePlan grava honorarios_total,
   // honorarios_parcelas e contract_start_date mas nunca plan_type. Um cliente
   // com plan_type 'monthly' que passe a parcelado continua a ser lido como
   // avença (ClientDetail.jsx:1101-1103 dá prioridade ao plan_type gravado) e a
   // ficha volta a mostrar "Avença mensal" e "meses ativo" em vez do total
   // contratado e do progresso das parcelas.
-  it.fails('mudar de avença para parcelado devia gravar o novo tipo de plano', async () => {
+  it('mudar de avença para parcelado grava o novo tipo de plano', async () => {
     const { utilizador } = await abrir({ client: cliente({ plan_type: 'monthly', honorarios_total: 0 }), installments: [parcela(1)] });
     await abrirPlano(utilizador);
     await utilizador.selectOptions(campoDoRotulo('Tipo de plano'), 'installment');
+    await utilizador.clear(campoDoRotulo('Valor total contratado'));
     await utilizador.type(campoDoRotulo('Valor total contratado'), '900');
+    // o número de parcelas tem de estar preenchido para o plano poder ser gravado
+    const nParcelas = campoDoRotulo('Número de parcelas');
+    await utilizador.clear(nParcelas);
+    await utilizador.type(nParcelas, '3');
     await utilizador.click(botao('Guardar e gerar parcelas'));
-    await waitFor(() => expect(api.clienteUpdate).toHaveBeenCalledWith('cli-1', expect.objectContaining({ plan_type: 'installment' })));
+    await waitFor(() => expect(api.clienteUpdate).toHaveBeenCalled());
+    expect(api.clienteUpdate.mock.calls.at(-1)[1]).toMatchObject({ plan_type: 'installment' });
   });
 });
 

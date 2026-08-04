@@ -26,7 +26,11 @@ export async function upsertKeywords(env, lista) {
     const termo = normalizarTermo(k && k.termo);
     if (!termo || termo.length < 3 || termo.length > 80) continue;
     const tipo = termo.includes(" ") ? "conjunto" : "palavra";
-    const score = Math.max(0, Math.min(100, Math.round(+((k && k.score)) || 50)));
+    // `|| 50` engolia o zero: um score 0 (nenhum potencial) era promovido a 50.
+    // Ausencia de valor (null/undefined/vazio/ilegivel) continua a valer 50.
+    const bruto = k && k.score;
+    const num = bruto === null || bruto === undefined || bruto === '' ? NaN : Number(bruto);
+    const score = Math.max(0, Math.min(100, Math.round(Number.isFinite(num) ? num : 50)));
     stmts.push(env.DB.prepare(
       `INSERT INTO keyword_bank (termo, tipo, score, atualizado_em)
        VALUES (?, ?, ?, datetime('now'))

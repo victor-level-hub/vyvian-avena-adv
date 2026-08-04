@@ -158,9 +158,9 @@ describe('sendEmail — chamada à Resend', () => {
     expect('text' in c).toBe(false);
   });
 
-  // BUG: o texto é interpolado no HTML sem escape — um «<» ou «&» vindo do nome
+  // CORRIGIDO (era): o texto é interpolado no HTML sem escape — um «<» ou «&» vindo do nome
   // do cliente ou da descrição da parcela produz HTML partido (ou injetado).
-  it.fails('devia escapar o texto ao derivar o html', async () => {
+  it('escapar o texto ao derivar o html', async () => {
     const f = mockFetch({ json: {} });
     vi.stubGlobal('fetch', f);
     await sendEmail(envEmail(), { to: 'a@b.pt', text: 'Dívida <100€ & juros' });
@@ -276,9 +276,9 @@ describe('sendWhatsApp — guardas', () => {
     expect((await sendWhatsApp(envZap(), { phone: '', message: 'x' })).skipped).toBe(true);
   });
 
-  // BUG: `!phone` só apanha o vazio. Um telefone só com letras/símbolos passa a
+  // CORRIGIDO (era): `!phone` só apanha o vazio. Um telefone só com letras/símbolos passa a
   // guarda e é enviado à Z-API como string vazia em vez de ser ignorado.
-  it.fails('telefone sem um único dígito devia ser skipped', async () => {
+  it('telefone sem um único dígito ser skipped', async () => {
     vi.stubGlobal('fetch', mockFetch({ json: { messageId: 'm1' } }));
     const r = await sendWhatsApp(envZap(), { phone: 'sem-numero', message: 'x' });
     expect(r.skipped).toBe(true);
@@ -488,20 +488,23 @@ describe('renderTemplate', () => {
     expect(renderTemplate('Olá {{n}}\nAté já.', { n: 'Inês' })).toBe('Olá Inês\nAté já.');
   });
 
-  // BUG: `vars[k]` apanha as propriedades herdadas de Object.prototype — um
+  // CORRIGIDO (era): `vars[k]` apanha as propriedades herdadas de Object.prototype — um
   // {{constructor}} ou {{toString}} no template escreve lixo em vez de vazio.
-  it.fails('{{constructor}} devia ficar vazio e não escrever o Object nativo', () => {
+  it('{{constructor}} ficar vazio e não escrever o Object nativo', () => {
     expect(renderTemplate('[{{constructor}}]', { nome: 'Ana' })).toBe('[]');
   });
 
-  it.fails('{{toString}} devia ficar vazio', () => {
+  it('{{toString}} ficar vazio', () => {
     expect(renderTemplate('[{{toString}}]', {})).toBe('[]');
   });
 
   // Armadilha: `vars` não tem valor por omissão. Sem segundo argumento só
   // sobrevive um template sem variáveis.
-  it('sem o objeto de variáveis rebenta se houver alguma variável', () => {
-    expect(() => renderTemplate('Olá {{nome}}')).toThrow(TypeError);
+  // CORRIGIDO (era): sem o objeto de variáveis, o acesso rebentava com TypeError.
+  // Agora uma variável sem valor fica simplesmente vazia, como já acontecia quando
+  // o objeto existia mas não tinha a chave.
+  it('sem o objeto de variáveis a variável fica vazia em vez de rebentar', () => {
+    expect(renderTemplate('Olá {{nome}}')).toBe('Olá ');
   });
 
   it('sem o objeto de variáveis um template literal passa na mesma', () => {

@@ -244,9 +244,9 @@ describe('recordVisit', () => {
     expect(env.DB.linha('SELECT path FROM site_page_views').path).toBe(p);
   });
 
-  // BUG: o limite de 160 é medido ANTES de cortar a query string, por isso um
+  // CORRIGIDO (era): o limite de 160 é medido ANTES de cortar a query string, por isso um
   // artigo com uma campanha longa (utm_*) desaparece do Banco de Palavras.
-  it.fails('caminho curto com query string longa devia ser contado', async () => {
+  it('caminho curto com query string longa ser contado', async () => {
     await recordVisit(hit({ path: '/blog/x?' + 'utm_content=' + 'b'.repeat(200) }), env);
     expect(env.DB.linha('SELECT path FROM site_page_views')).toMatchObject({ path: '/blog/x' });
   });

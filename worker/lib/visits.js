@@ -49,8 +49,16 @@ export async function recordVisit(request, env) {
       if (!path) {
         try { path = new URL(request.headers.get('Referer') || '').pathname; } catch {}
       }
-      if (path && path.startsWith('/') && path.length <= 160 && !path.startsWith('/admin') && !path.startsWith('/api')) {
+      // O limite de 160 era medido ANTES de cortar a query string, por isso um
+      // artigo partilhado com utm_* longos nunca era contado no Banco de Palavras.
+      const publico = path && path.startsWith('/') && !path.startsWith('/admin') && !path.startsWith('/api');
+      if (!publico) {
+        path = '';
+      } else {
         path = path.split('?')[0].split('#')[0].replace(/\/+$/, '') || '/';
+        if (path.length > 160) path = '';   // medido DEPOIS de cortar a query string
+      }
+      if (path) {
         await env.DB.prepare(
           `INSERT INTO site_page_views (day, path, views) VALUES (?, ?, 1)
            ON CONFLICT(day, path) DO UPDATE SET views = views + 1`

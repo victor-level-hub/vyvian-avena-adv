@@ -209,16 +209,18 @@ describe('upsertKeywords', () => {
     expect(env.DB.linha('SELECT score FROM keyword_bank').score).toBe(50);
   });
 
-  it('score 0 acaba gravado como 50 (comportamento atual)', async () => {
+  // CORRIGIDO (era): o `|| 50` tratava o zero como ausência de valor e promovia um
+  // termo sem potencial nenhum a meio da tabela.
+  it('score 0 fica mesmo 0', async () => {
     const env = criarEnv();
     await upsertKeywords(env, [{ termo: 'termo sem potencial', score: 0 }]);
-    expect(env.DB.linha('SELECT score FROM keyword_bank').score).toBe(50);
+    expect(env.DB.linha('SELECT score FROM keyword_bank').score).toBe(0);
   });
 
-  // BUG: worker/lib/keywords.js:29 — `Math.round(+(k.score) || 50)` trata o zero como
+  // CORRIGIDO (era): worker/lib/keywords.js:29 — `Math.round(+(k.score) || 50)` trata o zero como
   // ausência de valor, por isso um score 0 (nenhum potencial) é promovido a 50.
   // O 0 está dentro do intervalo 0..100 e devia sobreviver ao clamp.
-  it.fails('score 0 devia ficar 0 (o falsy-coalescing engole o zero)', async () => {
+  it('score 0 ficar 0 (o falsy-coalescing engole o zero)', async () => {
     const env = criarEnv();
     await upsertKeywords(env, [{ termo: 'termo sem potencial', score: 0 }]);
     expect(env.DB.linha('SELECT score FROM keyword_bank').score).toBe(0);

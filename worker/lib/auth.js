@@ -111,7 +111,11 @@ export async function verifyJWT(token, secret) {
     false,
     ['verify']
   );
-  const signature = base64UrlToBytes(sigB64);
+  // Uma assinatura com caracteres fora do alfabeto base64 fazia o atob lançar
+  // DOMException, que subia ao catch global do worker e devolvia 500 com detalhe
+  // interno a QUEM NEM SESSÃO TEM — bastava `Authorization: Bearer a.b.!!!`.
+  let signature;
+  try { signature = base64UrlToBytes(sigB64); } catch { return null; }
   const isValid = await crypto.subtle.verify(
     'HMAC',
     key,
@@ -126,9 +130,13 @@ export async function verifyJWT(token, secret) {
   } catch {
     return null;
   }
+  // JSON.parse('null') devolve null e a leitura seguinte rebentava com TypeError.
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null;
 
   const now = Math.floor(Date.now() / 1000);
-  if (payload.exp && payload.exp < now) return null;
+  // `if (payload.exp && ...)`: exp === 0 é falsy, por isso um token com exp 0
+  // (1 de janeiro de 1970) passava como se não tivesse expiração nenhuma.
+  if (typeof payload.exp === 'number' && payload.exp < now) return null;
 
   return payload;
 }

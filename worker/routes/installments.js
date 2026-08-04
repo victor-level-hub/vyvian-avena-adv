@@ -1,6 +1,7 @@
 // worker/routes/installments.js
 import { ownerPaymentReceivedAlert } from '../lib/owner_alerts.js';
 import { jsonResponse, jsonError } from '../lib/response.js';
+import { numeroOuNull, dataISOValida, erroDeRestricao } from '../lib/validar.js';
 
 export async function handleInstallments(request, env, path, session) {
   const method = request.method;
@@ -85,14 +86,30 @@ async function createInstallment(request, env) {
   try { body = await request.json(); } catch { return jsonError('Invalid JSON', 400); }
 
   const { id, client_id, installment_number, total_installments, amount, currency, due_date, notes } = body || {};
-  if (!id || !client_id || !installment_number || !total_installments || !amount || !due_date) {
+  if (!id || !client_id || !installment_number || !total_installments || amount == null || amount === '' || !due_date) {
     return jsonError('Campos obrigatórios em falta', 400);
   }
+  // Sem estas guardas, 'abc' era gravado como TEXTO numa coluna REAL (e os alertas
+  // passavam a mostrar "NaN") e uma data que não é data fazia a parcela desaparecer
+  // de todas as consultas com date()/strftime(), sem erro nenhum.
+  const valor = numeroOuNull(amount);
+  if (valor === null) return jsonError('O valor tem de ser um número.', 400);
+  if (!dataISOValida(due_date)) return jsonError('A data de vencimento tem de estar no formato aaaa-mm-dd.', 400);
+  const nParcela = numeroOuNull(installment_number);
+  const nTotal = numeroOuNull(total_installments);
+  if (nParcela === null || nTotal === null) return jsonError('O número da parcela tem de ser um número.', 400);
 
-  await env.DB.prepare(`
-    INSERT INTO installments (id, client_id, installment_number, total_installments, amount, currency, due_date, notes, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
-  `).bind(id, client_id, installment_number, total_installments, amount, currency || 'EUR', due_date, notes || null).run();
+  try {
+    await env.DB.prepare(`
+      INSERT INTO installments (id, client_id, installment_number, total_installments, amount, currency, due_date, notes, status)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+    `).bind(id, client_id, nParcela, nTotal, valor, currency || 'EUR', due_date, notes || null).run();
+  } catch (e) {
+    // cliente inexistente ou id repetido chegavam ao cliente como 500 genérico
+    const r = erroDeRestricao(e);
+    if (r) return jsonError(r.texto, r.status);
+    throw e;
+  }
 
   return jsonResponse({ ok: true, id }, 201);
 }

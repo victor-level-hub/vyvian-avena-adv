@@ -470,17 +470,17 @@ describe('POST /api/installments — criação', () => {
     expect(r.status).toBe(201);
   });
 
-  // BUG: worker/routes/installments.js:92-95 — não há verificação de que o cliente
+  // CORRIGIDO (era): worker/routes/installments.js:92-95 — não há verificação de que o cliente
   // existe; o INSERT rebenta com "FOREIGN KEY constraint failed" e a exceção sobe
   // pela rota acima (500 genérico) em vez de um 400/404 explicável à Dra.
-  it.fails('cliente inexistente devolve erro tratado, não uma exceção', async () => {
+  it('cliente inexistente devolve erro tratado, não uma exceção', async () => {
     const r = await rota('POST', '/api/installments', { body: corpoValido({ client_id: 'nao-existe' }) });
     expect([400, 404]).toContain(r.status);
   });
 
-  // BUG: worker/routes/installments.js:92-95 — id repetido rebenta com
+  // CORRIGIDO (era): worker/routes/installments.js:92-95 — id repetido rebenta com
   // "UNIQUE constraint failed"; devia devolver 409 (ou 400).
-  it.fails('id repetido devolve conflito em vez de exceção', async () => {
+  it('id repetido devolve conflito em vez de exceção', async () => {
     await rota('POST', '/api/installments', { body: corpoValido() });
     const r = await rota('POST', '/api/installments', { body: corpoValido() });
     expect([400, 409]).toContain(r.status);
@@ -522,9 +522,17 @@ describe('POST /api/installments — valores monetários', () => {
     expect(valorGuardado().amount).toBe(Number.MAX_SAFE_INTEGER);
   });
 
-  it('recusa valor zero como campo em falta', async () => {
-    const r = await rota('POST', '/api/installments', { body: corpoValido({ amount: 0 }) });
-    expect(r.status).toBe(400);
+  // CORRIGIDO (era): o `!amount` recusava o número 0 como "campo em falta" mas
+  // deixava passar a string '0' — o mesmo valor com resultados opostos. Agora zero
+  // é um valor legítimo (uma parcela de cortesia dentro de um plano), venha como vier.
+  it('aceita valor zero, venha como número ou como texto', async () => {
+    let n = 0;
+    for (const v of [0, '0']) {
+      n += 1;
+      const r = await rota('POST', '/api/installments', { body: corpoValido({ id: `p-zero-${n}`, amount: v }) });
+      expect(r.status).toBe(201);
+      expect(env.DB.linha('SELECT amount FROM installments WHERE id = ?', `p-zero-${n}`).amount).toBe(0);
+    }
   });
 
   it('aceita "0" em string, porque a string é truthy', async () => {
@@ -533,31 +541,33 @@ describe('POST /api/installments — valores monetários', () => {
     expect(valorGuardado().amount).toBe(0);
   });
 
-  // BUG: worker/routes/installments.js:88 — a validação é `!amount`, por isso o
+  // CORRIGIDO (era): worker/routes/installments.js:88 — a validação é `!amount`, por isso o
   // número 0 é recusado mas a string '0' passa e grava uma parcela de valor zero.
   // O mesmo valor devia dar o mesmo resultado, venha ele como for.
-  it.fails('trata o zero da mesma maneira em número e em string', async () => {
+  it('trata o zero da mesma maneira em número e em string', async () => {
     const comNumero = await rota('POST', '/api/installments', { body: corpoValido({ id: 'p-num', amount: 0 }) });
     const comString = await rota('POST', '/api/installments', { body: corpoValido({ id: 'p-str', amount: '0' }) });
     expect(comNumero.status).toBe(comString.status);
   });
 
-  // BUG: worker/routes/installments.js:87-95 — nenhum campo é validado como número;
+  // CORRIGIDO (era): worker/routes/installments.js:87-95 — nenhum campo é validado como número;
   // 'abc' é gravado como TEXTO numa coluna REAL e depois o fmtMoney dos alertas
   // produz "NaN". Devia devolver 400.
-  it.fails('recusa um valor que não é número', async () => {
+  it('recusa um valor que não é número', async () => {
     const r = await rota('POST', '/api/installments', { body: corpoValido({ amount: 'trezentos' }) });
     expect(r.status).toBe(400);
   });
 
-  it('um valor não numérico fica gravado como texto na coluna REAL', async () => {
-    await rota('POST', '/api/installments', { body: corpoValido({ amount: 'trezentos' }) });
-    expect(valorGuardado()).toEqual({ amount: 'trezentos', t: 'text' });
+  it('um valor não numérico é recusado antes de chegar à coluna REAL', async () => {
+    const r = await rota('POST', '/api/installments', { body: corpoValido({ amount: 'trezentos' }) });
+    expect(r.status).toBe(400);
+    expect((await json(r)).error).toMatch(/número/i);
+    expect(env.DB.linha('SELECT COUNT(*) AS n FROM installments').n).toBe(0);
   });
 
-  // BUG: worker/routes/installments.js:92-95 — um objeto no campo amount não é
+  // CORRIGIDO (era): worker/routes/installments.js:92-95 — um objeto no campo amount não é
   // rejeitado; chega ao bind e rebenta ("cannot be bound to SQLite parameter").
-  it.fails('recusa um objeto no campo do valor sem rebentar', async () => {
+  it('recusa um objeto no campo do valor sem rebentar', async () => {
     const r = await rota('POST', '/api/installments', { body: corpoValido({ amount: { valor: 10 } }) });
     expect(r.status).toBe(400);
   });
@@ -596,11 +606,10 @@ describe('POST /api/installments — datas de vencimento', () => {
     expect(b.installments.map((p) => p.id)).toEqual(['par-1']);
   });
 
-  it('29 de fevereiro num ano não bissexto é gravado tal e qual mas roda para março nos filtros', async () => {
-    await rota('POST', '/api/installments', { body: corpoValido({ due_date: '2027-02-29' }) });
-    expect(dataGuardada()).toBe('2027-02-29');
-    expect((await json(await rota('GET', '/api/installments?month=2027-02'))).installments).toEqual([]);
-    expect((await json(await rota('GET', '/api/installments?month=2027-03'))).installments).toHaveLength(1);
+  it('29 de fevereiro num ano não bissexto é recusado', async () => {
+    const r = await rota('POST', '/api/installments', { body: corpoValido({ due_date: '2027-02-29' }) });
+    expect(r.status).toBe(400);
+    expect(env.DB.linha('SELECT COUNT(*) AS n FROM installments').n).toBe(0);
   });
 
   it('31 de dezembro conta para o ano certo', async () => {
@@ -613,25 +622,24 @@ describe('POST /api/installments — datas de vencimento', () => {
     expect(dataGuardada()).toBe('2026-09-15T10:00:00Z');
   });
 
-  // BUG: worker/routes/installments.js:87-95 — o due_date não é validado; "amanhã"
+  // CORRIGIDO (era): worker/routes/installments.js:87-95 — o due_date não é validado; "amanhã"
   // entra na base e todas as consultas com date()/strftime() passam a devolver NULL
   // para essa linha (a parcela desaparece de upcoming e dos alertas, sem erro).
-  it.fails('recusa uma data que não é data', async () => {
+  it('recusa uma data que não é data', async () => {
     const r = await rota('POST', '/api/installments', { body: corpoValido({ due_date: 'amanhã' }) });
     expect(r.status).toBe(400);
   });
 
-  it('uma data inválida some das listagens por mês (documenta o estrago)', async () => {
-    await rota('POST', '/api/installments', { body: corpoValido({ due_date: 'amanhã' }) });
-    expect((await json(await rota('GET', '/api/installments'))).installments).toHaveLength(1);
-    expect((await json(await rota('GET', '/api/installments?year=2026'))).installments).toEqual([]);
-    expect((await json(await rota('GET', '/api/installments/upcoming?days=3650'))).installments).toEqual([]);
+  it('uma data inválida é recusada em vez de sumir das listagens', async () => {
+    const r = await rota('POST', '/api/installments', { body: corpoValido({ due_date: 'amanhã' }) });
+    expect(r.status).toBe(400);
+    expect((await json(await rota('GET', '/api/installments'))).installments).toEqual([]);
   });
 
-  it('data em formato português é aceite mas inutilizável nas consultas', async () => {
-    await rota('POST', '/api/installments', { body: corpoValido({ due_date: '15/09/2026' }) });
-    expect(dataGuardada()).toBe('15/09/2026');
-    expect((await json(await rota('GET', '/api/installments/upcoming?days=3650'))).installments).toEqual([]);
+  it('data em formato português é recusada com uma mensagem clara', async () => {
+    const r = await rota('POST', '/api/installments', { body: corpoValido({ due_date: '15/09/2026' }) });
+    expect(r.status).toBe(400);
+    expect((await json(r)).error).toMatch(/aaaa-mm-dd/);
   });
 });
 

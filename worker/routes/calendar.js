@@ -8,6 +8,7 @@
 //   PUT    /api/calendar/types/:id          -> editar tipo (nativos: só is_visible)
 //   DELETE /api/calendar/types/:id?strategy=delete|move -> apagar tipo personalizado
 import { jsonResponse, jsonError } from '../lib/response.js';
+import { dataISOValida, erroDeRestricao } from '../lib/validar.js';
 
 const EVENT_FIELDS = ['title', 'description', 'type_id', 'start_date', 'end_date', 'is_all_day', 'amount', 'currency', 'status', 'client_name', 'case_reference', 'is_recurring', 'recurrence_rule'];
 const STATUS_OK = ['none', 'paid', 'pending', 'overdue'];
@@ -49,6 +50,11 @@ async function createEvent(request, env) {
   try { body = await request.json(); } catch { return jsonError('Invalid JSON', 400); }
   const { title, type_id, start_date } = body || {};
   if (!title || !type_id || !start_date) return jsonError('title, type_id e start_date são obrigatórios', 400);
+  // Datas impossíveis (2026-13-45), formato português (31/12/2026) ou puro texto
+  // entravam na base tal e qual e só rebentavam depois, no cliente, como Invalid Date.
+  if (!dataISOValida(start_date)) return jsonError('A data de início tem de estar no formato aaaa-mm-dd.', 400);
+  if (body.end_date && !dataISOValida(body.end_date)) return jsonError('A data de fim tem de estar no formato aaaa-mm-dd.', 400);
+  if (body.end_date && body.end_date < start_date) return jsonError('A data de fim não pode ser anterior à de início.', 400);
 
   const type = await env.DB.prepare('SELECT id FROM calendar_types WHERE id = ?').bind(type_id).first();
   if (!type) return jsonError('Tipo de data não existe', 400);

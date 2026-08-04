@@ -198,12 +198,12 @@ describe('POST /api/calendar/events', () => {
   });
 
   // ── datas inválidas ────────────────────────────────────────────────────────
-  // BUG: createEvent (worker/routes/calendar.js:47-69) não valida start_date nem
+  // CORRIGIDO (era): createEvent (worker/routes/calendar.js:47-69) não valida start_date nem
   // end_date — grava a string tal e qual. Uma data impossível ('2026-13-45'), um
   // formato português ('31/12/2026') ou puro texto entram na base e só rebentam
   // mais tarde, no cliente, que faz new Date(start_date) e recebe Invalid Date.
   for (const dataMa of ['2026-13-45', '2026-02-30', '31/12/2026', 'amanhã', '2026-09']) {
-    it.fails(`recusa a data de início inválida «${dataMa}»`, async () => {
+    it(`recusa a data de início inválida «${dataMa}»`, async () => {
       const r = await cal('POST', '/api/calendar/events', { ...EVENTO, start_date: dataMa });
       expect(r.status).toBe(400);
     });
@@ -213,15 +213,18 @@ describe('POST /api/calendar/events', () => {
     expect((await cal('POST', '/api/calendar/events', { ...EVENTO, start_date: '' })).status).toBe(400);
   });
 
-  it('documenta que uma data impossível fica mesmo gravada', async () => {
-    const id = await criarEvento({ start_date: '2026-13-45' });
-    expect(env.DB.linha('SELECT start_date FROM calendar_events WHERE id = ?', id).start_date).toBe('2026-13-45');
-    expect(isNaN(new Date('2026-13-45').getTime())).toBe(true);
+  // CORRIGIDO (era): a data impossível ficava mesmo gravada e só rebentava depois,
+  // no cliente, como Invalid Date. Agora é recusada à entrada.
+  it('uma data impossível não chega a ser gravada', async () => {
+    const antes = (await todosOsEventos()).length;
+    const res = await cal('POST', '/api/calendar/events', { ...EVENTO, start_date: '2026-13-45' });
+    expect(res.status).toBe(400);
+    expect(await todosOsEventos()).toHaveLength(antes);
   });
 
-  // BUG: a data de fim nunca é comparada com a de início — um evento que "acaba
+  // CORRIGIDO (era): a data de fim nunca é comparada com a de início — um evento que "acaba
   // antes de começar" é aceite com 201 (worker/routes/calendar.js:51-66).
-  it.fails('recusa uma data de fim anterior à de início', async () => {
+  it('recusa uma data de fim anterior à de início', async () => {
     const r = await cal('POST', '/api/calendar/events', {
       ...EVENTO, start_date: '2026-09-10', end_date: '2026-09-01',
     });

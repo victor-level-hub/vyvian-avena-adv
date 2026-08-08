@@ -237,10 +237,17 @@ export default {
       const cab = {
         'Content-Type': 'audio/mpeg',
         'Accept-Ranges': 'bytes',
-        'Cache-Control': 'public, max-age=3600',
+        // max-age=0: uma narração regenerada (ex.: correção de pronúncia) tem
+        // de chegar já — com ETag a revalidação custa um 304, não os MB todos.
+        'Cache-Control': 'public, max-age=0, must-revalidate',
       };
       const etag = asset.headers.get('ETag');
-      if (etag) cab.ETag = etag;
+      if (etag) {
+        cab.ETag = etag;
+        if (request.headers.get('If-None-Match') === etag) {
+          return new Response(null, { status: 304, headers: cab });
+        }
+      }
       const m = /^bytes=(\d*)-(\d*)$/.exec(request.headers.get('Range') || '');
       if (m && (m[1] !== '' || m[2] !== '')) {
         const ini = m[1] !== '' ? Number(m[1]) : Math.max(0, total - Number(m[2]));

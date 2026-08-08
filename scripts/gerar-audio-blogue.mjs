@@ -87,6 +87,14 @@ const CARD = (n) => {
   const dz = r < 20 ? U[r] : D[Math.floor(r / 10)] + (r % 10 ? " e " + U[r % 10] : "");
   return [c ? C[c] : "", c && r ? "e" : "", dz].filter(Boolean).join(" ");
 };
+// Siglas/nomes que o modelo lê mal: trocar por grafia fonética APENAS na fala
+// (o ecrã continua a mostrar o token original). Cada substituição TEM de manter
+// o número de palavras do token, senão o mapeamento token→timestamps desalinha.
+// AIMA saía com o "I" anasalado e a tónica fora do primeiro A; "Áima" força
+// [ˈaj.mɐ] — tónica no primeiro A, ditongo "ái" sem pausa (8 ago 2026).
+const PRONUNCIAS = [[/AIMA/g, "Áima"]];
+const pronunciar = (s) => PRONUNCIAS.reduce((t, [re, sub]) => t.replace(re, sub), s);
+
 const ORD_M = ["", "primeiro", "segundo", "terceiro", "quarto", "quinto", "sexto", "sétimo", "oitavo", "nono", "décimo"];
 const ORD = (n, fem) => {
   let s;
@@ -99,6 +107,7 @@ const ORD = (n, fem) => {
 };
 function falar(token) {
   if (token === "*") return "Nota:"; // marcador visual; falado como "Nota:"
+  token = pronunciar(token);
   // €175,00 (com eventual pontuação a seguir) → "cento e setenta e cinco euros"
   let m = token.match(/^€(\d+),(\d{2})([)\].,;:!?»"]*)$/);
   if (m) {
@@ -134,10 +143,11 @@ const [ano, mes, dia] = (meta.data || "").split("-").map(Number);
 const dataExt = `${ext(dia)} de ${MESES[mes - 1]} de dois mil${ano % 2000 ? " e " + ext(ano % 2000) : ""}`;
 const minutos = Math.max(1, Math.round(body.replace(/[#>*_`\-]/g, " ").split(/\s+/).filter(Boolean).length / 200));
 
-const intro =
+const intro = pronunciar(
   `Neste artigo: ${meta.descricao.replace(/\.$/, "")}.\n\n` +
   `Escrito pela Doutora Vyvian Avena, no dia ${dataExt}.\n\n` +
-  `Artigo com ${ext(minutos)} minutos de leitura.`;
+  `Artigo com ${ext(minutos)} minutos de leitura.`
+);
 
 const narracao = intro + "\n\n" + corpo;
 console.log(`Narração: ${narracao.length} chars · ${palavrasDom.length} palavras no corpo · modelo ${MODEL}`);

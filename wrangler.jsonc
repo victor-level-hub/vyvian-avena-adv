@@ -1,6 +1,9 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "vyvian-avena-adv",
+  // Fixar a conta evita a chamada a /memberships no deploy (o CI falhava com
+  // "Authentication error [code: 10000]" quando o token não podia listar contas).
+  "account_id": "0ec92e050344e6d5f12b73a4d0c690e4",
   "main": "worker/index.js",
   "compatibility_date": "2026-05-27",
   "compatibility_flags": ["nodejs_compat"],

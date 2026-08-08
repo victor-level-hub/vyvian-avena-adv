@@ -121,6 +121,15 @@ ELEVENLABS_API_KEY=sk_... node scripts/gerar-audio-blogue.mjs --slug {slug} [--m
   responde 206 a pedidos Range. Diagnóstico: `curl -sI -H "Range: bytes=0-100"
   URL.mp3` tem de devolver `206`/`Content-Range`.
 - Testes do leitor: `tests/site/audio-artigo.test.jsx`.
+- **Pronúncia de siglas e abreviaturas**: o modelo lê mal maiúsculas e
+  abreviaturas ("AIMA" saía com o I anasalado e tónica errada; "n.º" não saía
+  como "número"). O dicionário `PRONUNCIAS` em `scripts/gerar-audio-blogue.mjs`
+  troca a grafia só na fala ("AIMA" → "Áima"; "n.º(s)" → "número(s)", com
+  variantes de maiúscula); a substituição tem de manter o nº de palavras do
+  token (timestamps!). Ordinais "78.º" já são expandidos em `falar()`. Num
+  artigo novo, vigiar também art.º, al.ª, Sr.ª, Dr.ª. Para refazer a narração
+  de um artigo já publicado: Actions → "Regenerar áudio de artigo" (dispatch
+  por slug).
 
 ## 5. Compilar, publicar e verificar
 

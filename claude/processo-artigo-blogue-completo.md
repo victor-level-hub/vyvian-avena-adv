@@ -97,8 +97,12 @@ ELEVENLABS_API_KEY=sk_... node scripts/gerar-audio-blogue.mjs --slug {slug} [--m
 - Ao tocar: envolve cada palavra da prosa num `<span class="aw">`, esbate o texto
   (`.audio-escuta`) e acende as palavras ao ritmo do áudio (palavra ativa com
   sublinhado dourado), com auto-scroll suave.
-- Controlo: play/pausa, barra clicável, velocidades 1x/1.25x/1.5x (os tempos
-  exibidos escalam com a velocidade), ✕ parar (limpa tudo).
+- Controlo: play/pausa, barra clicável, saltos de ±10 s (botões + setas ←/→),
+  velocidades 1x/1.25x/1.5x/2x, ✕ parar (limpa tudo). Tempos exibidos são os
+  REAIS — nunca dividir pela velocidade. Cabeçalho mostra "min de leitura ·
+  min de escuta". Seek exige Range no servidor: `run_worker_first:
+  ["/blog-audio/*"]` + handler 206 no worker (ver docs/processo-artigo-blogue-
+  completo.md, 8 ago). Testes: `tests/site/audio-artigo.test.jsx`.
 - **Mini-player flutuante** quando o cartão sai do ecrã (IntersectionObserver):
   mesmos controlos, fundo verde-floresta; o pill do WhatsApp recolhe enquanto
   se ouve (`body.a-ouvir`).

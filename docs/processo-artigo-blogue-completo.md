@@ -103,11 +103,24 @@ ELEVENLABS_API_KEY=sk_... node scripts/gerar-audio-blogue.mjs --slug {slug} [--m
 - Ao tocar: envolve cada palavra da prosa num `<span class="aw">`, esbate o texto
   (`.audio-escuta`) e acende as palavras ao ritmo do áudio (palavra ativa com
   sublinhado dourado), com auto-scroll suave.
-- Controlo: play/pausa, barra clicável, velocidades 1x/1.25x/1.5x (os tempos
-  exibidos escalam com a velocidade), ✕ parar (limpa tudo).
+- Controlo: play/pausa, barra clicável, saltos de ±10 s (botões + setas ←/→ no
+  slider), velocidades 1x/1.25x/1.5x/2x, ✕ parar (limpa tudo). Os tempos
+  exibidos são os REAIS (posição/duração do ficheiro) — nunca dividir pela
+  velocidade, confunde ("10:43" a virar "8:34").
 - **Mini-player flutuante** quando o cartão sai do ecrã (IntersectionObserver):
   mesmos controlos, fundo verde-floresta; o pill do WhatsApp recolhe enquanto
   se ouve (`body.a-ouvir`).
+- O cabeçalho do artigo mostra "X min de leitura · Y min de escuta" (a escuta
+  vem do `duracao` do JSON via callback `onDuracao`) — leitura silenciosa e
+  narração diferem por natureza (~200 vs ~110 ppm) e sem os dois rótulos parece
+  um bug.
+- **Seek exige Range no servidor** (armadilha de 8 ago): o serviço de assets do
+  Workers responde 200 chunked sem `Accept-Ranges`/`Content-Length` e qualquer
+  clique na barra recomeçava do zero. Correção: `run_worker_first:
+  ["/blog-audio/*"]` no `wrangler.jsonc` + handler no `worker/index.js` que
+  responde 206 a pedidos Range. Diagnóstico: `curl -sI -H "Range: bytes=0-100"
+  URL.mp3` tem de devolver `206`/`Content-Range`.
+- Testes do leitor: `tests/site/audio-artigo.test.jsx`.
 
 ## 5. Compilar, publicar e verificar
 
@@ -118,7 +131,10 @@ ELEVENLABS_API_KEY=sk_... node scripts/gerar-audio-blogue.mjs --slug {slug} [--m
    último build** (o Vite copia `public/` no build — áudio gerado depois do build
    não entra no deploy; foi a armadilha de 15 jul).
 3. Deploy: `CLOUDFLARE_API_TOKEN` (Workers Scripts Edit) + `CLOUDFLARE_ACCOUNT_ID`
-   exportados → `npx wrangler deploy`.
+   exportados → `npx wrangler deploy`. **`git pull` + rebuild SEMPRE antes de um
+   deploy local**: o Action `publicar.yml` faz commit de artigos+áudio direto no
+   main; um deploy com checkout desatualizado apaga-os de produção e o mp3 passa
+   a devolver o HTML do fallback SPA (aconteceu a 8 ago).
 4. **Verificar em produção** (esperar ~1 min pela propagação do edge; usar
    `?x=1` para furar cache na dúvida):
    - página do artigo (título, imagens do corpo pela ordem certa);

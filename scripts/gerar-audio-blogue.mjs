@@ -92,7 +92,13 @@ const CARD = (n) => {
 // o número de palavras do token, senão o mapeamento token→timestamps desalinha.
 // AIMA saía com o "I" anasalado e a tónica fora do primeiro A; "Áima" força
 // [ˈaj.mɐ] — tónica no primeiro A, ditongo "ái" sem pausa (8 ago 2026).
-const PRONUNCIAS = [[/AIMA/g, "Áima"]];
+const PRONUNCIAS = [
+  [/AIMA/g, "Áima"],
+  // "n.º"/"N.º" saía soletrado; falar "número" ("n.ºs" → "números").
+  // (Ordinais como "78.º" já são tratados à parte, em falar().)
+  [/N\.º(s?)/g, "Número$1"],
+  [/n\.º(s?)/g, "número$1"],
+];
 const pronunciar = (s) => PRONUNCIAS.reduce((t, [re, sub]) => t.replace(re, sub), s);
 
 const ORD_M = ["", "primeiro", "segundo", "terceiro", "quarto", "quinto", "sexto", "sétimo", "oitavo", "nono", "décimo"];

@@ -8,10 +8,13 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application",
-    // Os mp3 da narração têm de passar pelo worker: o serviço estático de
-    // assets responde sem Accept-Ranges/Content-Length e o <audio> perde o
-    // seek (a barra de progresso recomeçava do zero). O worker responde 206.
-    "run_worker_first": ["/blog-audio/*"]
+    // TUDO passa pelo worker (true): a API, o 404 real, a prévia por token e
+    // os mp3 da narração (que precisam de Range/206 — o serviço estático não
+    // suporta e o seek recomeçava do zero). ⚠️ NUNCA trocar por uma lista de
+    // padrões: com lista, os caminhos fora dela deixam de chegar ao worker e
+    // caem no fallback SPA — a 8 ago 2026 isso devolveu HTML em todo o /api/*
+    // (login incluído) durante ~1h.
+    "run_worker_first": true
   },
   "d1_databases": [
     {

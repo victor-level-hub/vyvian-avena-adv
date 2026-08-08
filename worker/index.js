@@ -221,6 +221,41 @@ export default {
       }
     }
 
+    // === ÁUDIO DO BLOGUE: mp3 com suporte a Range (seek) ===
+    // O ASSETS serve os mp3 com 200 sem Accept-Ranges nem Content-Length
+    // (chunked) — o browser fica sem intervalo "seekable" e QUALQUER clique na
+    // barra de progresso recomeçava a narração do zero. Ler o ficheiro inteiro
+    // e responder nós próprios (206 aos pedidos Range) devolve o seek ao
+    // <audio>. Requer "run_worker_first": ["/blog-audio/*"] no wrangler.jsonc,
+    // senão o pedido nem chega ao worker. Ficheiros de poucos MB: ler para
+    // memória é aceitável.
+    if (path.startsWith('/blog-audio/') && path.endsWith('.mp3') && (request.method === 'GET' || request.method === 'HEAD')) {
+      const asset = await env.ASSETS.fetch(new Request(url, { method: 'GET' }));
+      if (!asset.ok) return asset;
+      const corpo = await asset.arrayBuffer();
+      const total = corpo.byteLength;
+      const cab = {
+        'Content-Type': 'audio/mpeg',
+        'Accept-Ranges': 'bytes',
+        'Cache-Control': 'public, max-age=3600',
+      };
+      const etag = asset.headers.get('ETag');
+      if (etag) cab.ETag = etag;
+      const m = /^bytes=(\d*)-(\d*)$/.exec(request.headers.get('Range') || '');
+      if (m && (m[1] !== '' || m[2] !== '')) {
+        const ini = m[1] !== '' ? Number(m[1]) : Math.max(0, total - Number(m[2]));
+        const fim = m[1] !== '' && m[2] !== '' ? Math.min(Number(m[2]), total - 1) : total - 1;
+        if (ini > fim || ini >= total) {
+          return new Response(null, { status: 416, headers: { ...cab, 'Content-Range': `bytes */${total}` } });
+        }
+        cab['Content-Range'] = `bytes ${ini}-${fim}/${total}`;
+        cab['Content-Length'] = String(fim - ini + 1);
+        return new Response(request.method === 'HEAD' ? null : corpo.slice(ini, fim + 1), { status: 206, headers: cab });
+      }
+      cab['Content-Length'] = String(total);
+      return new Response(request.method === 'HEAD' ? null : corpo, { status: 200, headers: cab });
+    }
+
     // === PÁGINA INEXISTENTE: 404 REAL ===
     if (ehPaginaInexistente(path)) {
       const pagina404 = new URL('/404.html', url.origin);

@@ -7,7 +7,11 @@
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    // Os mp3 da narração têm de passar pelo worker: o serviço estático de
+    // assets responde sem Accept-Ranges/Content-Length e o <audio> perde o
+    // seek (a barra de progresso recomeçava do zero). O worker responde 206.
+    "run_worker_first": ["/blog-audio/*"]
   },
   "d1_databases": [
     {

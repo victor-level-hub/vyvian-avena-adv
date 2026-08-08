@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Play, Pause, RotateCcw, X } from "lucide-react";
+import { Play, Pause, RotateCcw, RotateCw, X } from "lucide-react";
 
 /**
  * "Ouvir este artigo" — narração ElevenLabs com leitura acompanhada.
@@ -18,7 +18,7 @@ import { Play, Pause, RotateCcw, X } from "lucide-react";
  * renderiza nada — o frontmatter `audio: sim` só liga a tentativa.
  */
 
-const VELOCIDADES = [1, 1.25, 1.5];
+const VELOCIDADES = [1, 1.25, 1.5, 2];
 
 const fmt = (s) => {
   if (!Number.isFinite(s)) return "0:00";
@@ -56,7 +56,7 @@ function envolverPalavras(root) {
   return spans;
 }
 
-export default function AudioArtigo({ slug, proseRef }) {
+export default function AudioArtigo({ slug, proseRef, onDuracao }) {
   const [dados, setDados] = useState(null); // timings JSON
   const [pronto, setPronto] = useState(false); // metadata do áudio carregada
   const [aTocar, setATocar] = useState(false);
@@ -77,7 +77,11 @@ export default function AudioArtigo({ slug, proseRef }) {
     let vivo = true;
     fetch(`/blog-audio/${slug}.json`)
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => vivo && d && Array.isArray(d.palavras) && setDados(d))
+      .then((d) => {
+        if (!vivo || !d || !Array.isArray(d.palavras)) return;
+        setDados(d);
+        if (Number.isFinite(d.duracao)) onDuracao?.(d.duracao);
+      })
       .catch(() => {});
     return () => {
       vivo = false;
@@ -214,8 +218,28 @@ export default function AudioArtigo({ slug, proseRef }) {
     if (!a || !dados) return;
     const r = e.currentTarget.getBoundingClientRect();
     const frac = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-    a.currentTime = frac * (a.duration || dados.duracao);
+    const total = Number.isFinite(a.duration) && a.duration > 0 ? a.duration : dados.duracao;
+    a.currentTime = frac * total;
     setT(a.currentTime);
+  };
+
+  const saltar = (delta) => {
+    const a = audioRef.current;
+    if (!a || !dados) return;
+    const total = Number.isFinite(a.duration) && a.duration > 0 ? a.duration : dados.duracao;
+    const alvo = Math.min(Math.max(0, a.currentTime + delta), Math.max(0, total - 0.25));
+    a.currentTime = alvo;
+    setT(alvo);
+  };
+
+  const teclasSlider = (e) => {
+    if (e.key === "ArrowLeft") {
+      e.preventDefault();
+      saltar(-10);
+    } else if (e.key === "ArrowRight") {
+      e.preventDefault();
+      saltar(10);
+    }
   };
 
   useEffect(
@@ -238,14 +262,38 @@ export default function AudioArtigo({ slug, proseRef }) {
     <>
     <div ref={cardRef} className="mb-10 border border-gold/35 bg-[#f7f2e9] px-5 py-4 md:px-6 md:py-5">
       <div className="flex items-center gap-4">
-        <button
-          type="button"
-          onClick={aTocar ? pause : play}
-          aria-label={aTocar ? "Pausar a narração" : "Ouvir este artigo"}
-          className="shrink-0 w-12 h-12 rounded-full bg-gold text-forest flex items-center justify-center hover:bg-[#a07d4a] hover:text-warmwhite transition-colors duration-300"
-        >
-          {aTocar ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 translate-x-[1px]" />}
-        </button>
+        <div className="shrink-0 flex items-center gap-1">
+          {sessao && (
+            <button
+              type="button"
+              onClick={() => saltar(-10)}
+              aria-label="Recuar 10 segundos"
+              className="relative w-8 h-8 flex items-center justify-center text-forest/55 hover:text-gold transition-colors duration-300"
+            >
+              <RotateCcw className="w-[19px] h-[19px]" />
+              <span aria-hidden="true" className="absolute font-body font-semibold text-[6.5px] mt-[1px] pointer-events-none">10</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={aTocar ? pause : play}
+            aria-label={aTocar ? "Pausar a narração" : "Ouvir este artigo"}
+            className="shrink-0 w-12 h-12 rounded-full bg-gold text-forest flex items-center justify-center hover:bg-[#a07d4a] hover:text-warmwhite transition-colors duration-300"
+          >
+            {aTocar ? <Pause className="w-5 h-5" /> : <Play className="w-5 h-5 translate-x-[1px]" />}
+          </button>
+          {sessao && (
+            <button
+              type="button"
+              onClick={() => saltar(10)}
+              aria-label="Avançar 10 segundos"
+              className="relative w-8 h-8 flex items-center justify-center text-forest/55 hover:text-gold transition-colors duration-300"
+            >
+              <RotateCw className="w-[19px] h-[19px]" />
+              <span aria-hidden="true" className="absolute font-body font-semibold text-[6.5px] mt-[1px] pointer-events-none">10</span>
+            </button>
+          )}
+        </div>
 
         <div className="min-w-0 flex-1">
           <div className="flex items-baseline justify-between gap-3">
@@ -253,7 +301,7 @@ export default function AudioArtigo({ slug, proseRef }) {
               Ouvir este artigo
             </div>
             <div className="font-body text-[12px] text-forest/50 tabular-nums shrink-0">
-              {fmt(t / VELOCIDADES[vel])} / {fmt(dur / VELOCIDADES[vel])}
+              {fmt(t)} / {fmt(dur)}
             </div>
           </div>
           <div className="font-body text-[12.5px] text-forest/55 mt-0.5">
@@ -272,6 +320,7 @@ export default function AudioArtigo({ slug, proseRef }) {
             aria-valuenow={Math.round(t)}
             tabIndex={0}
             onClick={procurar}
+            onKeyDown={teclasSlider}
             className="mt-2.5 h-4 flex items-center cursor-pointer group"
           >
             <div className="relative h-[3px] w-full bg-forest/15">
@@ -324,11 +373,31 @@ export default function AudioArtigo({ slug, proseRef }) {
       >
         <button
           type="button"
+          onClick={() => saltar(-10)}
+          aria-label="Recuar 10 segundos"
+          className="relative shrink-0 w-7 h-7 flex items-center justify-center text-warmwhite/70 hover:text-gold transition-colors duration-300"
+        >
+          <RotateCcw className="w-4 h-4" />
+          <span aria-hidden="true" className="absolute font-body font-semibold text-[5.5px] mt-[1px] pointer-events-none">10</span>
+        </button>
+
+        <button
+          type="button"
           onClick={aTocar ? pause : play}
           aria-label={aTocar ? "Pausar a narração" : "Retomar a narração"}
           className="shrink-0 w-9 h-9 rounded-full bg-gold text-forest flex items-center justify-center hover:bg-[#a07d4a] hover:text-warmwhite transition-colors duration-300"
         >
           {aTocar ? <Pause className="w-4 h-4" /> : <Play className="w-4 h-4 translate-x-[1px]" />}
+        </button>
+
+        <button
+          type="button"
+          onClick={() => saltar(10)}
+          aria-label="Avançar 10 segundos"
+          className="relative shrink-0 w-7 h-7 flex items-center justify-center text-warmwhite/70 hover:text-gold transition-colors duration-300"
+        >
+          <RotateCw className="w-4 h-4" />
+          <span aria-hidden="true" className="absolute font-body font-semibold text-[5.5px] mt-[1px] pointer-events-none">10</span>
         </button>
 
         <div
@@ -339,6 +408,7 @@ export default function AudioArtigo({ slug, proseRef }) {
           aria-valuenow={Math.round(t)}
           tabIndex={0}
           onClick={procurar}
+          onKeyDown={teclasSlider}
           className="flex-1 h-6 flex items-center cursor-pointer min-w-0"
         >
           <div className="relative h-[3px] w-full bg-warmwhite/20 rounded-full">
@@ -350,7 +420,7 @@ export default function AudioArtigo({ slug, proseRef }) {
         </div>
 
         <div className="font-body text-[11px] text-warmwhite/70 tabular-nums shrink-0 hidden sm:block">
-          {fmt(t / VELOCIDADES[vel])} / {fmt(dur / VELOCIDADES[vel])}
+          {fmt(t)} / {fmt(dur)}
         </div>
 
         <button

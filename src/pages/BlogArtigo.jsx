@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowRight, ArrowLeft } from "lucide-react";
 import Seo from "../components/Seo";
@@ -58,6 +58,10 @@ function ProgressoLeitura() {
 export default function BlogArtigo() {
   const { slug } = useParams();
   const proseRef = useRef(null);
+  // Duração real da narração (vem do JSON de timings, via AudioArtigo). O
+  // "min de leitura" é uma estimativa de leitura silenciosa (~200 ppm); a
+  // narração é mais lenta — mostrar as duas evita parecer que uma está errada.
+  const [minEscuta, setMinEscuta] = useState(null);
   const post = getPost(slug);
 
   if (!post) return <NaoEncontrado />;
@@ -102,6 +106,7 @@ export default function BlogArtigo() {
           <div className="h-px w-12 bg-gold mb-6" />
           <div className="font-body text-xs tracking-[0.15em] uppercase text-gold mb-5">
             {area ? `${area.title} · ` : ""}{fmtData(post.data)} · {post.minutos} min de leitura
+            {minEscuta ? ` · ${minEscuta} min de escuta` : ""}
           </div>
           <h1 className="font-heading font-normal text-3xl md:text-[52px] leading-[1.12] text-warmwhite max-w-[880px]">
             {post.titulo}
@@ -121,7 +126,13 @@ export default function BlogArtigo() {
         </aside>
 
         <div className="max-w-[680px] min-w-0">
-          {post.audio && <AudioArtigo slug={post.slug} proseRef={proseRef} />}
+          {post.audio && (
+            <AudioArtigo
+              slug={post.slug}
+              proseRef={proseRef}
+              onDuracao={(s) => setMinEscuta(Math.max(1, Math.round(s / 60)))}
+            />
+          )}
           <article ref={proseRef} className="blog-prose" dangerouslySetInnerHTML={{ __html: post.html }} />
         </div>
       </div>
